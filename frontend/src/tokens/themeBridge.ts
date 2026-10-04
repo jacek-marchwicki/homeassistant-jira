@@ -7,11 +7,19 @@ export type ThemeMode = 'dark' | 'light' | 'kiosk';
 
 const THEME_STORAGE_KEY = 'ha_jira_theme_mode';
 
+function getStorage(): Storage | null {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage;
+  }
+  return null;
+}
+
 export function getInitialTheme(): ThemeMode {
-  if (typeof window === 'undefined') return 'dark';
+  const storage = getStorage();
+  if (!storage) return 'dark';
   
   // Check local storage preference
-  const saved = localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null;
+  const saved = storage.getItem(THEME_STORAGE_KEY) as ThemeMode | null;
   if (saved && ['dark', 'light', 'kiosk'].includes(saved)) {
     return saved;
   }
@@ -30,7 +38,10 @@ export function applyTheme(theme: ThemeMode): void {
     root.setAttribute('data-theme', theme);
   }
 
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  const storage = getStorage();
+  if (storage) {
+    storage.setItem(THEME_STORAGE_KEY, theme);
+  }
 }
 
 /**

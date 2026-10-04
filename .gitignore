@@ -58,6 +58,7 @@ lerna-debug.log*
 .pnp/
 .pnp.js
 dist/
+*.tsbuildinfo
 out/
 .next/
 .nuxt/

@@ -33,7 +33,8 @@ packages = ["src/jira_dashboard"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-ra -q --asyncio-mode=auto"
+addopts = "-ra -q"
+asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]

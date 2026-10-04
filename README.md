@@ -179,13 +179,12 @@ pnpm build
 
 ### 3. Run Entire CI Pipeline Locally
 
-The project includes a hybrid CI runner [`scripts/run_ci_locally.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.py) (with a backward-compatible [`scripts/run_ci_locally.sh`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.sh) wrapper) supporting both instant native execution and containerized GitHub Actions simulation:
+The project includes a hybrid CI runner [`scripts/run_ci_locally.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.py) supporting both instant native execution and containerized GitHub Actions simulation:
 
 #### Mode A: Fast Native Checks (Default, ~1-2 seconds)
 Validates workflow YAML, runs Ruff linting/formatting, Pytest/unittest, Vitest, and TypeScript production build directly on your host with per-step timing:
 ```bash
 ./scripts/run_ci_locally.py
-# or: ./scripts/run_ci_locally.sh
 ```
 
 #### Mode B: Containerized GitHub Actions Simulation (`nektos/act`)

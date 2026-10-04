@@ -65,9 +65,13 @@ Quality and reliability are first-class requirements. Every feature must be back
    - Component tests for responsive layout rendering across viewports (mobile, tablet, desktop, wallboard).
    - Optimistic UI tests verifying state update $\rightarrow$ async sync confirmation $\rightarrow$ rollback on simulated error.
 
-4. **Continuous Verification**:
-   - Always run the relevant test suite before completing any feature or bug fix.
-   - Never skip or delete failing tests without explicit rationale and user agreement.
+4. **Mandatory Pre-Commit CI Verification**:
+   - Before committing any changes, contributors and AI agents MUST execute the local CI runner:
+     ```bash
+     ./scripts/run_ci_locally.py
+     ```
+   - All verification steps (GitHub Actions workflow YAML validation, Ruff linting & formatting checks, Pytest and standard unittest suites, Vitest frontend tests, and TypeScript production build) must pass cleanly with 100% success.
+   - Never bypass checks or commit code that fails local verification.
 
 ---
 
@@ -89,6 +93,12 @@ Quality and reliability are first-class requirements. Every feature must be back
 ---
 
 ## 5. Git & Collaboration Workflow
+
+### Pre-Commit Checklist
+Before creating any commit, verify that:
+1. [`./scripts/run_ci_locally.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.py) has been run and completed with zero errors.
+2. New features, bug fixes, or behavioral changes are covered by automated unit/integration tests.
+3. Commit messages adhere to Conventional Commits format.
 
 ### Commit Messages (Conventional Commits)
 Use standard semantic prefixes:

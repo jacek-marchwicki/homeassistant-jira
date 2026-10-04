@@ -208,6 +208,14 @@ def run_act_pipeline(project_root: Path, act_args: list[str]) -> int:
             f"{YELLOW}Notice: Using --container-architecture linux/amd64 for Apple Silicon.{NC}"
         )
 
+    # Ensure container Node toolcache path is preserved across action steps in act
+    act_flags.extend(
+        [
+            "--env",
+            "PATH=/opt/acttoolcache/node/24.19.0/x64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        ]
+    )
+
     cmd = ["act", *act_flags, *act_args]
     print(f"{CYAN}Executing: {' '.join(cmd)}{NC}\n")
 

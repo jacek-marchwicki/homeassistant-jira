@@ -1,6 +1,6 @@
 # Home Assistant Jira Dashboard
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Status: Phase 2 Complete](https://img.shields.io/badge/Status-Phase%202%20Complete-green.svg)](#roadmap)
 
 A high-performance, real-time Jira dashboard built for **Home Assistant** and **standalone web environments**. Designed from the ground up for ambient wall displays, desk workflows, and mobile devices, providing instant UI feedback and live multi-client synchronization.
@@ -278,3 +278,11 @@ This file defines coding standards, testing requirements, architectural boundari
 - [ ] **Phase 4: Home Assistant Integration & Packaging**
   - [ ] Home Assistant Add-on container configuration (`config.yaml`, `build.yaml`, Ingress)
   - [ ] Standalone Docker packaging and docker-compose configurations
+
+---
+
+## 📄 License
+
+This project is licensed under the **Apache License, Version 2.0**.
+See the [LICENSE](LICENSE) file for the full license text and copyright notices.
+

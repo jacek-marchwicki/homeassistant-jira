@@ -1,7 +1,7 @@
 # Home Assistant Jira Dashboard
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status: Planning & Scaffolding](https://img.shields.io/badge/Status-Phase%201%20Planning-amber.svg)](#roadmap)
+[![Status: Phase 2 Complete](https://img.shields.io/badge/Status-Phase%202%20Complete-green.svg)](#roadmap)
 
 A high-performance, real-time Jira dashboard built for **Home Assistant** and **standalone web environments**. Designed from the ground up for ambient wall displays, desk workflows, and mobile devices, providing instant UI feedback and live multi-client synchronization.
 
@@ -23,6 +23,37 @@ A high-performance, real-time Jira dashboard built for **Home Assistant** and **
   - Connected browsers receive delta updates in real time via **WebSockets**.
 - **Tested & Engineered for Evolution**:
   - Adherence to Clean Architecture, strict typing, and comprehensive unit and integration test suites.
+
+---
+
+## 🛠️ Technology Stack (Phase 2)
+
+See [**ADR-001: Technology Stack Selection**](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/architecture_decision_records/ADR-001-technology-stack.md) for full context and architectural tradeoffs.
+
+- **Backend** ([`backend/`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/)):
+  - **Runtime & Framework**: Python 3.10+, **FastAPI**, **Uvicorn** (ASGI).
+  - **Data Modeling & Validation**: **Pydantic v2** (Rust-accelerated serialization).
+  - **Client**: **HTTPX** (Async HTTP for Jira Cloud REST API).
+  - **Package Management & Tooling**: **uv**, **pyproject.toml**, **pytest**, **ruff**, **mypy**.
+- **Frontend** ([`frontend/`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/)):
+  - **Core**: **React 19**, **TypeScript**, **Vite** (configured with relative `base: './'` for Ingress dynamic proxying).
+  - **Styling & Theming**: **Tailwind CSS v4** + Design Tokens with Home Assistant CSS variable bridge.
+  - **State & Optimistic Mutations**: **Zustand** (sub-50ms optimistic state updates with rollback queues).
+  - **Drag & Drop**: **@dnd-kit** (accessible touch and pointer sensors across mobile, tablet, and PC).
+  - **Icons**: **Lucide React**.
+  - **Package Manager**: **pnpm**.
+
+---
+
+## 🎨 Design System
+
+The dashboard implements a versatile design system designed for ambient wallboards, desktop monitors, and handheld mobile phones.
+👉 [**Complete Design System Specification**](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/design_system.md)
+
+- **Dark-First Default**: Slate palettes optimized for high-contrast visibility and low-glare wall displays.
+- **Home Assistant Theme Bridge**: Seamlessly inherits `--card-background-color`, `--primary-text-color`, and `--accent-color` when hosted in Ingress.
+- **Dual Action Modality**: Drag-and-drop across all screens, plus direct one-tap "Mark as Done" buttons and status transition menus so dragging is never strictly required.
+- **Touch-Friendly & Accessible**: Minimum $44 \times 44\text{ px}$ targets and dual-coded priority indicators (color + unique icon glyph).
 
 ---
 
@@ -97,14 +128,16 @@ This file defines coding standards, testing requirements, architectural boundari
 
 ## 🗺️ Roadmap & Phases
 
-- [x] **Phase 1: Project Scaffolding & Requirements (Current)**
+- [x] **Phase 1: Project Scaffolding & Requirements**
   - [x] Initialize Git repository
   - [x] Define business needs and architecture vision
   - [x] Establish developer & agent guidelines (`AGENTS.md`)
-- [ ] **Phase 2: Technology Stack Selection**
-  - [ ] Evaluate and select Python backend framework (e.g. FastAPI, Litestar, aiohttp)
-  - [ ] Evaluate and select Frontend framework (e.g. Svelte, Vue, React)
-  - [ ] Define project layout and tooling (package managers, linters, test runners)
+- [x] **Phase 2: Technology Stack Selection & Design System**
+  - [x] Evaluate and select Python backend framework (FastAPI + Pydantic v2 + uv)
+  - [x] Evaluate and select Frontend framework (React 19 + TypeScript + Vite + Tailwind CSS v4 + Zustand + @dnd-kit + pnpm)
+  - [x] Publish Architecture Decision Record ([`ADR-001`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/architecture_decision_records/ADR-001-technology-stack.md))
+  - [x] Define comprehensive [Design System](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/design_system.md) with Home Assistant theme bridge
+  - [x] Scaffold initial backend and frontend directory structures
 - [ ] **Phase 3: Core Implementation**
   - [ ] Jira Cloud adapter and webhook parser
   - [ ] WebSocket hub and client state reconciliation

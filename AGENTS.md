@@ -26,12 +26,25 @@ This document provides definitive instructions, architectural principles, and op
 
 ---
 
-## 2. Guardrails & Current Project Status
+## 2. Technology Stack & Architectural Decisions (ADR-001)
 
-> [!IMPORTANT]
-> **Phase 1 Status**: We are currently in Phase 1 (Foundation & Requirements).
-> - **DO NOT unilaterally select or commit to specific frameworks** (e.g., do not arbitrarily install FastAPI, Flask, Django, React, Vue, Svelte, Tailwind) until explicitly agreed upon in the upcoming Technology Selection phase.
-> - Keep any preliminary code and prototypes technology-agnostic or modular.
+> [!NOTE]
+> **Phase 2 Status**: Technology Selection & Design System have been formally completed and accepted in [`ADR-001`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/architecture_decision_records/ADR-001-technology-stack.md).
+
+All future implementations MUST strictly adhere to the standardized stack:
+- **Backend**:
+  - Python 3.10+ with **FastAPI**, **Uvicorn** (ASGI), **Pydantic v2**, and **HTTPX**.
+  - Package manager: **uv** (with standard `pyproject.toml`).
+  - Strict ASGI `root_path` compliance for Home Assistant Ingress dynamic proxying.
+- **Frontend**:
+  - **React 19** + **TypeScript** + **Vite** + **Tailwind CSS v4**.
+  - Relative asset pathing (`base: './'`) in `vite.config.ts` is mandatory for Ingress compatibility.
+  - State & Optimistic UI: **Zustand** (guaranteeing sub-50ms optimistic mutations with rollback queue).
+  - Drag-and-Drop: **@dnd-kit** across mobile, tablet, and PC, complemented by direct non-drag quick actions (one-tap "Mark Done" and status transition menu).
+  - Package manager: **pnpm**.
+- **Design System**:
+  - Follow tokens and component rules in [`docs/design_system.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/design_system.md).
+  - Dark-first default with Home Assistant CSS custom property bridge (`--ha-card-background`, `--primary-background-color`, `--primary-text-color`, `--accent-color`).
 
 ---
 

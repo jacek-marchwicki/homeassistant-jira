@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Base Surfaces (Dark-First Default, with fallback bridge to Home Assistant CSS variables) */
+    --jira-canvas: var(--primary-background-color, #0f172a);
+    --jira-surface: var(--card-background-color, #1e293b);
+    --jira-surface-elevated: var(--ha-card-background, #334155);
+    --jira-surface-hover: #475569;
+    --jira-border: var(--divider-color, #334155);
+    --jira-border-subtle: #1e293b;
+
+    /* Content & Typography */
+    --jira-text-primary: var(--primary-text-color, #f8fafc);
+    --jira-text-secondary: var(--secondary-text-color, #94a3b8);
+    --jira-text-muted: #64748b;
+    --jira-text-inverse: #0f172a;
+
+    /* Brand / Primary Accent */
+    --jira-primary: var(--accent-color, #3b82f6);
+    --jira-primary-hover: #2563eb;
+    --jira-focus-ring: #60a5fa;
+
+    /* Semantic Jira Status Categories */
+    --jira-status-todo: #64748b;
+    --jira-status-inprogress: #3b82f6;
+    --jira-status-inreview: #8b5cf6;
+    --jira-status-done: #22c55e;
+    --jira-status-blocked: #ef4444;
+
+    /* Priorities */
+    --jira-priority-highest: #ef4444;
+    --jira-priority-high: #f97316;
+    --jira-priority-medium: #eab308;
+    --jira-priority-low: #3b82f6;
+    --jira-priority-lowest: #94a3b8;
+  }
+
+  /* Explicit Standalone Light Mode Override */
+  [data-theme="light"] {
+    --jira-canvas: #f8fafc;
+    --jira-surface: #ffffff;
+    --jira-surface-elevated: #f1f5f9;
+    --jira-surface-hover: #e2e8f0;
+    --jira-border: #cbd5e1;
+    --jira-border-subtle: #f1f5f9;
+
+    --jira-text-primary: #0f172a;
+    --jira-text-secondary: #475569;
+    --jira-text-muted: #94a3b8;
+    --jira-text-inverse: #ffffff;
+
+    --jira-primary: #2563eb;
+    --jira-primary-hover: #1d4ed8;
+    --jira-focus-ring: #3b82f6;
+  }
+
+  /* True OLED Black Kiosk Mode for Wall Displays */
+  [data-theme="kiosk"] {
+    --jira-canvas: #000000;
+    --jira-surface: #0f0f12;
+    --jira-surface-elevated: #1a1a20;
+    --jira-surface-hover: #282832;
+    --jira-border: #22222a;
+    --jira-border-subtle: #141418;
+  }
+}

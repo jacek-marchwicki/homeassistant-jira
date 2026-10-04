@@ -117,6 +117,138 @@ For the complete specification of personas, user stories, functional and non-fun
 
 ---
 
+---
+
+## 🚀 Quick Start & Project Setup
+
+### Prerequisites
+- **Python**: 3.10 or higher (with [`uv`](https://github.com/astral-sh/uv) recommended, or `pip` / `venv`)
+- **Node.js**: 20.x or 22.x
+- **Package Manager**: [`pnpm`](https://pnpm.io/) (`corepack enable && corepack prepare pnpm@latest --activate` or `npx pnpm`)
+
+### 1. Backend Setup
+```bash
+cd backend
+
+# Option A: Using uv (Recommended)
+uv sync
+
+# Option B: Using standard Python venv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e ".[dev]"
+```
+
+### 2. Frontend Setup
+```bash
+cd frontend
+
+# Install dependencies using pnpm
+pnpm install
+```
+
+---
+
+## 🧪 Running Tests & Quality Checks
+
+The codebase is tested across both the Python backend and TypeScript frontend.
+
+### 1. Run Backend Tests
+```bash
+# Run with pytest
+PYTHONPATH=backend/src pytest backend/tests
+
+# Run with standard Python unittest runner
+PYTHONPATH=backend/src python3 -m unittest discover -s backend/tests
+
+# Lint and formatting check
+ruff check backend/
+```
+
+### 2. Run Frontend Tests & Build
+```bash
+cd frontend
+
+# Run unit tests via Vitest
+pnpm test
+
+# Run strict TypeScript typecheck and production build
+pnpm build
+```
+
+### 3. Run Entire CI Pipeline Locally
+You can validate the entire pipeline (YAML validation, backend tests, frontend tests, and production build) locally with one command:
+```bash
+./scripts/run_ci_locally.sh
+```
+
+---
+
+## 💻 Running the App Locally
+
+### Development Mode (Concurrent Servers with Live Reload)
+
+1. **Start the Python Backend Service**:
+   ```bash
+   # From root or backend directory:
+   uv run uvicorn jira_dashboard.presentation.main:app --reload --port 8000
+   # or with active virtualenv:
+   python3 -m uvicorn jira_dashboard.presentation.main:app --reload --port 8000
+   ```
+   *The backend will listen on `http://127.0.0.1:8000`.*
+
+2. **Start the Vite Frontend Dev Server**:
+   ```bash
+   cd frontend
+   pnpm dev
+   ```
+   *The frontend starts at `http://localhost:3000`. Vite automatically proxies `/api` and `/ws` to `http://127.0.0.1:8000`, so API calls and WebSockets work out of the box.*
+
+3. Open **`http://localhost:3000`** in your browser.
+
+---
+
+## 🏠 Installation in Home Assistant
+
+The application is packaged as a **Home Assistant Add-on** with native **Ingress** support, meaning it integrates securely into the Home Assistant interface and Companion mobile apps without exposing external ports.
+
+### Add-on Manifest & Packaging
+The Add-on manifest is located at [`addon/config.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/config.yaml) and uses the multi-stage [`addon/Dockerfile`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/Dockerfile).
+
+### Method 1: Installing via Home Assistant Add-on Store (Repository)
+1. In Home Assistant, navigate to **Settings** > **Add-ons** > **Add-on Store**.
+2. Click the three vertical dots (top right) and select **Repositories**.
+3. Add this repository URL:
+   ```
+   https://github.com/jacek-marchwicki/homeassistant-jira
+   ```
+4. Find **Jira Dashboard** in the store, click **Install**, and wait for the image to build/download.
+
+### Method 2: Local Development / Manual Installation
+1. On your Home Assistant host (via Samba, SSH, or Samba Share), open the `/addons/` directory.
+2. Copy or symlink the repository into `/addons/jira_dashboard/`.
+3. In Home Assistant, go to **Settings** > **Add-ons** > **Add-on Store** > three dots > **Check for updates**.
+4. The local **Jira Dashboard** add-on will appear under the "Local Add-ons" section. Click **Install**.
+
+### Configuration Options
+In the add-on's **Configuration** tab, enter your Jira connection settings:
+
+| Option | Type | Required | Description | Example |
+|---|---|---|---|---|
+| `jira_url` | URL | Yes | Base URL of your Jira Cloud instance | `https://mycompany.atlassian.net` |
+| `jira_email` | String | Yes | Your Atlassian account email | `alex@mycompany.com` |
+| `jira_api_token` | Password | Yes | Jira API Token ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens)) | `ATATT3xFfGF0...` |
+| `jira_board_id` | String | No | Target Jira Board ID (optional, defaults to primary board) | `42` |
+| `polling_interval_seconds` | Integer | No | Fallback polling interval in seconds | `60` |
+
+### Launching the Dashboard
+1. Go to the **Info** tab, toggle **Show in sidebar**, and click **Start**.
+2. Click **Open Web UI** (or click **Jira** in the Home Assistant left sidebar).
+3. The dashboard loads seamlessly inside Home Assistant through Ingress, automatically matching your Home Assistant theme!
+
+---
+
 ## 🤖 AI Agent & Developer Guidelines
 
 If you are an AI assistant or human contributor developing this project, please consult:

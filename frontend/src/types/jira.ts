@@ -7,9 +7,12 @@ export type JiraStatusCategory = 'todo' | 'inprogress' | 'inreview' | 'done' | '
 export type JiraPriority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
 
 export interface JiraUser {
-  accountId: string;
-  displayName: string;
+  accountId?: string;
+  account_id?: string;
+  displayName?: string;
+  display_name?: string;
   avatarUrl?: string;
+  avatar_url?: string;
 }
 
 export interface JiraStatus {
@@ -29,12 +32,15 @@ export interface JiraIssue {
   id: string;
   key: string;
   summary: string;
-  issueType: 'story' | 'bug' | 'task' | 'subtask';
+  issueType?: 'story' | 'bug' | 'task' | 'subtask';
+  issue_type?: 'story' | 'bug' | 'task' | 'subtask';
   priority: JiraPriority;
   status: JiraStatus;
   assignee?: JiraUser;
   storyPoints?: number;
-  updatedAt: string;
+  story_points?: number;
+  updatedAt?: string;
+  updated_at?: string;
   // Optimistic tracking state
   _optimisticState?: 'synced' | 'pending' | 'failed';
   _pendingTargetStatusId?: string;

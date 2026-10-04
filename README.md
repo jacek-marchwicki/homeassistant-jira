@@ -178,10 +178,32 @@ pnpm build
 ```
 
 ### 3. Run Entire CI Pipeline Locally
-You can validate the entire pipeline (YAML validation, backend tests, frontend tests, and production build) locally with one command:
+
+The project includes a hybrid CI runner [`scripts/run_ci_locally.sh`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.sh) supporting both instant native execution and containerized GitHub Actions simulation:
+
+#### Mode A: Fast Native Checks (Default, ~1-2 seconds)
+Validates workflow YAML, runs Ruff linting/formatting, Pytest/unittest, Vitest, and TypeScript production build directly on your host:
 ```bash
 ./scripts/run_ci_locally.sh
 ```
+
+#### Mode B: Containerized GitHub Actions Simulation (`nektos/act`)
+Simulates the exact GitHub Actions environment inside Docker Ubuntu containers (including Python 3.10/3.11/3.12 matrix jobs). Requires Docker daemon and [`act`](https://github.com/nektos/act) (`brew install act`):
+```bash
+# Run all CI jobs in Docker
+./scripts/run_ci_locally.sh --act
+
+# Run only a specific job (e.g., backend matrix or frontend)
+./scripts/run_ci_locally.sh --act -j backend
+./scripts/run_ci_locally.sh --act -j frontend
+
+# Dry-run workflow validation (does not spin up containers)
+./scripts/run_ci_locally.sh --act --dry-run
+
+# View all options
+./scripts/run_ci_locally.sh --help
+```
+
 
 ---
 

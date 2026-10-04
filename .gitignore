@@ -46,6 +46,10 @@ coverage.xml
 .pytest_cache/
 cover/
 htmlcov/
+test-results/
+playwright-report/
+blob-report/
+
 
 # Node / Frontend
 node_modules/

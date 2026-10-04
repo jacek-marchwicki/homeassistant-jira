@@ -9,7 +9,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test tests/integration",
+    "test:visual": "playwright test tests/visual",
+    "test:all": "vitest run && playwright test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -23,6 +26,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.50.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.0",

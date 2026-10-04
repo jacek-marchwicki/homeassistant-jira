@@ -163,7 +163,8 @@ PYTHONPATH=backend/src pytest backend/tests
 PYTHONPATH=backend/src python3 -m unittest discover -s backend/tests
 
 # Lint and formatting check
-ruff check backend/
+ruff check backend/ scripts/
+ruff format --check backend/ scripts/
 ```
 
 ### 2. Run Frontend Tests & Build
@@ -177,27 +178,51 @@ pnpm test
 pnpm build
 ```
 
-### 3. Run Entire CI Pipeline Locally
-
-The project includes a hybrid CI runner [`scripts/run_ci_locally.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.py) supporting both instant native execution and containerized GitHub Actions simulation:
-
-#### Mode A: Fast Native Checks (Default, ~1-2 seconds)
-Validates workflow YAML, runs Ruff linting/formatting, Pytest/unittest, Vitest, and TypeScript production build directly on your host with per-step timing:
+### 3. Run Full-Stack E2E Integration Tests (Fake Jira Test Double)
+Runs end-to-end integration tests (Frontend $\leftrightarrow$ WebSockets $\leftrightarrow$ FastAPI $\leftrightarrow$ `FakeJiraClient`), verifying live data loading, optimistic transitions, real-time incoming webhook broadcasting, and error rollbacks without requiring an external Jira instance:
 ```bash
+cd frontend
+pnpm test:e2e
+```
+
+### 4. Run Visual Screenshot Tests
+Captures responsive snapshots across mobile (375×667), tablet (768×1024), desktop (1440×900 in Dark, Light, and Kiosk themes), 1080p wallboard (1920×1080), and atomic components into `frontend/tests/screenshots/`:
+```bash
+cd frontend
+pnpm test:visual
+```
+
+### 5. Run Local CI Pipeline Runner
+
+The project includes a hybrid CI runner [`scripts/run_ci_locally.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.py) supporting fast native execution with per-step timing, full test suites, and containerized GitHub Actions simulation:
+
+#### Mode A: Fast Native Checks (Recommended Pre-Commit)
+```bash
+# Run fast checks (YAML validation, Ruff, pytest, unittest, Vitest, and SPA build) (~1-2s):
 ./scripts/run_ci_locally.py
+
+# Run with Full-Stack E2E Integration tests:
+./scripts/run_ci_locally.py --e2e
+
+# Run with Visual Screenshot tests:
+./scripts/run_ci_locally.py --visual
+
+# Run ALL checks (including E2E and visual screenshot suites):
+./scripts/run_ci_locally.py --all
 ```
 
 #### Mode B: Containerized GitHub Actions Simulation (`nektos/act`)
-Simulates the exact GitHub Actions environment inside Docker Ubuntu containers (including Python 3.10/3.11/3.12 matrix jobs). Requires Docker daemon and [`act`](https://github.com/nektos/act) (`brew install act`):
+Simulates the exact GitHub Actions environment inside Docker Ubuntu containers matching the 3 parallel CI jobs (`backend`, `frontend`, `e2e-and-visual`). Requires Docker daemon and [`act`](https://github.com/nektos/act) (`brew install act`):
 ```bash
 # Run all CI jobs in Docker
 ./scripts/run_ci_locally.py --act
 
-# Run only a specific job (e.g., backend matrix or frontend)
+# Run only a specific job (e.g., backend matrix, frontend, or e2e-and-visual)
 ./scripts/run_ci_locally.py --act -j backend
 ./scripts/run_ci_locally.py --act -j frontend
+./scripts/run_ci_locally.py --act -j e2e-and-visual
 
-# Dry-run workflow validation (does not spin up containers)
+# Dry-run workflow validation (validates DAG without spinning up containers)
 ./scripts/run_ci_locally.py --act --dry-run
 
 # View all options

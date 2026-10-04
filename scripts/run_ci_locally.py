@@ -77,9 +77,15 @@ def validate_ci_workflow(workflow_path: Path) -> None:
         raise ValueError("Missing 'backend' job definition in ci.yml")
     if "frontend" not in jobs:
         raise ValueError("Missing 'frontend' job definition in ci.yml")
+    if "e2e-and-visual" not in jobs:
+        raise ValueError("Missing 'e2e-and-visual' job definition in ci.yml")
 
 
-def run_native_pipeline(project_root: Path) -> int:
+def run_native_pipeline(
+    project_root: Path,
+    run_e2e: bool = False,
+    run_visual: bool = False,
+) -> int:
     """Run all quality, lint, and test checks directly on the local host."""
     print(
         f"{BLUE}{BOLD}=== Starting Fast Local CI Pipeline Verification (Native Mode) ==={NC}"
@@ -100,14 +106,14 @@ def run_native_pipeline(project_root: Path) -> int:
             None,
         ),
         (
-            "Step 2: Checking Backend code quality with Ruff...",
-            [sys.executable, "-m", "ruff", "check", "backend/"],
+            "Step 2: Checking Backend & Scripts code quality with Ruff...",
+            [sys.executable, "-m", "ruff", "check", "backend/", "scripts/"],
             project_root,
             None,
         ),
         (
-            "Step 2b: Checking Backend formatting with Ruff...",
-            [sys.executable, "-m", "ruff", "format", "--check", "backend/"],
+            "Step 2b: Checking Backend & Scripts formatting with Ruff...",
+            [sys.executable, "-m", "ruff", "format", "--check", "backend/", "scripts/"],
             project_root,
             None,
         ),
@@ -136,6 +142,26 @@ def run_native_pipeline(project_root: Path) -> int:
             None,
         ),
     ]
+
+    if run_e2e:
+        steps.append(
+            (
+                "Step 6: Running Full-Stack E2E Integration tests (Playwright)...",
+                ["npx", "pnpm", "--dir", "frontend", "test:e2e"],
+                project_root,
+                None,
+            )
+        )
+
+    if run_visual:
+        steps.append(
+            (
+                "Step 7: Running Visual Screenshot tests across viewports & themes (Playwright)...",
+                ["npx", "pnpm", "--dir", "frontend", "test:visual"],
+                project_root,
+                None,
+            )
+        )
 
     total_start = time.perf_counter()
 
@@ -262,6 +288,26 @@ Examples:
         help="Force fast native checks directly on your host (default).",
     )
 
+    test_group = parser.add_argument_group("Test Selection Options (Native Mode)")
+    test_group.add_argument(
+        "--e2e",
+        dest="run_e2e",
+        action="store_true",
+        help="Run full-stack E2E integration tests against the fake Jira backend using Playwright.",
+    )
+    test_group.add_argument(
+        "--visual",
+        dest="run_visual",
+        action="store_true",
+        help="Run visual screenshot tests across viewports and themes using Playwright.",
+    )
+    test_group.add_argument(
+        "--all",
+        dest="run_all",
+        action="store_true",
+        help="Run all checks including full-stack E2E and visual screenshot tests.",
+    )
+
     act_group = parser.add_argument_group(
         "Docker / act Options (automatically activates --act)"
     )
@@ -322,7 +368,9 @@ def main() -> int:
         parser.print_help(sys.stderr)
         return 2
 
-    return run_native_pipeline(project_root)
+    run_e2e = args.run_all or args.run_e2e
+    run_visual = args.run_all or args.run_visual
+    return run_native_pipeline(project_root, run_e2e=run_e2e, run_visual=run_visual)
 
 
 if __name__ == "__main__":

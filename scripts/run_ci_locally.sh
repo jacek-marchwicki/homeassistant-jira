@@ -29,8 +29,14 @@ with open('.github/workflows/ci.yml') as f:
 "
 echo -e "${GREEN}✓ Workflow syntax validated.${NC}"
 
-# Step 2: Backend tests (pytest & unittest)
-echo -e "\n${BLUE}Step 2: Running Backend tests (pytest & unittest)...${NC}"
+# Step 2: Ruff Linting & Formatting Check
+echo -e "\n${BLUE}Step 2: Checking Backend code quality with Ruff...${NC}"
+python3 -m ruff check backend/
+python3 -m ruff format --check backend/
+echo -e "${GREEN}✓ Ruff linting and formatting passed.${NC}"
+
+# Step 3: Backend tests (pytest & unittest)
+echo -e "\n${BLUE}Step 3: Running Backend tests (pytest & unittest)...${NC}"
 PYTHONPATH=backend/src python3 -m pytest backend/tests
 PYTHONPATH=backend/src python3 -m unittest discover -s backend/tests
 echo -e "${GREEN}✓ Backend tests passed.${NC}"

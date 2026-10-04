@@ -1,7 +1,9 @@
 """Integration tests for FastAPI presentation layer endpoints."""
 
 import unittest
+
 from fastapi.testclient import TestClient
+
 from jira_dashboard.presentation.main import app
 
 

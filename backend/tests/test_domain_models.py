@@ -1,6 +1,7 @@
 """Unit tests for domain models."""
 
 import unittest
+
 from jira_dashboard.domain import (
     IssueType,
     JiraIssue,

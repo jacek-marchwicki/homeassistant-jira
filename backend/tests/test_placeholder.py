@@ -1,6 +1,7 @@
 """Placeholder test to verify test harness setup."""
 
 import unittest
+
 import jira_dashboard
 
 
@@ -14,4 +15,3 @@ class TestPackageMetadata(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

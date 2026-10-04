@@ -4,9 +4,12 @@ Provides REST endpoints, WebSocket broadcasting for real-time state synchronizat
 and optional static asset serving for Ingress/standalone deployment.
 """
 
-from contextlib import asynccontextmanager
+from __future__ import annotations
+
 import os
-from typing import AsyncGenerator, Dict, List, Optional
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -36,7 +39,7 @@ SAMPLE_USER_AL = JiraUser(
     avatar_url="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=64&h=64&fit=crop&crop=faces",
 )
 
-STATUSES: Dict[StatusCategory, JiraStatus] = {
+STATUSES: dict[StatusCategory, JiraStatus] = {
     StatusCategory.TODO: JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
     StatusCategory.IN_PROGRESS: JiraStatus(
         id="2", name="In Progress", category=StatusCategory.IN_PROGRESS
@@ -48,7 +51,7 @@ STATUSES: Dict[StatusCategory, JiraStatus] = {
     StatusCategory.BLOCKED: JiraStatus(id="5", name="Blocked", category=StatusCategory.BLOCKED),
 }
 
-INITIAL_ISSUES: List[JiraIssue] = [
+INITIAL_ISSUES: list[JiraIssue] = [
     JiraIssue(
         id="101",
         key="PROJ-101",
@@ -107,7 +110,7 @@ INITIAL_ISSUES: List[JiraIssue] = [
 ]
 
 # Mutable store for the active session
-CURRENT_ISSUES: Dict[str, JiraIssue] = {issue.key: issue for issue in INITIAL_ISSUES}
+CURRENT_ISSUES: dict[str, JiraIssue] = {issue.key: issue for issue in INITIAL_ISSUES}
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +122,7 @@ class WebSocketHub:
     """Manages active WebSocket connections and broadcasts state deltas."""
 
     def __init__(self) -> None:
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -156,8 +159,8 @@ class BoardResponse(BaseModel):
 
     board_id: str
     board_name: str
-    sprint_name: Optional[str] = None
-    issues: List[JiraIssue]
+    sprint_name: str | None = None
+    issues: list[JiraIssue]
 
 
 # ---------------------------------------------------------------------------

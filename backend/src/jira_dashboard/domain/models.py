@@ -1,8 +1,10 @@
 """Domain entities and business models for Jira issues, statuses, and boards."""
 
+from __future__ import annotations
+
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel
 
 
 class StatusCategory(str, Enum):
@@ -39,7 +41,7 @@ class JiraUser(BaseModel):
 
     account_id: str
     display_name: str
-    avatar_url: Optional[str] = None
+    avatar_url: str | None = None
 
 
 class JiraStatus(BaseModel):
@@ -48,7 +50,7 @@ class JiraStatus(BaseModel):
     id: str
     name: str
     category: StatusCategory
-    color: Optional[str] = None
+    color: str | None = None
 
 
 class JiraTransition(BaseModel):
@@ -68,8 +70,8 @@ class JiraIssue(BaseModel):
     issue_type: IssueType
     priority: Priority
     status: JiraStatus
-    assignee: Optional[JiraUser] = None
-    story_points: Optional[float] = None
+    assignee: JiraUser | None = None
+    story_points: float | None = None
     updated_at: str
 
     def is_done(self) -> bool:

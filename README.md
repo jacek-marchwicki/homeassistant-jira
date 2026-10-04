@@ -179,29 +179,30 @@ pnpm build
 
 ### 3. Run Entire CI Pipeline Locally
 
-The project includes a hybrid CI runner [`scripts/run_ci_locally.sh`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.sh) supporting both instant native execution and containerized GitHub Actions simulation:
+The project includes a hybrid CI runner [`scripts/run_ci_locally.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.py) (with a backward-compatible [`scripts/run_ci_locally.sh`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.sh) wrapper) supporting both instant native execution and containerized GitHub Actions simulation:
 
 #### Mode A: Fast Native Checks (Default, ~1-2 seconds)
-Validates workflow YAML, runs Ruff linting/formatting, Pytest/unittest, Vitest, and TypeScript production build directly on your host:
+Validates workflow YAML, runs Ruff linting/formatting, Pytest/unittest, Vitest, and TypeScript production build directly on your host with per-step timing:
 ```bash
-./scripts/run_ci_locally.sh
+./scripts/run_ci_locally.py
+# or: ./scripts/run_ci_locally.sh
 ```
 
 #### Mode B: Containerized GitHub Actions Simulation (`nektos/act`)
 Simulates the exact GitHub Actions environment inside Docker Ubuntu containers (including Python 3.10/3.11/3.12 matrix jobs). Requires Docker daemon and [`act`](https://github.com/nektos/act) (`brew install act`):
 ```bash
 # Run all CI jobs in Docker
-./scripts/run_ci_locally.sh --act
+./scripts/run_ci_locally.py --act
 
 # Run only a specific job (e.g., backend matrix or frontend)
-./scripts/run_ci_locally.sh --act -j backend
-./scripts/run_ci_locally.sh --act -j frontend
+./scripts/run_ci_locally.py --act -j backend
+./scripts/run_ci_locally.py --act -j frontend
 
 # Dry-run workflow validation (does not spin up containers)
-./scripts/run_ci_locally.sh --act --dry-run
+./scripts/run_ci_locally.py --act --dry-run
 
 # View all options
-./scripts/run_ci_locally.sh --help
+./scripts/run_ci_locally.py --help
 ```
 
 

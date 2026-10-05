@@ -568,6 +568,69 @@ describe('boardUtils', () => {
       });
       expect(result.map((i) => i.key)).toEqual(['ISSUE-2']);
     });
+
+    it('searches issues by key, summary, and description', () => {
+      const issuesWithDesc: JiraIssue[] = [
+        {
+          ...mockBaseIssue,
+          key: 'FEAT-10',
+          summary: 'Build authentication flow',
+          description: 'OAuth2 code exchange with Home Assistant Ingress proxy',
+        },
+        {
+          ...mockBaseIssue,
+          key: 'BUG-20',
+          summary: 'Fix websocket disconnect bug',
+          description: 'Handle reconnect backoff and heartbeat timeouts',
+        },
+        {
+          ...mockBaseIssue,
+          key: 'TASK-30',
+          summary: 'Optimize query index',
+          description: 'Improve telemetry packet latency across MQTT bridge',
+        },
+      ];
+
+      // 1. Search by Key
+      const keyMatches = filterIssues(issuesWithDesc, {
+        activeFilters: [],
+        searchQuery: 'FEAT-10',
+        now: fixedNow,
+      });
+      expect(keyMatches.map((i) => i.key)).toEqual(['FEAT-10']);
+
+      // 2. Search by Summary
+      const summaryMatches = filterIssues(issuesWithDesc, {
+        activeFilters: [],
+        searchQuery: 'websocket disconnect',
+        now: fixedNow,
+      });
+      expect(summaryMatches.map((i) => i.key)).toEqual(['BUG-20']);
+
+      // 3. Search by Description
+      const descMatches = filterIssues(issuesWithDesc, {
+        activeFilters: [],
+        searchQuery: 'telemetry packet',
+        now: fixedNow,
+      });
+      expect(descMatches.map((i) => i.key)).toEqual(['TASK-30']);
+
+      // 4. Case-insensitive and trimmed search
+      const caseMatches = filterIssues(issuesWithDesc, {
+        activeFilters: [],
+        searchQuery: '   OAUTH2   ',
+        now: fixedNow,
+      });
+      expect(caseMatches.map((i) => i.key)).toEqual(['FEAT-10']);
+
+      // 5. No matches returns empty array
+      const noMatches = filterIssues(issuesWithDesc, {
+        activeFilters: [],
+        searchQuery: 'nonexistent keyword',
+        now: fixedNow,
+      });
+      expect(noMatches).toEqual([]);
+    });
   });
 
   describe('Done column filtering (updated <= 2 days ago)', () => {

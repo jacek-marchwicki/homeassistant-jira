@@ -423,12 +423,13 @@ export function filterIssues(
   }
 
   return issues.filter((issue) => {
-    // 1. Text Search Filter
+    // 1. Text Search Filter (matches Issue Key, Summary, or Description)
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       const matchesKey = (issue.key || '').toLowerCase().includes(q);
       const matchesSummary = (issue.summary || '').toLowerCase().includes(q);
-      if (!matchesKey && !matchesSummary) return false;
+      const matchesDescription = (issue.description || '').toLowerCase().includes(q);
+      if (!matchesKey && !matchesSummary && !matchesDescription) return false;
     }
 
     // 2. Assigned to Me / Unassigned Filter

@@ -315,5 +315,19 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Board Filtered by Search Query Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const searchInput = page.getByPlaceholder('Search key, summary, description...');
+    await searchInput.fill('PROJ-101');
+    await page.waitForTimeout(100);
+
+    await page.screenshot({
+      path: './tests/screenshots/board-search-filtered.png',
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
 });
 

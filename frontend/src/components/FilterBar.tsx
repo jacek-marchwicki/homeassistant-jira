@@ -60,7 +60,8 @@ export function FilterBar() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Filter issues..."
+          placeholder="Search key, summary, description..."
+          aria-label="Search issues by key, summary, or description"
           className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] placeholder-[var(--jira-text-muted)] focus:outline-none focus:border-[var(--jira-primary)]"
         />
       </div>

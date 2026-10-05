@@ -16,6 +16,7 @@ import { StatusSelect } from './StatusSelect.tsx';
 import {
   getAvailableStatuses,
   getColumnForIssue,
+  getJiraIssueUrl,
   isIssueExpedited,
   isIssueOverdue,
 } from '../utils/boardUtils.ts';
@@ -26,12 +27,13 @@ interface IssueCardProps {
 }
 
 export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
-  const { columns, transitionIssueOptimistic, setEditingIssue } = useBoardStore();
+  const { columns, jiraUrl, transitionIssueOptimistic, setEditingIssue } = useBoardStore();
   const currentColumn = getColumnForIssue(issue, columns);
   const isDone = (currentColumn?.category || issue.status.category) === 'done';
   const dueDateStr = issue.due_date ?? issue.dueDate;
   const isOverdue = isIssueOverdue(issue);
   const isExpedited = isIssueExpedited(issue);
+  const issueUrl = getJiraIssueUrl(issue, jiraUrl);
 
   const {
     attributes,
@@ -84,9 +86,19 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
       } ${isDragOverlay ? 'shadow-xl ring-2 ring-[var(--jira-primary)] cursor-grabbing' : ''}`}
     >
       <div className="flex items-center justify-between mb-1.5 pointer-events-auto">
-        <div className="flex items-center gap-1.5">
-          <IssueTypeIcon type={issue.issue_type || issue.issueType} className="w-3.5 h-3.5" />
-          <span className="text-xs font-bold text-[var(--jira-text-secondary)]">{issue.key}</span>
+        <div className="flex items-center gap-1.5 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+          <IssueTypeIcon type={issue.issue_type || issue.issueType} className="w-3.5 h-3.5 shrink-0" />
+          <a
+            href={issueUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs font-bold whitespace-nowrap text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] hover:underline cursor-pointer"
+            title={`Open ${issue.key} in Jira`}
+            aria-label={`Open ${issue.key} in Jira`}
+          >
+            {issue.key}
+          </a>
         </div>
 
         <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>

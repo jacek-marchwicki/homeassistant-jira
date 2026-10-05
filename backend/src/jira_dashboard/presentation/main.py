@@ -200,6 +200,7 @@ class BoardResponse(BaseModel):
     board_id: str
     board_name: str
     sprint_name: str | None = None
+    jira_url: str | None = None
     columns: list[BoardColumn] = []
     issues: list[JiraIssue]
 
@@ -305,10 +306,13 @@ async def get_board() -> BoardResponse:
             "Active Issues" if board_id and board_id != "engineering-1" else "Active Sprint 42"
         )
 
+    jira_base_url = (settings.jira_url or "https://jira.example.com").rstrip("/")
+
     return BoardResponse(
         board_id=board_id,
         board_name=board_name,
         sprint_name=sprint_name,
+        jira_url=jira_base_url,
         columns=columns,
         issues=issues,
     )

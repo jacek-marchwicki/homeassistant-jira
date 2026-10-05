@@ -17,6 +17,7 @@ import { StatusSelect } from './StatusSelect.tsx';
 import {
   getAvailableStatuses,
   getCategoryColorVar,
+  getJiraIssueUrl,
   isBacklogIssue,
   isIssueExpedited,
   isIssueOverdue,
@@ -28,11 +29,12 @@ interface BacklogIssueRowProps {
 }
 
 export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRowProps) {
-  const { columns, transitionIssueOptimistic, moveToBoard, moveToBacklog, setEditingIssue } =
+  const { columns, jiraUrl, transitionIssueOptimistic, moveToBoard, moveToBacklog, setEditingIssue } =
     useBoardStore();
   const isBacklog = isBacklogIssue(issue, columns);
   const statusColorVar = getCategoryColorVar(issue.status.category);
   const statusOptions = getAvailableStatuses(columns);
+  const issueUrl = getJiraIssueUrl(issue, jiraUrl);
 
   const {
     attributes,
@@ -104,9 +106,17 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
         <IssueTypeIcon type={issue.issue_type || issue.issueType} className="w-4 h-4 shrink-0" />
 
         {/* Issue Key */}
-        <span className="font-mono font-bold text-xs text-[var(--jira-text-secondary)] shrink-0">
+        <a
+          href={issueUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="font-mono font-bold text-xs text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] hover:underline shrink-0 cursor-pointer"
+          title={`Open ${issue.key} in Jira`}
+          aria-label={`Open ${issue.key} in Jira`}
+        >
           {issue.key}
-        </span>
+        </a>
 
         {/* Issue Summary */}
         <span

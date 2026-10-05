@@ -33,6 +33,7 @@ export interface BoardStoreState {
   columns: BoardColumn[];
   boardName: string;
   sprintName: string;
+  jiraUrl: string;
   wsConnected: boolean;
   activeFilters: string[];
   activeFilter: string;
@@ -78,6 +79,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   columns: DEFAULT_COLUMNS,
   boardName: '',
   sprintName: '',
+  jiraUrl: 'https://jira.example.com',
   wsConnected: false,
   activeFilters: ['my', 'active'],
   activeFilter: 'my,active',
@@ -192,6 +194,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         set({
           boardName: data.board_name || 'Engineering Sprint Board',
           sprintName: data.sprint_name || '',
+          jiraUrl: data.jira_url || 'https://jira.example.com',
           columns: data.columns && data.columns.length > 0 ? data.columns : DEFAULT_COLUMNS,
           issues: data.issues || [],
           errorMessage: null,

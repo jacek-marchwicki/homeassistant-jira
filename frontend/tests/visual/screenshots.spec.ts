@@ -346,5 +346,25 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Issue Card with Jira Link Hover Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const issueCard = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(issueCard).toBeVisible();
+
+    const jiraLink = issueCard.locator('a[aria-label="Open PROJ-101 in Jira"]');
+    await expect(jiraLink).toBeVisible();
+    await expect(jiraLink).toHaveAttribute('target', '_blank');
+    await expect(jiraLink).toHaveAttribute('href', /browse\/PROJ-101/);
+
+    await jiraLink.hover();
+    await page.waitForTimeout(100);
+
+    await issueCard.screenshot({
+      path: './tests/screenshots/component-card-jira-link-hover.png',
+      animations: 'disabled',
+    });
+  });
 });
 

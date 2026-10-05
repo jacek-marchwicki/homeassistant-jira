@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle } from 'lucide-react';
+import { X, Save, AlertCircle, ExternalLink } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue, JiraPriority } from '../types/jira.ts';
-import { getAvailableStatuses } from '../utils/boardUtils.ts';
+import { getAvailableStatuses, getJiraIssueUrl } from '../utils/boardUtils.ts';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 import { AssigneeSelect } from './AssigneeSelect.tsx';
 import { IssueTypeSelect } from './IssueTypeSelect.tsx';
@@ -16,7 +16,7 @@ interface EditIssueModalProps {
 }
 
 export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) {
-  const { columns, updateIssueOptimistic } = useBoardStore();
+  const { columns, jiraUrl, updateIssueOptimistic } = useBoardStore();
 
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
@@ -31,6 +31,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const statusOptions = getAvailableStatuses(columns);
+  const issueUrl = issue ? getJiraIssueUrl(issue, jiraUrl) : '#';
 
   useEffect(() => {
     if (issue) {
@@ -108,8 +109,19 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
         <div className="flex items-center justify-between pb-4 border-b border-[var(--jira-border)]">
           <div className="flex items-center gap-2">
             <IssueTypeIcon type={issueType} className="w-5 h-5" />
-            <h2 id="edit-issue-title" className="text-lg font-bold text-[var(--jira-text-primary)]">
-              Edit Issue <span className="font-mono text-[var(--jira-primary)]">{issue.key}</span>
+            <h2 id="edit-issue-title" className="text-lg font-bold text-[var(--jira-text-primary)] flex items-center gap-2">
+              <span>Edit Issue</span>
+              <a
+                href={issueUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-[var(--jira-primary)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                title={`Open ${issue.key} in Jira`}
+                aria-label={`Open ${issue.key} in Jira`}
+              >
+                <span>{issue.key}</span>
+                <ExternalLink className="w-4 h-4 shrink-0" />
+              </a>
             </h2>
           </div>
           <button

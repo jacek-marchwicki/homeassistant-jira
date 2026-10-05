@@ -335,6 +335,7 @@ class JiraCloudClient(JiraClientProtocol):
             key=key,
             summary=summary,
             description=description,
+            url=f"{self.base_url}/browse/{key}",
             issue_type=issue_type,
             priority=priority,
             status=status,

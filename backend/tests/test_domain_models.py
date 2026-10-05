@@ -50,10 +50,12 @@ class TestDomainModels(unittest.TestCase):
             assignee=self.user,
             story_points=3.0,
             recreate_after="7d",
+            url="https://jira.example.com/browse/PROJ-101",
             updated_at="2026-10-04T22:00:00Z",
         )
         self.assertEqual(issue.key, "PROJ-101")
         self.assertEqual(issue.recreate_after, "7d")
+        self.assertEqual(issue.url, "https://jira.example.com/browse/PROJ-101")
         self.assertFalse(issue.is_done())
         self.assertFalse(issue.is_blocked())
 

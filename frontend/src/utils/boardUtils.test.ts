@@ -16,6 +16,7 @@ import {
   filterIssues,
   isDoneIssueWithinDays,
   filterIssuesForColumn,
+  getJiraIssueUrl,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -738,5 +739,48 @@ describe('boardUtils', () => {
       expect(filtered.map((i) => i.key)).toEqual(['DONE-1']);
     });
   });
+
+  describe('getJiraIssueUrl', () => {
+    it('returns direct issue.url when present', () => {
+      const issueWithUrl: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'PROJ-101',
+        url: 'https://custom-jira.atlassian.net/browse/PROJ-101',
+      };
+      expect(getJiraIssueUrl(issueWithUrl)).toBe(
+        'https://custom-jira.atlassian.net/browse/PROJ-101'
+      );
+    });
+
+    it('constructs url from jiraBaseUrl when issue.url is not set', () => {
+      const issueWithoutUrl: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'PROJ-200',
+        url: undefined,
+      };
+      expect(getJiraIssueUrl(issueWithoutUrl, 'https://mycompany.atlassian.net')).toBe(
+        'https://mycompany.atlassian.net/browse/PROJ-200'
+      );
+    });
+
+    it('handles trailing slash on jiraBaseUrl correctly', () => {
+      const issue: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'PROJ-300',
+      };
+      expect(getJiraIssueUrl(issue, 'https://mycompany.atlassian.net///')).toBe(
+        'https://mycompany.atlassian.net/browse/PROJ-300'
+      );
+    });
+
+    it('defaults to https://jira.example.com when no base url or issue url is present', () => {
+      const issue: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'PROJ-400',
+      };
+      expect(getJiraIssueUrl(issue)).toBe('https://jira.example.com/browse/PROJ-400');
+    });
+  });
 });
+
 

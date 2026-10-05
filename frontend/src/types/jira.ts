@@ -33,6 +33,7 @@ export interface JiraIssue {
   key: string;
   summary: string;
   description?: string | null;
+  url?: string | null;
   issueType?: 'story' | 'bug' | 'task' | 'subtask';
   issue_type?: 'story' | 'bug' | 'task' | 'subtask';
   priority: JiraPriority;

@@ -450,4 +450,16 @@ export function filterIssues(
   });
 }
 
+/**
+ * Constructs the canonical Jira issue URL to open in Jira.
+ * Uses issue.url if provided, otherwise constructs ${jiraBaseUrl}/browse/${issue.key}.
+ */
+export function getJiraIssueUrl(issue: JiraIssue, jiraBaseUrl?: string): string {
+  if (issue.url && issue.url.trim()) {
+    return issue.url.trim();
+  }
+  const base = (jiraBaseUrl || 'https://jira.example.com').trim().replace(/\/+$/, '');
+  return `${base}/browse/${issue.key}`;
+}
+
 

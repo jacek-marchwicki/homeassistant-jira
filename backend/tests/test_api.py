@@ -28,8 +28,11 @@ class TestPresentationApi(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("board_id", data)
+        self.assertIn("jira_url", data)
+        self.assertTrue(data["jira_url"].startswith("http"))
         self.assertIn("issues", data)
         self.assertGreater(len(data["issues"]), 0)
+        self.assertTrue(data["issues"][0]["url"].endswith("/browse/PROJ-101"))
 
     def test_transition_issue_endpoint(self) -> None:
         """Verify POST /api/issues/{key}/transition transitions an issue."""

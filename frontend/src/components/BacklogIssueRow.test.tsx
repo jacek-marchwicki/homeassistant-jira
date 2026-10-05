@@ -52,6 +52,13 @@ describe('BacklogIssueRow component', () => {
     expect(container.textContent).toContain('Backlog');
     expect(container.textContent).toContain('To Board');
 
+    // Issue key Jira link
+    const link = container.querySelector('a[aria-label="Open PROJ-104 in Jira"]') as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('href')).toBe('https://jira.example.com/browse/PROJ-104');
+
     await act(async () => {
       root.unmount();
     });

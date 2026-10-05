@@ -78,6 +78,12 @@ describe('EditIssueModal component', () => {
     const recreateAfterInput = container.querySelector('#edit-recreate-after') as HTMLInputElement;
     expect(recreateAfterInput).not.toBeNull();
     expect(recreateAfterInput.value).toBe('14 days');
+
+    const jiraLink = container.querySelector('a[aria-label="Open PROJ-101 in Jira"]') as HTMLAnchorElement;
+    expect(jiraLink).not.toBeNull();
+    expect(jiraLink.getAttribute('target')).toBe('_blank');
+    expect(jiraLink.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(jiraLink.getAttribute('href')).toBe('https://jira.example.com/browse/PROJ-101');
   });
 
 function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {

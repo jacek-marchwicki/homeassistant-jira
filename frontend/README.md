@@ -9,6 +9,7 @@ The modern, ultra-responsive web frontend for the **Home Assistant Jira Dashboar
 - **State & Optimistic UI**: Zustand with instant sync queue
 - **Drag & Drop**: @dnd-kit (accessible, cross-device touch & pointer sensors)
 - **Icons**: Lucide React
+- **Progressive Web App (PWA)**: Web App Manifest, Service Worker (`sw.js`), adaptive Android maskable icons (192x192 & 512x512), and in-app install prompt for Android and mobile browsers
 - **Bundler**: Vite configured with relative base path (`base: './'`) for dynamic Home Assistant Ingress proxying
 
 ## Getting Started (pnpm)

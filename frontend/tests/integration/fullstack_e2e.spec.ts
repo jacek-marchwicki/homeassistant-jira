@@ -234,5 +234,74 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(activeBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
   });
+
+  test('9. PWA Installability: serves valid manifest, icons, service worker, and mobile install prompt', async ({
+    page,
+    request,
+  }) => {
+    // 1. Verify Web App Manifest link in DOM
+    const manifestLink = page.locator('link[rel="manifest"]');
+    await expect(manifestLink).toHaveAttribute('href', 'manifest.webmanifest');
+
+    // 2. Fetch and validate Manifest JSON
+    const manifestRes = await request.get('/manifest.webmanifest');
+    expect(manifestRes.ok()).toBeTruthy();
+    const manifest = await manifestRes.json();
+    expect(manifest.name).toBe('Jira Dashboard');
+    expect(manifest.short_name).toBe('Jira');
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.start_url).toBe('./');
+    expect(manifest.scope).toBe('./');
+    expect(manifest.theme_color).toBe('#0f172a');
+    expect(manifest.background_color).toBe('#0f172a');
+
+    // 3. Verify Android-required icons (192x192 and 512x512 including maskable)
+    const icon192 = manifest.icons.find(
+      (i: { sizes: string; purpose: string }) => i.sizes === '192x192' && i.purpose === 'any'
+    );
+    const icon512 = manifest.icons.find(
+      (i: { sizes: string; purpose: string }) => i.sizes === '512x512' && i.purpose === 'any'
+    );
+    const iconMaskable192 = manifest.icons.find(
+      (i: { sizes: string; purpose: string }) => i.sizes === '192x192' && i.purpose === 'maskable'
+    );
+    const iconMaskable512 = manifest.icons.find(
+      (i: { sizes: string; purpose: string }) => i.sizes === '512x512' && i.purpose === 'maskable'
+    );
+
+    expect(icon192).toBeDefined();
+    expect(icon512).toBeDefined();
+    expect(iconMaskable192).toBeDefined();
+    expect(iconMaskable512).toBeDefined();
+
+    // 4. Verify icon assets exist on server
+    const res192 = await request.get(`/${icon192.src}`);
+    expect(res192.ok()).toBeTruthy();
+    expect(res192.headers()['content-type']).toContain('image/png');
+
+    const res512 = await request.get(`/${icon512.src}`);
+    expect(res512.ok()).toBeTruthy();
+    expect(res512.headers()['content-type']).toContain('image/png');
+
+    // 5. Verify Service Worker asset is served
+    const swRes = await request.get('/sw.js');
+    expect(swRes.ok()).toBeTruthy();
+    const swContent = await swRes.text();
+    expect(swContent).toContain('jira-dashboard-v1');
+    expect(swContent).toContain('skipWaiting');
+
+    // 6. Verify Install Button in Header triggers Guidance Modal
+    const installBtn = page.getByRole('button', { name: 'Install App' });
+    await expect(installBtn).toBeVisible();
+    await installBtn.click();
+
+    // Modal appears
+    await expect(page.getByRole('dialog', { name: 'Install Jira Dashboard' })).toBeVisible();
+    await expect(page.getByText('Desktop Browser')).toBeVisible();
+
+    // Close modal
+    await page.getByRole('button', { name: 'Got it' }).click();
+    await expect(page.getByRole('dialog', { name: 'Install Jira Dashboard' })).not.toBeVisible();
+  });
 });
 

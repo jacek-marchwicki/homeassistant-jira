@@ -1,8 +1,13 @@
-import { LayoutGrid, Layers, ListTodo, Moon, Sun, Tv, Wifi, WifiOff } from 'lucide-react';
+import { Download, LayoutGrid, Layers, ListTodo, Moon, Sun, Tv, Wifi, WifiOff } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { splitIssuesByBacklog } from '../utils/boardUtils.ts';
 
-export function Header() {
+export interface HeaderProps {
+  canInstall?: boolean;
+  onInstall?: () => void;
+}
+
+export function Header({ canInstall = false, onInstall }: HeaderProps) {
   const {
     boardName,
     sprintName,
@@ -102,6 +107,19 @@ export function Header() {
             </>
           )}
         </div>
+
+        {/* PWA Install Button */}
+        {canInstall && onInstall && (
+          <button
+            onClick={onInstall}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--jira-primary)]/40 bg-[var(--jira-primary)]/10 text-[var(--jira-primary)] hover:bg-[var(--jira-primary)] hover:text-white transition-colors text-xs font-semibold cursor-pointer min-h-[36px]"
+            title="Install Jira Dashboard"
+            aria-label="Install App"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Install</span>
+          </button>
+        )}
 
         <div className="flex items-center p-1 rounded-lg border border-[var(--jira-border)] bg-[var(--jira-surface)]">
           <button

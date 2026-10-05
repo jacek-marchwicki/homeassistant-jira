@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="layer-grad-top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <linearGradient id="layer-grad-mid" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="layer-grad-bot" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="45%" r="40%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bg-grad)" />
+
+  <!-- Subtle glow halo behind icon -->
+  <circle cx="256" cy="240" r="190" fill="url(#halo)" />
+
+  <!-- Decorative subtle rounded border for standalone preview -->
+  
+
+  <!-- Scaled centered Layers icon -->
+  <g transform="translate(88, 88) scale(14)">
+    <!-- Top Layer (diamond) -->
+    <path
+      d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+      fill="url(#layer-grad-top)"
+      stroke="#93c5fd"
+      stroke-width="0.6"
+      stroke-linejoin="round"
+    />
+    <!-- Middle Layer -->
+    <path
+      d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"
+      fill="none"
+      stroke="url(#layer-grad-mid)"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <!-- Bottom Layer -->
+    <path
+      d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"
+      fill="none"
+      stroke="url(#layer-grad-bot)"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>

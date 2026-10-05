@@ -44,7 +44,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'PYTHONPATH=backend/src python3 -m uvicorn jira_dashboard.presentation.main:app --port 8000',
+    command: 'JIRA_USE_FAKE=1 JIRA_BOARD_ID=engineering-1 PYTHONPATH=backend/src python3 -m uvicorn jira_dashboard.presentation.main:app --port 8000',
     url: 'http://127.0.0.1:8000/health',
     reuseExistingServer: !process.env.CI,
     cwd: projectRoot,

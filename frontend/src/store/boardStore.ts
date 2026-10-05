@@ -74,10 +74,16 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           boardName: data.board_name || 'Engineering Sprint Board',
           sprintName: data.sprint_name || '',
           issues: data.issues || [],
+          errorMessage: null,
+        });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        set({
+          errorMessage: err.detail || `Failed to load board (HTTP ${res.status})`,
         });
       }
     } catch {
-      // In preview or offline mode, retain existing state
+      set({ errorMessage: 'Unable to connect to Jira backend server.' });
     }
   },
 

@@ -90,6 +90,7 @@ class JiraCloudClient(JiraClientProtocol):
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self.settings = settings
+        self._custom_client = http_client is not None
         base_url = (settings.jira_url or "https://jira.example.com").rstrip("/")
         self.base_url = base_url
 
@@ -119,6 +120,85 @@ class JiraCloudClient(JiraClientProtocol):
     async def close(self) -> None:
         """Close underlying HTTP client connection pool."""
         await self._client.aclose()
+
+    async def _discover_cloud_id(self, site_url: str) -> str | None:
+        """Discover the Atlassian Cloud ID for a given Jira Cloud site URL."""
+        try:
+            clean_url = site_url.rstrip("/")
+            async with httpx.AsyncClient(timeout=5.0) as probe_client:
+                r = await probe_client.get(f"{clean_url}/_edge/tenant_info")
+                if r.is_success:
+                    return r.json().get("cloudId")
+        except Exception as exc:
+            logger.debug("Failed to discover Atlassian cloudId from %s: %s", site_url, exc)
+        return None
+
+    async def _send_request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """Execute an HTTP request, automatically resolving Atlassian Cloud Gateway if needed."""
+        # 1. Proactively resolve Atlassian Cloud Gateway if scoped token (ATATT...)
+        # is used with a direct *.atlassian.net URL
+        if (
+            not self._custom_client
+            and not getattr(self, "_gateway_resolved", False)
+            and ".atlassian.net" in str(self._client.base_url)
+            and "api.atlassian.com" not in str(self._client.base_url)
+            and (
+                (self.settings.jira_api_token and self.settings.jira_api_token.startswith("ATATT"))
+                or (
+                    self.settings.jira_personal_access_token
+                    and self.settings.jira_personal_access_token.startswith("ATATT")
+                )
+            )
+        ):
+            self._gateway_resolved = True
+            cloud_id = await self._discover_cloud_id(str(self._client.base_url))
+            if cloud_id:
+                gateway_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
+                logger.info(
+                    "Detected Atlassian scoped token; resolved Cloud ID %s; base URL: %s",
+                    cloud_id,
+                    gateway_url,
+                )
+                self.base_url = gateway_url
+                headers = dict(self._client.headers)
+                auth = self._client.auth
+                await self._client.aclose()
+                self._client = httpx.AsyncClient(
+                    base_url=gateway_url,
+                    headers=headers,
+                    auth=auth,
+                    timeout=15.0,
+                )
+
+        res = await self._client.request(method, url, **kwargs)
+
+        # 2. Reactive resolution if direct atlassian.net returns 401
+        if (
+            not self._custom_client
+            and res.status_code == 401
+            and ".atlassian.net" in str(self._client.base_url)
+            and "api.atlassian.com" not in str(self._client.base_url)
+        ):
+            cloud_id = await self._discover_cloud_id(str(self._client.base_url))
+            if cloud_id:
+                gateway_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
+                logger.info(
+                    "Resolved Atlassian Cloud ID %s on 401; switching base URL to gateway %s",
+                    cloud_id,
+                    gateway_url,
+                )
+                self.base_url = gateway_url
+                headers = dict(self._client.headers)
+                auth = self._client.auth
+                await self._client.aclose()
+                self._client = httpx.AsyncClient(
+                    base_url=gateway_url,
+                    headers=headers,
+                    auth=auth,
+                    timeout=15.0,
+                )
+                res = await self._client.request(method, url, **kwargs)
+        return res
 
     def _handle_response_errors(self, response: httpx.Response) -> None:
         """Check response status and raise typed JiraAPIError if error occurred."""
@@ -226,20 +306,29 @@ class JiraCloudClient(JiraClientProtocol):
         )
 
     async def get_board_issues(self, board_id: str) -> list[JiraIssue]:
-        """Fetch all issues for a given board ID."""
+        """Fetch all issues for a given board ID or project key."""
         try:
             # 1. First attempt Jira Agile API
-            res = await self._client.get(
+            res = await self._send_request(
+                "GET",
                 f"/rest/agile/1.0/board/{board_id}/issue",
                 params={"maxResults": 100},
             )
-            if res.status_code == 404 or res.status_code == 400:
-                # 2. Fallback to JQL search if board_id is not an agile board or is project key
+            # If board is 404, or 400 (e.g. project key used instead of board ID),
+            # or 401 with "scope does not match" (user token missing read:jira-agile scope),
+            # fallback to standard modern JQL search endpoint /rest/api/3/search/jql
+            should_fallback_to_jql = res.status_code in (400, 404) or (
+                res.status_code == 401 and "scope does not match" in res.text.lower()
+            )
+            if should_fallback_to_jql:
+                # 2. Modern JQL search endpoint /rest/api/3/search/jql
                 jql = f"project = '{board_id}' ORDER BY updated DESC"
-                res = await self._client.get(
-                    "/rest/api/3/search",
-                    params={"jql": jql, "maxResults": 100},
+                res = await self._send_request(
+                    "GET",
+                    "/rest/api/3/search/jql",
+                    params={"jql": jql, "fields": "*all", "maxResults": 100},
                 )
+
             self._handle_response_errors(res)
             data = res.json()
             issues_raw = data.get("issues", [])
@@ -250,7 +339,7 @@ class JiraCloudClient(JiraClientProtocol):
     async def get_issue(self, issue_key: str) -> JiraIssue | None:
         """Fetch a single issue by key."""
         try:
-            res = await self._client.get(f"/rest/api/3/issue/{issue_key}")
+            res = await self._send_request("GET", f"/rest/api/3/issue/{issue_key}")
             if res.status_code == 404:
                 return None
             self._handle_response_errors(res)
@@ -261,8 +350,9 @@ class JiraCloudClient(JiraClientProtocol):
     async def transition_issue(self, issue_key: str, target_category: StatusCategory) -> JiraIssue:
         """Transition an issue to a new status category."""
         try:
-            # 1. Query available transitions for this issue
-            trans_res = await self._client.get(f"/rest/api/3/issue/{issue_key}/transitions")
+            trans_res = await self._send_request(
+                "GET", f"/rest/api/3/issue/{issue_key}/transitions"
+            )
             self._handle_response_errors(trans_res)
             trans_data = trans_res.json()
             available = trans_data.get("transitions", [])
@@ -288,7 +378,8 @@ class JiraCloudClient(JiraClientProtocol):
                 )
 
             # 3. Post transition execution
-            exec_res = await self._client.post(
+            exec_res = await self._send_request(
+                "POST",
                 f"/rest/api/3/issue/{issue_key}/transitions",
                 json={"transition": {"id": target_trans_id}},
             )

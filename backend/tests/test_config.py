@@ -38,9 +38,16 @@ def test_load_from_options_file(tmp_path: Path, monkeypatch) -> None:
     }
     options_file.write_text(json.dumps(data), encoding="utf-8")
 
-    monkeypatch.delenv("JIRA_URL", raising=False)
-    monkeypatch.delenv("JIRA_EMAIL", raising=False)
-    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+    for var in (
+        "JIRA_URL",
+        "JIRA_EMAIL",
+        "JIRA_API_TOKEN",
+        "JIRA_PAT",
+        "JIRA_BOARD_ID",
+        "JIRA_WEBHOOK_SECRET",
+        "POLLING_INTERVAL_SECONDS",
+    ):
+        monkeypatch.delenv(var, raising=False)
 
     settings = JiraDashboardSettings.load(options_path=options_file)
     assert settings.jira_url == "https://example.atlassian.net"

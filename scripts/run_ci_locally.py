@@ -121,13 +121,13 @@ def run_native_pipeline(
             "Step 3: Running Backend tests (pytest & unittest)...",
             [sys.executable, "-m", "pytest", "backend/tests"],
             project_root,
-            {"PYTHONPATH": str(project_root / "backend" / "src")},
+            {"PYTHONPATH": str(project_root / "backend" / "src"), "JIRA_USE_FAKE": "1"},
         ),
         (
             "Step 3b: Running Backend tests (standard unittest runner)...",
             [sys.executable, "-m", "unittest", "discover", "-s", "backend/tests"],
             project_root,
-            {"PYTHONPATH": str(project_root / "backend" / "src")},
+            {"PYTHONPATH": str(project_root / "backend" / "src"), "JIRA_USE_FAKE": "1"},
         ),
         (
             "Step 4: Running Frontend unit tests (Vitest)...",
@@ -149,7 +149,7 @@ def run_native_pipeline(
                 "Step 6: Running Full-Stack E2E Integration tests (Playwright)...",
                 ["npx", "pnpm", "--dir", "frontend", "test:e2e"],
                 project_root,
-                None,
+                {"JIRA_USE_FAKE": "1"},
             )
         )
 
@@ -159,7 +159,7 @@ def run_native_pipeline(
                 "Step 7: Running Visual Screenshot tests across viewports & themes (Playwright)...",
                 ["npx", "pnpm", "--dir", "frontend", "test:visual"],
                 project_root,
-                None,
+                {"JIRA_USE_FAKE": "1"},
             )
         )
 

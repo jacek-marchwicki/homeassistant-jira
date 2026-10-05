@@ -241,6 +241,7 @@ async def get_board() -> BoardResponse:
     try:
         issues = await jira_client.get_board_issues(board_id)
     except JiraAPIError as exc:
+        logger.error("Failed to fetch board issues from Jira: %s", exc)
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     # Seed cache for polling loop
@@ -249,10 +250,23 @@ async def get_board() -> BoardResponse:
             f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
         )
 
+    if isinstance(jira_client, FakeJiraClient):
+        board_name = "Engineering Sprint Board"
+        sprint_name = "Active Sprint 42"
+    else:
+        board_name = (
+            f"{board_id.upper()} Board"
+            if board_id and board_id != "engineering-1"
+            else "Engineering Sprint Board"
+        )
+        sprint_name = (
+            "Active Issues" if board_id and board_id != "engineering-1" else "Active Sprint 42"
+        )
+
     return BoardResponse(
         board_id=board_id,
-        board_name="Engineering Sprint Board",
-        sprint_name="Active Sprint 42",
+        board_name=board_name,
+        sprint_name=sprint_name,
         issues=issues,
     )
 

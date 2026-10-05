@@ -20,6 +20,12 @@ def create_jira_client(settings: JiraDashboardSettings | None = None) -> JiraCli
     Uses JiraCloudClient if real credentials exist, otherwise falls back
     to FakeJiraClient for local development and testing.
     """
+    import os
+
+    if os.environ.get("JIRA_USE_FAKE") == "1":
+        logger.info("JIRA_USE_FAKE=1 set; using in-memory FakeJiraClient test double.")
+        return FakeJiraClient()
+
     if settings is None:
         settings = JiraDashboardSettings.load()
 

@@ -19,7 +19,8 @@ describe('Zustand BoardStore', () => {
       boardName: 'Engineering Sprint Board',
       sprintName: 'Active Sprint 42',
       wsConnected: false,
-      activeFilter: 'all',
+      activeFilters: ['my', 'active'],
+      activeFilter: 'my,active',
       searchQuery: '',
       errorMessage: null,
       rollbackQueue: {},
@@ -89,8 +90,18 @@ describe('Zustand BoardStore', () => {
   });
 
   it('toggles filters and search query correctly', () => {
-    useBoardStore.getState().setActiveFilter('blockers');
-    expect(useBoardStore.getState().activeFilter).toBe('blockers');
+    expect(useBoardStore.getState().activeFilters).toEqual(['my', 'active']);
+
+    useBoardStore.getState().toggleFilter('my');
+    expect(useBoardStore.getState().activeFilters).toEqual(['active']);
+
+    useBoardStore.getState().toggleFilter('active');
+    expect(useBoardStore.getState().activeFilters).toEqual([]);
+    expect(useBoardStore.getState().activeFilter).toBe('all');
+
+    useBoardStore.getState().setActiveFilter('my');
+    expect(useBoardStore.getState().activeFilters).toEqual(['my']);
+    expect(useBoardStore.getState().activeFilter).toBe('my');
 
     useBoardStore.getState().setSearchQuery('test query');
     expect(useBoardStore.getState().searchQuery).toBe('test query');

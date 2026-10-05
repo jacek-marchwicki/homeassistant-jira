@@ -2,15 +2,27 @@ import { Search } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 
 export function FilterBar() {
-  const { issues, activeFilter, setActiveFilter, searchQuery, setSearchQuery } = useBoardStore();
+  const {
+    issues,
+    activeFilters,
+    toggleFilter,
+    setActiveFilter,
+    searchQuery,
+    setSearchQuery,
+  } = useBoardStore();
+
+  const isAll = activeFilters.length === 0;
+  const isMy = activeFilters.includes('my');
+  const isActive = activeFilters.includes('active');
 
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--jira-border)] bg-[var(--jira-canvas)]">
       <div className="flex items-center gap-2 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveFilter('all')}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-            activeFilter === 'all'
+            isAll
               ? 'bg-[var(--jira-primary)] text-white shadow-sm font-semibold'
               : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
           }`}
@@ -18,9 +30,10 @@ export function FilterBar() {
           All Issues ({issues.length})
         </button>
         <button
-          onClick={() => setActiveFilter('my')}
+          type="button"
+          onClick={() => toggleFilter('my')}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-            activeFilter === 'my'
+            isMy
               ? 'bg-[var(--jira-primary)] text-white shadow-sm font-semibold'
               : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
           }`}
@@ -28,14 +41,15 @@ export function FilterBar() {
           Assigned to Me
         </button>
         <button
-          onClick={() => setActiveFilter('blockers')}
+          type="button"
+          onClick={() => toggleFilter('active')}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-            activeFilter === 'blockers'
+            isActive
               ? 'bg-[var(--jira-primary)] text-white shadow-sm font-semibold'
               : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
           }`}
         >
-          Blockers & Critical
+          Active
         </button>
       </div>
 

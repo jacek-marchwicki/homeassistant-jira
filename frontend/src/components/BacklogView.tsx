@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   CollisionDetection,
   DndContext,
@@ -20,13 +20,14 @@ import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
 import { BacklogIssueRow } from './BacklogIssueRow.tsx';
 import { BacklogList } from './BacklogList.tsx';
-import { splitIssuesByBacklog } from '../utils/boardUtils.ts';
+import { filterIssues, splitIssuesByBacklog } from '../utils/boardUtils.ts';
 
 export function BacklogView() {
   const {
     issues,
     columns,
     sprintName,
+    activeFilters,
     activeFilter,
     searchQuery,
     moveToBoard,
@@ -51,23 +52,10 @@ export function BacklogView() {
   );
 
   // Filter issues based on active filter and search query
-  const filteredIssues = issues.filter((issue) => {
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchesKey = issue.key.toLowerCase().includes(q);
-      const matchesSummary = issue.summary.toLowerCase().includes(q);
-      if (!matchesKey && !matchesSummary) return false;
-    }
-
-    if (activeFilter === 'my') {
-      const name = issue.assignee?.displayName || issue.assignee?.display_name || '';
-      return name.includes('Jacek');
-    }
-    if (activeFilter === 'blockers') {
-      return issue.priority === 'highest' || issue.status.category === 'blocked';
-    }
-    return true;
-  });
+  const filteredIssues = useMemo(
+    () => filterIssues(issues, { activeFilters, activeFilter, searchQuery }),
+    [issues, activeFilters, activeFilter, searchQuery]
+  );
 
   const { boardIssues, backlogIssues } = splitIssuesByBacklog(filteredIssues, columns);
 

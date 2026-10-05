@@ -27,6 +27,7 @@ export interface BoardStoreState {
   boardName: string;
   sprintName: string;
   wsConnected: boolean;
+  activeFilters: string[];
   activeFilter: string;
   searchQuery: string;
   errorMessage: string | null;
@@ -37,6 +38,8 @@ export interface BoardStoreState {
   // Actions
   setTheme: (theme: ThemeMode) => void;
   setWsConnected: (connected: boolean) => void;
+  setActiveFilters: (filters: string[]) => void;
+  toggleFilter: (filter: string) => void;
   setActiveFilter: (filter: string) => void;
   setSearchQuery: (query: string) => void;
   setErrorMessage: (msg: string | null) => void;
@@ -60,7 +63,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   boardName: 'Engineering Sprint Board',
   sprintName: 'Active Sprint 42',
   wsConnected: false,
-  activeFilter: 'all',
+  activeFilters: ['my', 'active'],
+  activeFilter: 'my,active',
   searchQuery: '',
   errorMessage: null,
   rollbackQueue: {},
@@ -99,8 +103,35 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     set({ wsConnected: connected });
   },
 
+  setActiveFilters: (filters: string[]) => {
+    set({
+      activeFilters: filters,
+      activeFilter: filters.length === 0 ? 'all' : filters.join(','),
+    });
+  },
+
+  toggleFilter: (filter: string) => {
+    set((state) => {
+      if (filter === 'all') {
+        return { activeFilters: [], activeFilter: 'all' };
+      }
+      const exists = state.activeFilters.includes(filter);
+      const updated = exists
+        ? state.activeFilters.filter((f) => f !== filter)
+        : [...state.activeFilters, filter];
+      return {
+        activeFilters: updated,
+        activeFilter: updated.length === 0 ? 'all' : updated.join(','),
+      };
+    });
+  },
+
   setActiveFilter: (filter: string) => {
-    set({ activeFilter: filter });
+    if (filter === 'all') {
+      set({ activeFilters: [], activeFilter: 'all' });
+    } else {
+      set({ activeFilters: [filter], activeFilter: filter });
+    }
   },
 
   setSearchQuery: (query: string) => {

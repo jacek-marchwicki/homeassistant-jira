@@ -16,6 +16,7 @@ const testIssues: JiraIssue[] = [
     priority: 'high',
     status: { id: 'col-todo', name: 'To Do', category: 'todo' },
     assignee: { accountId: 'usr-1', displayName: 'Jacek Marchwicki' },
+    start_date: '2026-10-01',
   },
   {
     id: '2',
@@ -24,6 +25,25 @@ const testIssues: JiraIssue[] = [
     priority: 'highest',
     status: { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
     assignee: { accountId: 'usr-2', displayName: 'Alex Lead' },
+    start_date: '2026-10-01',
+  },
+  {
+    id: '3',
+    key: 'TEST-3',
+    summary: 'Unassigned task',
+    priority: 'medium',
+    status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+    assignee: null,
+    start_date: null,
+  },
+  {
+    id: '4',
+    key: 'TEST-4',
+    summary: 'Future task for me',
+    priority: 'low',
+    status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+    assignee: { accountId: 'usr-1', displayName: 'Jacek Marchwicki' },
+    start_date: '2099-01-01',
   },
 ];
 
@@ -33,12 +53,13 @@ describe('KanbanBoard component', () => {
       useBoardStore.setState({
         issues: testIssues,
         searchQuery: '',
+        activeFilters: [],
         activeFilter: 'all',
       });
     });
   });
 
-  it('renders all Kanban columns with their respective issues', async () => {
+  it('renders all Kanban columns with their respective issues when All Issues is selected', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
@@ -54,6 +75,8 @@ describe('KanbanBoard component', () => {
 
     expect(container.textContent).toContain('Fix navigation menu');
     expect(container.textContent).toContain('Database connection issue');
+    expect(container.textContent).toContain('Unassigned task');
+    expect(container.textContent).toContain('Future task for me');
 
     await act(async () => {
       root.unmount();
@@ -77,17 +100,56 @@ describe('KanbanBoard component', () => {
     });
   });
 
-  it('filters issues when "my" filter is active', async () => {
+  it('filters issues when "my" filter is active (includes me and unassigned, excludes others)', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
     await act(async () => {
-      useBoardStore.setState({ activeFilter: 'my' });
+      useBoardStore.setState({ activeFilters: ['my'], activeFilter: 'my' });
       root.render(<KanbanBoard />);
     });
 
     expect(container.textContent).toContain('Fix navigation menu');
+    expect(container.textContent).toContain('Unassigned task');
     expect(container.textContent).not.toContain('Database connection issue');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('filters issues when "active" filter is active (excludes future start dates)', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({ activeFilters: ['active'], activeFilter: 'active' });
+      root.render(<KanbanBoard />);
+    });
+
+    expect(container.textContent).toContain('Fix navigation menu');
+    expect(container.textContent).toContain('Database connection issue');
+    expect(container.textContent).toContain('Unassigned task');
+    expect(container.textContent).not.toContain('Future task for me');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('filters issues when both "my" and "active" are active by default', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({ activeFilters: ['my', 'active'], activeFilter: 'my,active' });
+      root.render(<KanbanBoard />);
+    });
+
+    expect(container.textContent).toContain('Fix navigation menu');
+    expect(container.textContent).toContain('Unassigned task');
+    expect(container.textContent).not.toContain('Database connection issue');
+    expect(container.textContent).not.toContain('Future task for me');
 
     await act(async () => {
       root.unmount();

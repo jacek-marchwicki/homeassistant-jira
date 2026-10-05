@@ -36,7 +36,7 @@ export interface JiraIssue {
   issue_type?: 'story' | 'bug' | 'task' | 'subtask';
   priority: JiraPriority;
   status: JiraStatus;
-  assignee?: JiraUser;
+  assignee?: JiraUser | null;
   storyPoints?: number;
   story_points?: number;
   dueDate?: string | null;

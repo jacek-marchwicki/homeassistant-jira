@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   CollisionDetection,
   DndContext,
@@ -22,6 +22,7 @@ import { BacklogPanel } from './BacklogPanel.tsx';
 import { IssueCard } from './IssueCard.tsx';
 import { KanbanColumn } from './KanbanColumn.tsx';
 import {
+  filterIssues,
   getActiveBoardColumns,
   getCategoryColorVar,
   getColumnForIssue,
@@ -34,6 +35,7 @@ export function KanbanBoard() {
   const {
     issues,
     columns,
+    activeFilters,
     activeFilter,
     searchQuery,
     transitionIssueOptimistic,
@@ -61,25 +63,10 @@ export function KanbanBoard() {
   );
 
   // Filter & Search Logic
-  const filteredIssues = issues.filter((issue) => {
-    // 1. Text Search Filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchesKey = issue.key.toLowerCase().includes(q);
-      const matchesSummary = issue.summary.toLowerCase().includes(q);
-      if (!matchesKey && !matchesSummary) return false;
-    }
-
-    // 2. Quick Category Filter
-    if (activeFilter === 'my') {
-      const name = issue.assignee?.displayName || issue.assignee?.display_name || '';
-      return name.includes('Jacek');
-    }
-    if (activeFilter === 'blockers') {
-      return issue.priority === 'highest' || issue.status.category === 'blocked';
-    }
-    return true;
-  });
+  const filteredIssues = useMemo(
+    () => filterIssues(issues, { activeFilters, activeFilter, searchQuery }),
+    [issues, activeFilters, activeFilter, searchQuery]
+  );
 
   // Active columns (excluding Backlog so it is never rendered as a Kanban column)
   const activeColumns = getActiveBoardColumns(columns);

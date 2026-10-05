@@ -276,4 +276,108 @@ export function splitReadyIssues(
   return { overdue, expedited, other };
 }
 
+/**
+ * Returns true if an issue is assigned to the specified user ('me') or not assigned to anyone.
+ */
+export function isAssignedToMeOrUnassigned(
+  issue: JiraIssue,
+  currentUser: string = 'Jacek'
+): boolean {
+  if (!issue.assignee) return true;
+  const name = issue.assignee.displayName || issue.assignee.display_name || '';
+  if (!name.trim()) return true;
+  return name.toLowerCase().includes(currentUser.toLowerCase());
+}
+
+/**
+ * Returns true if an issue is Active.
+ * An issue is active if it has no Start date OR its Start date is not in the future (Start date <= Now date).
+ */
+export function isIssueActive(issue: JiraIssue, now: Date = new Date()): boolean {
+  const startDateStr = issue.start_date ?? issue.startDate;
+  if (!startDateStr) return true;
+  const startDate = parseDate(startDateStr);
+  if (!startDate) return true;
+
+  const startOfStartDate = new Date(
+    startDate.getFullYear(),
+    startDate.getMonth(),
+    startDate.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+  return startOfStartDate <= startOfToday;
+}
+
+export interface FilterIssuesOptions {
+  activeFilters?: string[];
+  activeFilter?: string;
+  searchQuery?: string;
+  now?: Date;
+  currentUser?: string;
+}
+
+/**
+ * Filters an array of issues by search query and quick filters (e.g. 'my', 'active').
+ */
+export function filterIssues(
+  issues: JiraIssue[],
+  options: FilterIssuesOptions = {}
+): JiraIssue[] {
+  const { searchQuery = '', now = new Date(), currentUser = 'Jacek' } = options;
+
+  let filters: Set<string>;
+  if (options.activeFilter === 'all') {
+    filters = new Set();
+  } else if (options.activeFilters !== undefined) {
+    filters = new Set(options.activeFilters);
+  } else if (options.activeFilter) {
+    filters = new Set(
+      options.activeFilter
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+  } else {
+    filters = new Set(['my', 'active']);
+  }
+
+  return issues.filter((issue) => {
+    // 1. Text Search Filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesKey = (issue.key || '').toLowerCase().includes(q);
+      const matchesSummary = (issue.summary || '').toLowerCase().includes(q);
+      if (!matchesKey && !matchesSummary) return false;
+    }
+
+    // 2. Assigned to Me / Unassigned Filter
+    if (filters.has('my')) {
+      if (!isAssignedToMeOrUnassigned(issue, currentUser)) {
+        return false;
+      }
+    }
+
+    // 3. Active Filter (Start date not in future: empty or <= now)
+    if (filters.has('active')) {
+      if (!isIssueActive(issue, now)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
 

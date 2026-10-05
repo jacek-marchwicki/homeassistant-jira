@@ -11,6 +11,9 @@ import {
   isIssueOverdue,
   isIssueExpedited,
   splitReadyIssues,
+  isAssignedToMeOrUnassigned,
+  isIssueActive,
+  filterIssues,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -28,6 +31,9 @@ const mockBaseIssue: JiraIssue = {
   priority: 'medium',
   status: { id: '10002', name: 'Backlog', category: 'todo' },
 };
+
+// Fixed reference time for deterministic testing: 2026-10-05 12:00:00 local time
+const fixedNow = new Date(2026, 9, 5, 12, 0, 0); // October 5, 2026
 
 describe('boardUtils', () => {
   it('correctly maps issue by status ID when columns share the same category', () => {
@@ -207,9 +213,6 @@ describe('boardUtils', () => {
   });
 
   describe('Ready section splitting (Overdue, Expedited, Other)', () => {
-    // Fixed reference time for deterministic testing: 2026-10-05 12:00:00 local time
-    const fixedNow = new Date(2026, 9, 5, 12, 0, 0); // October 5, 2026
-
     it('correctly parses dates in YYYY-MM-DD format in local time', () => {
       const parsed = parseDate('2026-10-05');
       expect(parsed).not.toBeNull();
@@ -364,6 +367,204 @@ describe('boardUtils', () => {
         'TASK-OTHER-NORMAL',
         'TASK-OTHER-NO-DATES',
       ]);
+    });
+  });
+
+  describe('isAssignedToMeOrUnassigned', () => {
+    it('returns true when issue has no assignee', () => {
+      const issueWithoutAssignee: JiraIssue = {
+        ...mockBaseIssue,
+        assignee: null,
+      };
+      expect(isAssignedToMeOrUnassigned(issueWithoutAssignee)).toBe(true);
+
+      const issueUndefinedAssignee: JiraIssue = {
+        ...mockBaseIssue,
+        assignee: undefined,
+      };
+      expect(isAssignedToMeOrUnassigned(issueUndefinedAssignee)).toBe(true);
+    });
+
+    it('returns true when assignee name is empty or whitespace', () => {
+      const issueWithEmptyName: JiraIssue = {
+        ...mockBaseIssue,
+        assignee: { displayName: '' },
+      };
+      expect(isAssignedToMeOrUnassigned(issueWithEmptyName)).toBe(true);
+
+      const issueWithWhitespace: JiraIssue = {
+        ...mockBaseIssue,
+        assignee: { displayName: '   ' },
+      };
+      expect(isAssignedToMeOrUnassigned(issueWithWhitespace)).toBe(true);
+    });
+
+    it('returns true when issue is assigned to Jacek (default me)', () => {
+      const issueMe: JiraIssue = {
+        ...mockBaseIssue,
+        assignee: { displayName: 'Jacek Marchwicki' },
+      };
+      expect(isAssignedToMeOrUnassigned(issueMe)).toBe(true);
+
+      const issueSnakeCase: JiraIssue = {
+        ...mockBaseIssue,
+        assignee: { display_name: 'jacek' },
+      };
+      expect(isAssignedToMeOrUnassigned(issueSnakeCase)).toBe(true);
+    });
+
+    it('returns false when issue is assigned to someone else', () => {
+      const issueOther: JiraIssue = {
+        ...mockBaseIssue,
+        assignee: { displayName: 'Alex Lead' },
+      };
+      expect(isAssignedToMeOrUnassigned(issueOther)).toBe(false);
+    });
+
+    it('supports custom currentUser name', () => {
+      const issueAlex: JiraIssue = {
+        ...mockBaseIssue,
+        assignee: { displayName: 'Alex Lead' },
+      };
+      expect(isAssignedToMeOrUnassigned(issueAlex, 'Alex')).toBe(true);
+      expect(isAssignedToMeOrUnassigned(issueAlex, 'Jacek')).toBe(false);
+    });
+  });
+
+  describe('isIssueActive', () => {
+    it('returns true when issue has no start date', () => {
+      const noStartDate: JiraIssue = {
+        ...mockBaseIssue,
+        start_date: null,
+      };
+      expect(isIssueActive(noStartDate, fixedNow)).toBe(true);
+
+      const undefinedStartDate: JiraIssue = {
+        ...mockBaseIssue,
+        start_date: undefined,
+      };
+      expect(isIssueActive(undefinedStartDate, fixedNow)).toBe(true);
+    });
+
+    it('returns true when start date is in the past', () => {
+      const pastStart: JiraIssue = {
+        ...mockBaseIssue,
+        start_date: '2026-10-01',
+      };
+      expect(isIssueActive(pastStart, fixedNow)).toBe(true);
+    });
+
+    it('returns true when start date is today', () => {
+      const todayStart: JiraIssue = {
+        ...mockBaseIssue,
+        start_date: '2026-10-05',
+      };
+      expect(isIssueActive(todayStart, fixedNow)).toBe(true);
+    });
+
+    it('returns false when start date is in the future', () => {
+      const tomorrowStart: JiraIssue = {
+        ...mockBaseIssue,
+        start_date: '2026-10-06',
+      };
+      expect(isIssueActive(tomorrowStart, fixedNow)).toBe(false);
+
+      const futureStart: JiraIssue = {
+        ...mockBaseIssue,
+        start_date: '2026-10-25',
+      };
+      expect(isIssueActive(futureStart, fixedNow)).toBe(false);
+    });
+  });
+
+  describe('filterIssues', () => {
+    const issuesList: JiraIssue[] = [
+      {
+        ...mockBaseIssue,
+        key: 'ISSUE-1',
+        summary: 'Me with past start date',
+        assignee: { displayName: 'Jacek Marchwicki' },
+        start_date: '2026-10-01',
+      },
+      {
+        ...mockBaseIssue,
+        key: 'ISSUE-2',
+        summary: 'Unassigned with no start date',
+        assignee: null,
+        start_date: null,
+      },
+      {
+        ...mockBaseIssue,
+        key: 'ISSUE-3',
+        summary: 'Alex with past start date',
+        assignee: { displayName: 'Alex Lead' },
+        start_date: '2026-10-01',
+      },
+      {
+        ...mockBaseIssue,
+        key: 'ISSUE-4',
+        summary: 'Me with future start date',
+        assignee: { displayName: 'Jacek Marchwicki' },
+        start_date: '2026-10-15',
+      },
+      {
+        ...mockBaseIssue,
+        key: 'ISSUE-5',
+        summary: 'Unassigned with future start date',
+        assignee: null,
+        start_date: '2026-10-20',
+      },
+    ];
+
+    it('applies default quick filters (my + active) when no options provided', () => {
+      const result = filterIssues(issuesList, { now: fixedNow });
+      // Expect: ISSUE-1 (me, past start) and ISSUE-2 (unassigned, no start)
+      expect(result.map((i) => i.key)).toEqual(['ISSUE-1', 'ISSUE-2']);
+    });
+
+    it('filters by only "my" when activeFilters is ["my"]', () => {
+      const result = filterIssues(issuesList, { activeFilters: ['my'], now: fixedNow });
+      // Expect all issues assigned to me or unassigned, even if future start date:
+      // ISSUE-1 (me), ISSUE-2 (unassigned), ISSUE-4 (me), ISSUE-5 (unassigned)
+      expect(result.map((i) => i.key)).toEqual(['ISSUE-1', 'ISSUE-2', 'ISSUE-4', 'ISSUE-5']);
+    });
+
+    it('filters by only "active" when activeFilters is ["active"]', () => {
+      const result = filterIssues(issuesList, { activeFilters: ['active'], now: fixedNow });
+      // Expect all issues with start date <= today or empty, regardless of assignee:
+      // ISSUE-1 (me, past), ISSUE-2 (unassigned, empty), ISSUE-3 (Alex, past)
+      expect(result.map((i) => i.key)).toEqual(['ISSUE-1', 'ISSUE-2', 'ISSUE-3']);
+    });
+
+    it('returns all issues when activeFilters is empty (All Issues)', () => {
+      const result = filterIssues(issuesList, { activeFilters: [], now: fixedNow });
+      expect(result.map((i) => i.key)).toEqual([
+        'ISSUE-1',
+        'ISSUE-2',
+        'ISSUE-3',
+        'ISSUE-4',
+        'ISSUE-5',
+      ]);
+    });
+
+    it('respects legacy activeFilter="all"', () => {
+      const result = filterIssues(issuesList, { activeFilter: 'all', now: fixedNow });
+      expect(result.map((i) => i.key)).toEqual([
+        'ISSUE-1',
+        'ISSUE-2',
+        'ISSUE-3',
+        'ISSUE-4',
+        'ISSUE-5',
+      ]);
+    });
+
+    it('combines text search with quick filters', () => {
+      const result = filterIssues(issuesList, {
+        activeFilters: ['my', 'active'],
+        searchQuery: 'ISSUE-2',
+        now: fixedNow,
+      });
+      expect(result.map((i) => i.key)).toEqual(['ISSUE-2']);
     });
   });
 });

@@ -16,6 +16,7 @@ const testIssues: JiraIssue[] = [
     status: { id: 'col-todo', name: 'To Do', category: 'todo' },
     story_points: 5,
     assignee: { displayName: 'Jacek Marchwicki' },
+    start_date: '2026-10-01',
   },
   {
     id: '2',
@@ -25,6 +26,27 @@ const testIssues: JiraIssue[] = [
     status: { id: '0', name: 'Backlog', category: 'todo' },
     story_points: 3,
     assignee: { displayName: 'Alex Lead' },
+    start_date: '2026-10-01',
+  },
+  {
+    id: '3',
+    key: 'PROJ-3',
+    summary: 'Unassigned backlog item',
+    priority: 'low',
+    status: { id: '0', name: 'Backlog', category: 'todo' },
+    story_points: 2,
+    assignee: null,
+    start_date: null,
+  },
+  {
+    id: '4',
+    key: 'PROJ-4',
+    summary: 'Future sprint task',
+    priority: 'low',
+    status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+    story_points: 1,
+    assignee: { displayName: 'Jacek Marchwicki' },
+    start_date: '2099-01-01',
   },
 ];
 
@@ -35,6 +57,7 @@ describe('BacklogView component', () => {
         issues: testIssues,
         sprintName: 'Sprint 42',
         searchQuery: '',
+        activeFilters: [],
         activeFilter: 'all',
         columns: [
           { id: 'col-todo', name: 'To Do', category: 'todo' },
@@ -56,6 +79,8 @@ describe('BacklogView component', () => {
     expect(container.textContent).toContain('Active sprint task');
     expect(container.textContent).toContain('Backlog');
     expect(container.textContent).toContain('Backlog feature item');
+    expect(container.textContent).toContain('Unassigned backlog item');
+    expect(container.textContent).toContain('Future sprint task');
 
     await act(async () => {
       root.unmount();
@@ -79,17 +104,37 @@ describe('BacklogView component', () => {
     });
   });
 
-  it('filters issues when "my" filter is active', async () => {
+  it('filters issues when "my" filter is active (includes me and unassigned, excludes others)', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
     await act(async () => {
-      useBoardStore.setState({ activeFilter: 'my' });
+      useBoardStore.setState({ activeFilters: ['my'], activeFilter: 'my' });
       root.render(<BacklogView />);
     });
 
     expect(container.textContent).toContain('Active sprint task');
+    expect(container.textContent).toContain('Unassigned backlog item');
     expect(container.textContent).not.toContain('Backlog feature item');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('filters issues when "active" filter is active (excludes future start dates)', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({ activeFilters: ['active'], activeFilter: 'active' });
+      root.render(<BacklogView />);
+    });
+
+    expect(container.textContent).toContain('Active sprint task');
+    expect(container.textContent).toContain('Backlog feature item');
+    expect(container.textContent).toContain('Unassigned backlog item');
+    expect(container.textContent).not.toContain('Future sprint task');
 
     await act(async () => {
       root.unmount();

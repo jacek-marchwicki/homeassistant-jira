@@ -19,7 +19,7 @@ export function getInitials(name?: string): string {
 }
 
 interface AssigneeAvatarProps {
-  assignee?: JiraUser;
+  assignee?: JiraUser | null;
   sizeClassName?: string;
 }
 

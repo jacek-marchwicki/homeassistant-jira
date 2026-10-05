@@ -22,11 +22,17 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // 2. Validate Live WebSocket Connection badge
     await expect(page.getByText('Live WebSocket')).toBeVisible();
 
-    // 3. Validate Columns and Seed Issues
+    // 3. Validate Columns and Seed Issues (by default "Assigned to Me" and "Active" are selected)
     await expect(page.getByText('PROJ-101')).toBeVisible();
     await expect(page.getByText('Configure Home Assistant Ingress dynamic proxy support')).toBeVisible();
-    await expect(page.getByText('PROJ-98')).toBeVisible();
+    await expect(page.getByText('PROJ-85')).toBeVisible();
     await expect(page.getByText('PROJ-72')).toBeVisible();
+    // PROJ-98 is assigned to Alex Lead, so it is filtered out under default "Assigned to Me"
+    await expect(page.locator('article', { hasText: 'PROJ-98' })).not.toBeVisible();
+
+    // Click "All Issues" to view all cards including other assignees
+    await page.getByRole('button', { name: /All Issues/ }).click();
+    await expect(page.getByText('PROJ-98')).toBeVisible();
   });
 
   test('2. User Interaction: one-tap "Done" triggers optimistic mutation and syncs with backend', async ({ page }) => {
@@ -98,6 +104,9 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
       },
     });
 
+    // Make sure all issues are visible to access PROJ-98 (assigned to Alex)
+    await page.getByRole('button', { name: /All Issues/ }).click();
+
     const proj98Article = page.locator('article', { hasText: 'PROJ-98' });
     await expect(proj98Article).toBeVisible();
 
@@ -121,6 +130,9 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
   test('5. Dynamic Workflow Columns: renders workflow columns from backend and distributes cards', async ({
     page,
   }) => {
+    // Show all issues to inspect cards across all dynamic columns
+    await page.getByRole('button', { name: /All Issues/ }).click();
+
     // 1. Verify all 4 column headings are rendered with proper uppercase titles
     await expect(page.locator('h2', { hasText: 'To Do' })).toBeVisible();
     await expect(page.locator('h2', { hasText: 'In Progress' })).toBeVisible();
@@ -169,6 +181,9 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
   test('7. Filter and Search: instant search query filters displayed cards', async ({
     page,
   }) => {
+    // Show all issues before testing text search query
+    await page.getByRole('button', { name: /All Issues/ }).click();
+
     const searchInput = page.getByPlaceholder('Filter issues...');
     await expect(searchInput).toBeVisible();
 
@@ -184,4 +199,40 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await searchInput.clear();
     await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
   });
+
+  test('8. Quick Filters: "Assigned to Me" and "Active" toggle correctly and filter issues', async ({
+    page,
+  }) => {
+    // By default: "Assigned to Me" and "Active" are selected
+    const myBtn = page.getByRole('button', { name: 'Assigned to Me' });
+    const activeBtn = page.getByRole('button', { name: 'Active' });
+    const allBtn = page.getByRole('button', { name: /All Issues/ });
+
+    await expect(myBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(activeBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(allBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+
+    // PROJ-101 (Jacek) and PROJ-85 (unassigned) are visible; PROJ-98 (Alex) is hidden
+    await expect(page.locator('article', { hasText: 'PROJ-101' })).toBeVisible();
+    await expect(page.locator('article', { hasText: 'PROJ-85' })).toBeVisible();
+    await expect(page.locator('article', { hasText: 'PROJ-98' })).not.toBeVisible();
+
+    // Toggle "Assigned to Me" off -> PROJ-98 should become visible
+    await myBtn.click();
+    await expect(myBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
+
+    // Toggle "Assigned to Me" back on -> PROJ-98 should be hidden again
+    await myBtn.click();
+    await expect(myBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(page.locator('article', { hasText: 'PROJ-98' })).not.toBeVisible();
+
+    // Click "All Issues" -> all filters cleared, all issues visible
+    await allBtn.click();
+    await expect(allBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(myBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(activeBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
+  });
 });
+

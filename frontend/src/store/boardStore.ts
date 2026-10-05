@@ -18,6 +18,8 @@ export const DEFAULT_COLUMNS: BoardColumn[] = [
   { id: 'col-done', name: 'Done', category: 'done', status_ids: ['4'] },
 ];
 
+export type DashboardView = 'board' | 'backlog';
+
 export interface BoardStoreState {
   theme: ThemeMode;
   issues: JiraIssue[];
@@ -29,6 +31,8 @@ export interface BoardStoreState {
   searchQuery: string;
   errorMessage: string | null;
   rollbackQueue: Record<string, JiraIssue>;
+  currentView: DashboardView;
+  isBacklogExpandedOnBoard: boolean;
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
@@ -36,6 +40,10 @@ export interface BoardStoreState {
   setActiveFilter: (filter: string) => void;
   setSearchQuery: (query: string) => void;
   setErrorMessage: (msg: string | null) => void;
+  setCurrentView: (view: DashboardView) => void;
+  toggleBacklogExpandedOnBoard: () => void;
+  moveToBacklog: (issueKey: string) => Promise<void>;
+  moveToBoard: (issueKey: string) => Promise<void>;
   loadBoard: () => Promise<void>;
   transitionIssueOptimistic: (
     issueKey: string,
@@ -56,6 +64,31 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   searchQuery: '',
   errorMessage: null,
   rollbackQueue: {},
+  currentView: 'board',
+  isBacklogExpandedOnBoard: false,
+
+  setCurrentView: (view: DashboardView) => {
+    set({ currentView: view });
+  },
+
+  toggleBacklogExpandedOnBoard: () => {
+    set((state) => ({ isBacklogExpandedOnBoard: !state.isBacklogExpandedOnBoard }));
+  },
+
+  moveToBacklog: async (issueKey: string) => {
+    await get().transitionIssueOptimistic(issueKey, 'todo', 'Backlog');
+  },
+
+  moveToBoard: async (issueKey: string) => {
+    const { columns } = get();
+    const activeCols = columns.filter((c) => c.name.trim().toLowerCase() !== 'backlog');
+    const firstActiveCol = activeCols[0] || { category: 'todo' as const, name: 'To Do' };
+    await get().transitionIssueOptimistic(
+      issueKey,
+      firstActiveCol.category,
+      firstActiveCol.name
+    );
+  },
 
   setTheme: (newTheme: ThemeMode) => {
     set({ theme: newTheme });

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { BacklogView } from './components/BacklogView.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { Header } from './components/Header.tsx';
 import { KanbanBoard } from './components/KanbanBoard.tsx';
@@ -7,7 +8,8 @@ import { useBoardStore } from './store/boardStore.ts';
 import { getWsUrl } from './utils/paths.ts';
 
 export default function App() {
-  const { loadBoard, handleWsMessage, setWsConnected, errorMessage } = useBoardStore();
+  const { loadBoard, handleWsMessage, setWsConnected, errorMessage, currentView } =
+    useBoardStore();
   const wsRef = useRef<WebSocket | null>(null);
 
   // 1. Initial Load of Board State
@@ -60,7 +62,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]">
-      {/* Header */}
+      {/* Header with Board & Backlog Navigation */}
       <Header />
 
       {/* Error / Rollback Toast Banner */}
@@ -74,8 +76,8 @@ export default function App() {
       {/* Quick Filters & Search */}
       <FilterBar />
 
-      {/* Kanban Board with Drag-and-Drop */}
-      <KanbanBoard />
+      {/* Main View: Kanban Board or Dedicated Backlog List View */}
+      {currentView === 'board' ? <KanbanBoard /> : <BacklogView />}
     </div>
   );
 }

@@ -11,7 +11,8 @@ import {
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
-import { getColumnForIssue } from '../utils/boardUtils.ts';
+import { IssueTypeIcon } from './IssueTypeIcon.tsx';
+import { getAvailableStatuses, getColumnForIssue } from '../utils/boardUtils.ts';
 
 interface IssueCardProps {
   issue: JiraIssue;
@@ -45,6 +46,8 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
     opacity: isDragging ? 0.3 : 1,
   };
 
+  const statusOptions = getAvailableStatuses(columns);
+
   const handleQuickDone = (e: React.MouseEvent) => {
     e.stopPropagation();
     const doneCol = columns.find((c) => c.category === 'done');
@@ -53,9 +56,11 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     e.stopPropagation();
-    const chosenCol = columns.find((c) => c.id === e.target.value);
-    if (chosenCol) {
-      transitionIssueOptimistic(issue.key, chosenCol.category, chosenCol.name);
+    const chosenStatus = statusOptions.find(
+      (c) => c.id === e.target.value || c.name === e.target.value
+    );
+    if (chosenStatus) {
+      transitionIssueOptimistic(issue.key, chosenStatus.category, chosenStatus.name);
     }
   };
 
@@ -72,7 +77,10 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
       } ${isDragOverlay ? 'shadow-xl ring-2 ring-[var(--jira-primary)] cursor-grabbing' : ''}`}
     >
       <div className="flex items-center justify-between mb-1.5 pointer-events-auto">
-        <span className="text-xs font-bold text-[var(--jira-text-secondary)]">{issue.key}</span>
+        <div className="flex items-center gap-1.5">
+          <IssueTypeIcon type={issue.issue_type || issue.issueType} className="w-3.5 h-3.5" />
+          <span className="text-xs font-bold text-[var(--jira-text-secondary)]">{issue.key}</span>
+        </div>
 
         <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
           {/* Direct One-Tap Quick Action: Mark as Done */}
@@ -88,18 +96,18 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
             </button>
           )}
 
-          {/* Direct Transition Selector (Move to any column without dragging) */}
+          {/* Direct Transition Selector (Move to any column or Backlog without dragging) */}
           <div className="relative">
             <select
-              value={currentColumn?.id || ''}
+              value={currentColumn?.name || issue.status.name}
               onChange={handleStatusChange}
               className="text-2xs bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] rounded px-1.5 py-1 outline-none cursor-pointer min-h-[32px]"
               title="Change Status"
               aria-label={`Change status for ${issue.key}`}
             >
-              {columns.map((col) => (
-                <option key={col.id} value={col.id}>
-                  {col.name}
+              {statusOptions.map((opt) => (
+                <option key={opt.id} value={opt.name}>
+                  {opt.name}
                 </option>
               ))}
             </select>

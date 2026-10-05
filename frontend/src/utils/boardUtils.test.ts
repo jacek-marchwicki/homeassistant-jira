@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { getColumnForIssue, getCategoryColorVar, getColumnFromOver } from './boardUtils.ts';
+import {
+  getColumnForIssue,
+  getCategoryColorVar,
+  getColumnFromOver,
+  isBacklogIssue,
+  getActiveBoardColumns,
+  splitIssuesByBacklog,
+  getAvailableStatuses,
+} from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
 const homeColumns: BoardColumn[] = [
@@ -127,6 +135,70 @@ describe('boardUtils', () => {
         id: 'non-existent-id',
       };
       expect(getColumnFromOver(over, homeColumns, [mockBaseIssue])).toBeUndefined();
+    });
+  });
+
+  describe('Backlog utilities', () => {
+    it('identifies issues by status name "Backlog"', () => {
+      const issue: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '99', name: 'Backlog', category: 'todo' },
+      };
+      expect(isBacklogIssue(issue)).toBe(true);
+    });
+
+    it('identifies issues with in_backlog flag', () => {
+      const issue = {
+        ...mockBaseIssue,
+        status: { id: '1', name: 'To Do', category: 'todo' as const },
+        in_backlog: true,
+      };
+      expect(isBacklogIssue(issue as JiraIssue)).toBe(true);
+    });
+
+    it('identifies issues mapped to Backlog column', () => {
+      const issue: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '10002', name: 'Raw Ingest', category: 'todo' },
+      };
+      expect(isBacklogIssue(issue, homeColumns)).toBe(true);
+    });
+
+    it('returns false for active sprint issues', () => {
+      const issue: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '3', name: 'In Progress', category: 'inprogress' },
+      };
+      expect(isBacklogIssue(issue, homeColumns)).toBe(false);
+    });
+
+    it('filters out Backlog column in getActiveBoardColumns', () => {
+      const active = getActiveBoardColumns(homeColumns);
+      expect(active.some((c) => c.name.toLowerCase() === 'backlog')).toBe(false);
+      expect(active.map((c) => c.name)).toEqual(['Ready', 'In Progress', 'Done']);
+    });
+
+    it('splits issues cleanly into boardIssues and backlogIssues', () => {
+      const issues: JiraIssue[] = [
+        { ...mockBaseIssue, key: 'ISSUE-1', status: { id: '10002', name: 'Backlog', category: 'todo' } },
+        { ...mockBaseIssue, key: 'ISSUE-2', status: { id: '3', name: 'In Progress', category: 'inprogress' } },
+        { ...mockBaseIssue, key: 'ISSUE-3', status: { id: '10001', name: 'Done', category: 'done' } },
+      ];
+
+      const { boardIssues, backlogIssues } = splitIssuesByBacklog(issues, homeColumns);
+      expect(backlogIssues.map((i) => i.key)).toEqual(['ISSUE-1']);
+      expect(boardIssues.map((i) => i.key)).toEqual(['ISSUE-2', 'ISSUE-3']);
+    });
+
+    it('provides available statuses including Backlog', () => {
+      const colsWithoutBacklog: BoardColumn[] = [
+        { id: 'c1', name: 'To Do', category: 'todo' },
+        { id: 'c2', name: 'Done', category: 'done' },
+      ];
+      const options = getAvailableStatuses(colsWithoutBacklog);
+      expect(options.some((o) => o.name === 'Backlog')).toBe(true);
+      expect(options.some((o) => o.name === 'To Do')).toBe(true);
+      expect(options.some((o) => o.name === 'Done')).toBe(true);
     });
   });
 });

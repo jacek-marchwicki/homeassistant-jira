@@ -32,6 +32,8 @@ STATUS_MAP: dict[StatusCategory, JiraStatus] = {
     StatusCategory.BLOCKED: JiraStatus(id="5", name="Blocked", category=StatusCategory.BLOCKED),
 }
 
+STATUS_BACKLOG = JiraStatus(id="0", name="Backlog", category=StatusCategory.TODO)
+
 DEFAULT_COLUMNS: list[BoardColumn] = [
     BoardColumn(id="col-todo", name="To Do", category=StatusCategory.TODO, status_ids=["1"]),
     BoardColumn(
@@ -64,17 +66,6 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         ),
         story_points=5.0,
         updated_at="2026-10-04T22:30:00Z",
-    ),
-    JiraIssue(
-        id="104",
-        key="PROJ-104",
-        summary="Setup WebSocket broadcast client for live browser pushes",
-        issue_type=IssueType.TASK,
-        priority=Priority.MEDIUM,
-        status=STATUS_MAP[StatusCategory.TODO],
-        assignee=None,
-        story_points=3.0,
-        updated_at="2026-10-04T22:35:00Z",
     ),
     JiraIssue(
         id="98",
@@ -116,6 +107,32 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         ),
         story_points=2.0,
         updated_at="2026-10-04T22:50:00Z",
+    ),
+    JiraIssue(
+        id="104",
+        key="PROJ-104",
+        summary="Setup WebSocket broadcast client for live browser pushes",
+        issue_type=IssueType.TASK,
+        priority=Priority.MEDIUM,
+        status=STATUS_BACKLOG,
+        assignee=None,
+        story_points=3.0,
+        updated_at="2026-10-04T22:35:00Z",
+    ),
+    JiraIssue(
+        id="105",
+        key="PROJ-105",
+        summary="Support custom JQL query filters in Home Assistant sidebar",
+        issue_type=IssueType.STORY,
+        priority=Priority.LOW,
+        status=STATUS_BACKLOG,
+        assignee=JiraUser(
+            account_id="usr-1",
+            display_name="Jacek Marchwicki",
+            avatar_url=None,
+        ),
+        story_points=3.0,
+        updated_at="2026-10-04T22:55:00Z",
     ),
 ]
 

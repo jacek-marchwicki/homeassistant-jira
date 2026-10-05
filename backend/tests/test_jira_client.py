@@ -16,8 +16,10 @@ def test_fake_jira_client_fetches_seed_issues() -> None:
     async def _test() -> None:
         client = FakeJiraClient()
         issues = await client.get_board_issues("board-1")
-        assert len(issues) == 5
+        assert len(issues) == 6
         assert any(i.key == "PROJ-101" for i in issues)
+        assert any(i.key == "PROJ-104" for i in issues)
+        assert any(i.key == "PROJ-105" for i in issues)
 
     asyncio.run(_test())
 

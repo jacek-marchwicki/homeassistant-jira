@@ -17,16 +17,28 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
+import { BacklogIssueRow } from './BacklogIssueRow.tsx';
+import { BacklogPanel } from './BacklogPanel.tsx';
 import { IssueCard } from './IssueCard.tsx';
 import { KanbanColumn } from './KanbanColumn.tsx';
 import {
+  getActiveBoardColumns,
   getCategoryColorVar,
   getColumnForIssue,
   getColumnFromOver,
+  isBacklogIssue,
+  splitIssuesByBacklog,
 } from '../utils/boardUtils.ts';
 
 export function KanbanBoard() {
-  const { issues, columns, activeFilter, searchQuery, transitionIssueOptimistic } = useBoardStore();
+  const {
+    issues,
+    columns,
+    activeFilter,
+    searchQuery,
+    transitionIssueOptimistic,
+    moveToBacklog,
+  } = useBoardStore();
   const [activeIssue, setActiveIssue] = useState<JiraIssue | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
@@ -69,8 +81,12 @@ export function KanbanBoard() {
     return true;
   });
 
-  // Collision detection: Prioritize pointer collisions to accurately target columns/cards under the cursor,
-  // falling back to closestCorners for edge cases and keyboard dragging.
+  // Active columns (excluding Backlog so it is never rendered as a Kanban column)
+  const activeColumns = getActiveBoardColumns(columns);
+  // Separate Backlog issues from Active Board issues
+  const { boardIssues, backlogIssues } = splitIssuesByBacklog(filteredIssues, columns);
+
+  // Collision detection: Prioritize pointer collisions to accurately target columns/cards under cursor
   const collisionDetectionStrategy: CollisionDetection = (args) => {
     const pointerCollisions = pointerWithin(args);
     if (pointerCollisions.length > 0) {
@@ -84,7 +100,7 @@ export function KanbanBoard() {
     const issue = issues.find((i) => i.key === active.id);
     if (issue) {
       setActiveIssue(issue);
-      const initialCol = getColumnForIssue(issue, columns);
+      const initialCol = getColumnForIssue(issue, activeColumns);
       setOverColumnId(initialCol?.id ?? null);
     }
   };
@@ -95,7 +111,20 @@ export function KanbanBoard() {
       setOverColumnId(null);
       return;
     }
-    const targetCol = getColumnFromOver(over, columns, issues);
+
+    const overData = over.data?.current;
+    if (over.id === 'panel-backlog-list' || overData?.targetType === 'backlog') {
+      setOverColumnId('backlog');
+      return;
+    }
+
+    // If over an issue in the backlog list
+    if (backlogIssues.some((i) => i.key === String(over.id))) {
+      setOverColumnId('backlog');
+      return;
+    }
+
+    const targetCol = getColumnFromOver(over, activeColumns, issues);
     setOverColumnId(targetCol?.id ?? null);
   };
 
@@ -110,10 +139,23 @@ export function KanbanBoard() {
     const activeItem = issues.find((i) => i.key === activeKey);
     if (!activeItem) return;
 
-    const currentColumn = getColumnForIssue(activeItem, columns);
-    const targetCol = getColumnFromOver(over, columns, issues);
+    const overData = over.data?.current;
+    if (
+      over.id === 'panel-backlog-list' ||
+      overData?.targetType === 'backlog' ||
+      backlogIssues.some((i) => i.key === String(over.id))
+    ) {
+      moveToBacklog(activeKey);
+      return;
+    }
 
-    if (targetCol && currentColumn?.id !== targetCol.id) {
+    const currentColumn = getColumnForIssue(activeItem, activeColumns);
+    const targetCol = getColumnFromOver(over, activeColumns, issues);
+
+    if (
+      targetCol &&
+      (currentColumn?.id !== targetCol.id || isBacklogIssue(activeItem, columns))
+    ) {
       transitionIssueOptimistic(activeKey, targetCol.category, targetCol.name);
     }
   };
@@ -132,28 +174,43 @@ export function KanbanBoard() {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <main className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-4 overflow-y-auto overflow-x-auto min-w-0">
-        {columns.map((col) => {
-          const colIssues = filteredIssues.filter(
-            (i) => getColumnForIssue(i, columns)?.id === col.id
-          );
-          const colorVar = getCategoryColorVar(col.category);
-          return (
-            <KanbanColumn
-              key={col.id}
-              id={col.id}
-              category={col.category}
-              title={col.name}
-              colorVar={colorVar}
-              issues={colIssues}
-              isHighlighted={overColumnId === col.id}
-            />
-          );
-        })}
+      <main className="flex-1 p-4 flex flex-col overflow-y-auto">
+        {/* Kanban Board Active Workflow Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-4 overflow-x-auto min-w-0">
+          {activeColumns.map((col) => {
+            const colIssues = boardIssues.filter(
+              (i) => getColumnForIssue(i, activeColumns)?.id === col.id
+            );
+            const colorVar = getCategoryColorVar(col.category);
+            return (
+              <KanbanColumn
+                key={col.id}
+                id={col.id}
+                category={col.category}
+                title={col.name}
+                colorVar={colorVar}
+                issues={colIssues}
+                isHighlighted={overColumnId === col.id}
+              />
+            );
+          })}
+        </div>
+
+        {/* Backlog Displayed Separately as a List of Issues */}
+        <BacklogPanel
+          issues={backlogIssues}
+          isHighlighted={overColumnId === 'backlog'}
+        />
       </main>
 
       <DragOverlay>
-        {activeIssue ? <IssueCard issue={activeIssue} isDragOverlay /> : null}
+        {activeIssue ? (
+          isBacklogIssue(activeIssue, columns) ? (
+            <BacklogIssueRow issue={activeIssue} isDragOverlay />
+          ) : (
+            <IssueCard issue={activeIssue} isDragOverlay />
+          )
+        ) : null}
       </DragOverlay>
     </DndContext>
   );

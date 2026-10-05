@@ -146,4 +146,59 @@ describe('Zustand BoardStore', () => {
     expect(issue?.status.name).toBe('Ready');
     expect(issue?.status.category).toBe('todo');
   });
+
+  it('switches current view between board and backlog', () => {
+    expect(useBoardStore.getState().currentView).toBe('board');
+    useBoardStore.getState().setCurrentView('backlog');
+    expect(useBoardStore.getState().currentView).toBe('backlog');
+    useBoardStore.getState().setCurrentView('board');
+    expect(useBoardStore.getState().currentView).toBe('board');
+  });
+
+  it('toggles isBacklogExpandedOnBoard state', () => {
+    expect(useBoardStore.getState().isBacklogExpandedOnBoard).toBe(false);
+    useBoardStore.getState().toggleBacklogExpandedOnBoard();
+    expect(useBoardStore.getState().isBacklogExpandedOnBoard).toBe(true);
+    useBoardStore.getState().toggleBacklogExpandedOnBoard();
+    expect(useBoardStore.getState().isBacklogExpandedOnBoard).toBe(false);
+  });
+
+  it('moveToBacklog transitions issue to Backlog status optimistically', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockIssue,
+        status: { id: '0', name: 'Backlog', category: 'todo' },
+      }),
+    });
+
+    await useBoardStore.getState().moveToBacklog('PROJ-101');
+    const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+    expect(issue?.status.name).toBe('Backlog');
+    expect(issue?.status.category).toBe('todo');
+  });
+
+  it('moveToBoard transitions backlog issue to the first active board column', async () => {
+    useBoardStore.setState({
+      issues: [
+        {
+          ...mockIssue,
+          status: { id: '0', name: 'Backlog', category: 'todo' },
+        },
+      ],
+    });
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockIssue,
+        status: { id: '1', name: 'To Do', category: 'todo' },
+      }),
+    });
+
+    await useBoardStore.getState().moveToBoard('PROJ-101');
+    const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+    expect(issue?.status.name).toBe('To Do');
+    expect(issue?.status.category).toBe('todo');
+  });
 });

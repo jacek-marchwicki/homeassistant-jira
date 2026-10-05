@@ -94,3 +94,100 @@ export function getColumnFromOver(
   return undefined;
 }
 
+/**
+ * Checks whether an issue belongs to the Backlog.
+ */
+export function isBacklogIssue(issue: JiraIssue, columns?: BoardColumn[]): boolean {
+  if (!issue) return false;
+
+  const raw = issue as unknown as Record<string, unknown>;
+  if (raw.in_backlog === true || raw.inBacklog === true) {
+    return true;
+  }
+
+  const statusName = issue.status?.name?.trim().toLowerCase();
+  if (statusName === 'backlog') {
+    return true;
+  }
+
+  const statusId = String(issue.status?.id || '').trim().toLowerCase();
+  if (statusId === 'backlog' || statusId === 'col-backlog') {
+    return true;
+  }
+
+  if (columns && columns.length > 0) {
+    const backlogCol = columns.find((c) => c.name.trim().toLowerCase() === 'backlog');
+    if (backlogCol) {
+      if (
+        backlogCol.status_ids &&
+        issue.status?.id &&
+        backlogCol.status_ids.includes(String(issue.status.id))
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Returns board columns excluding any Backlog column,
+ * ensuring Backlog is never rendered as a column on the active board.
+ */
+export function getActiveBoardColumns(columns: BoardColumn[]): BoardColumn[] {
+  if (!columns) return [];
+  return columns.filter((col) => col.name.trim().toLowerCase() !== 'backlog');
+}
+
+/**
+ * Splits issues into Active Board issues and Backlog issues.
+ */
+export function splitIssuesByBacklog(
+  issues: JiraIssue[],
+  columns?: BoardColumn[]
+): { boardIssues: JiraIssue[]; backlogIssues: JiraIssue[] } {
+  const backlogIssues: JiraIssue[] = [];
+  const boardIssues: JiraIssue[] = [];
+
+  for (const issue of issues) {
+    if (isBacklogIssue(issue, columns)) {
+      backlogIssues.push(issue);
+    } else {
+      boardIssues.push(issue);
+    }
+  }
+
+  return { boardIssues, backlogIssues };
+}
+
+export interface StatusOption {
+  id: string;
+  name: string;
+  category: JiraStatusCategory;
+}
+
+/**
+ * Returns all available statuses for issue status selectors,
+ * ensuring Backlog is always an available option.
+ */
+export function getAvailableStatuses(columns: BoardColumn[]): StatusOption[] {
+  const options: StatusOption[] = (columns || []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    category: c.category,
+  }));
+
+  const hasBacklog = options.some((o) => o.name.trim().toLowerCase() === 'backlog');
+  if (!hasBacklog) {
+    options.unshift({
+      id: 'col-backlog',
+      name: 'Backlog',
+      category: 'todo',
+    });
+  }
+
+  return options;
+}
+
+

@@ -162,6 +162,7 @@ class IssueUpdateRequest(BaseModel):
     """Payload to update an existing issue."""
 
     summary: str | None = None
+    description: str | None = None
     issue_type: IssueType | None = None
     priority: Priority | None = None
     status_category: StatusCategory | None = None
@@ -178,6 +179,7 @@ class IssueCreateRequest(BaseModel):
     """Payload to create a new issue."""
 
     summary: str
+    description: str | None = None
     issue_type: IssueType = IssueType.TASK
     priority: Priority = Priority.MEDIUM
     status_category: StatusCategory = StatusCategory.TODO
@@ -356,6 +358,7 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
         issue = await jira_client.update_issue(
             key,
             summary=request.summary,
+            description=request.description,
             issue_type=request.issue_type,
             priority=request.priority,
             status_category=request.status_category,
@@ -395,6 +398,7 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     try:
         issue = await jira_client.create_issue(
             summary=request.summary,
+            description=request.description,
             issue_type=request.issue_type,
             priority=request.priority,
             status_category=request.status_category,

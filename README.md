@@ -334,6 +334,7 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] **Visual Screenshot Testing for Issue Dialogs**: Automated Playwright visual regression testing suite capturing full-viewport and isolated component snapshots for both Create Issue and Edit Issue modal dialogs across UI themes
   - [x] **Interactive Assignee Selector with Suggestions & Search**: Dedicated touch-friendly assignee picker for issue creation and editing with avatar previews, quick suggestion list populated from active board assignees, unassigned quick-toggle, instant search filtering, and custom assignee entry
   - [x] **'Recreate After' Interval Support**: Support for recurring task recreation intervals (e.g. '7d', '2 weeks', '1 month') across domain models, REST API (`PUT`/`POST`), WebSocket broadcasts, issue creation/editing dialogs, and issue card indicators
+  - [x] **Issue Description Field Support**: Support for multi-line issue descriptions across domain models, Jira Cloud ADF (Atlassian Document Format) bidirectional text extraction and formatting, REST API creation and update payloads, optimistic board state management, Create and Edit issue modals with responsive textareas, and visual regression test coverage
 - [ ] **Phase 4: Home Assistant Integration & Packaging**
   - [ ] Home Assistant Add-on container configuration (`config.yaml`, `build.yaml`, Ingress)
   - [ ] Standalone Docker packaging and docker-compose configurations

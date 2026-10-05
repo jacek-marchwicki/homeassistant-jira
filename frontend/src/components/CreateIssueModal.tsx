@@ -22,6 +22,7 @@ export function CreateIssueModal({
   const { columns, createIssueOptimistic } = useBoardStore();
 
   const [summary, setSummary] = useState('');
+  const [description, setDescription] = useState('');
   const [issueType, setIssueType] = useState<'story' | 'bug' | 'task' | 'subtask'>('task');
   const [priority, setPriority] = useState<JiraPriority>('medium');
   const [statusName, setStatusName] = useState('');
@@ -38,6 +39,7 @@ export function CreateIssueModal({
   useEffect(() => {
     if (isOpen) {
       setSummary('');
+      setDescription('');
       setIssueType('task');
       setPriority('medium');
       const initialStatus =
@@ -81,6 +83,7 @@ export function CreateIssueModal({
 
     createIssueOptimistic({
       summary: summary.trim(),
+      description: description.trim() || undefined,
       issue_type: issueType,
       priority,
       status_name: statusName || chosenStatus?.name || 'To Do',
@@ -150,6 +153,24 @@ export function CreateIssueModal({
               className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
               placeholder="What needs to be done?"
               autoFocus
+            />
+          </div>
+
+          {/* Description Input */}
+          <div>
+            <label
+              htmlFor="create-description"
+              className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
+            >
+              Description
+            </label>
+            <textarea
+              id="create-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)] resize-y"
+              placeholder="Add more details about this issue..."
             />
           </div>
 

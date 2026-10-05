@@ -305,10 +305,36 @@ class JiraCloudClient(JiraClientProtocol):
         )
         start_date = str(raw_start_date) if raw_start_date is not None else None
 
+        # Description
+        raw_description = fields.get("description")
+        description: str | None = None
+        if isinstance(raw_description, str):
+            description = raw_description
+        elif isinstance(raw_description, dict):
+            try:
+
+                def _extract_adf_text(node: Any) -> list[str]:
+                    texts = []
+                    if isinstance(node, dict):
+                        if node.get("type") == "text" and "text" in node:
+                            texts.append(str(node["text"]))
+                        for v in node.values():
+                            texts.extend(_extract_adf_text(v))
+                    elif isinstance(node, list):
+                        for item in node:
+                            texts.extend(_extract_adf_text(item))
+                    return texts
+
+                extracted = " ".join(_extract_adf_text(raw_description)).strip()
+                description = extracted if extracted else None
+            except Exception:
+                description = None
+
         return JiraIssue(
             id=issue_id,
             key=key,
             summary=summary,
+            description=description,
             issue_type=issue_type,
             priority=priority,
             status=status,
@@ -511,6 +537,7 @@ class JiraCloudClient(JiraClientProtocol):
         self,
         issue_key: str,
         summary: str | None = None,
+        description: str | None = None,
         issue_type: IssueType | None = None,
         priority: Priority | None = None,
         status_category: StatusCategory | None = None,
@@ -526,6 +553,21 @@ class JiraCloudClient(JiraClientProtocol):
         fields: dict[str, Any] = {}
         if summary is not None:
             fields["summary"] = summary
+        if description is not None:
+            fields["description"] = (
+                {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [{"type": "text", "text": description}],
+                        }
+                    ],
+                }
+                if description
+                else None
+            )
         if priority is not None:
             fields["priority"] = {"name": priority.value.capitalize()}
         if issue_type is not None:
@@ -557,6 +599,7 @@ class JiraCloudClient(JiraClientProtocol):
     async def create_issue(
         self,
         summary: str,
+        description: str | None = None,
         issue_type: IssueType = IssueType.TASK,
         priority: Priority = Priority.MEDIUM,
         status_category: StatusCategory = StatusCategory.TODO,
@@ -585,6 +628,17 @@ class JiraCloudClient(JiraClientProtocol):
             "issuetype": {"name": issue_type.value.capitalize()},
             "priority": {"name": priority.value.capitalize()},
         }
+        if description:
+            fields["description"] = {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": description}],
+                    }
+                ],
+            }
         if due_date:
             fields["duedate"] = due_date
         if assignee_account_id:

@@ -16,6 +16,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
   const { columns, updateIssueOptimistic } = useBoardStore();
 
   const [summary, setSummary] = useState('');
+  const [description, setDescription] = useState('');
   const [issueType, setIssueType] = useState<'story' | 'bug' | 'task' | 'subtask'>('task');
   const [priority, setPriority] = useState<JiraPriority>('medium');
   const [statusName, setStatusName] = useState('');
@@ -31,6 +32,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
   useEffect(() => {
     if (issue) {
       setSummary(issue.summary || '');
+      setDescription(issue.description || '');
       setIssueType(issue.issue_type || issue.issueType || 'task');
       setPriority(issue.priority || 'medium');
       setStatusName(issue.status?.name || '');
@@ -72,6 +74,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
     updateIssueOptimistic(issue.key, {
       summary: summary.trim(),
+      description: description.trim() || null,
       issue_type: issueType,
       priority,
       status_name: statusName || issue.status.name,
@@ -141,6 +144,24 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
               placeholder="What needs to be done?"
               autoFocus
+            />
+          </div>
+
+          {/* Description Input */}
+          <div>
+            <label
+              htmlFor="edit-description"
+              className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
+            >
+              Description
+            </label>
+            <textarea
+              id="edit-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)] resize-y"
+              placeholder="Add more details about this issue..."
             />
           </div>
 

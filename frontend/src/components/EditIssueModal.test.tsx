@@ -11,6 +11,7 @@ const testIssue: JiraIssue = {
   id: '101',
   key: 'PROJ-101',
   summary: 'Original Summary',
+  description: 'Original detailed description',
   issue_type: 'task',
   priority: 'medium',
   status: { id: 'col-todo', name: 'To Do', category: 'todo' },
@@ -58,6 +59,10 @@ describe('EditIssueModal component', () => {
     expect(summaryInput).not.toBeNull();
     expect(summaryInput.value).toBe('Original Summary');
 
+    const descriptionInput = container.querySelector('#edit-description') as HTMLTextAreaElement;
+    expect(descriptionInput).not.toBeNull();
+    expect(descriptionInput.value).toBe('Original detailed description');
+
     const prioritySelect = container.querySelector('#edit-priority') as HTMLSelectElement;
     expect(prioritySelect.value).toBe('medium');
 
@@ -75,11 +80,13 @@ describe('EditIssueModal component', () => {
     expect(recreateAfterInput.value).toBe('14 days');
   });
 
-function setInputValue(element: HTMLInputElement | HTMLSelectElement, value: string) {
+function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
   const prototype =
     element instanceof HTMLInputElement
       ? window.HTMLInputElement.prototype
-      : window.HTMLSelectElement.prototype;
+      : element instanceof HTMLTextAreaElement
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLSelectElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
   if (setter) {
     setter.call(element, value);
@@ -121,12 +128,14 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement, value: str
     });
 
     const summaryInput = container.querySelector('#edit-summary') as HTMLInputElement;
+    const descriptionInput = container.querySelector('#edit-description') as HTMLTextAreaElement;
     const prioritySelect = container.querySelector('#edit-priority') as HTMLSelectElement;
     const recreateAfterInput = container.querySelector('#edit-recreate-after') as HTMLInputElement;
     const form = container.querySelector('form') as HTMLFormElement;
 
     await act(async () => {
       setInputValue(summaryInput, 'Updated Summary via Modal');
+      setInputValue(descriptionInput, 'Updated description text');
       setInputValue(prioritySelect, 'highest');
       setInputValue(recreateAfterInput, '30 days');
     });
@@ -139,6 +148,7 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement, value: str
       'PROJ-101',
       expect.objectContaining({
         summary: 'Updated Summary via Modal',
+        description: 'Updated description text',
         priority: 'highest',
         recreate_after: '30 days',
       })

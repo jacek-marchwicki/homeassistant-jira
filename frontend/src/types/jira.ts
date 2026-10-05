@@ -32,6 +32,7 @@ export interface JiraIssue {
   id: string;
   key: string;
   summary: string;
+  description?: string | null;
   issueType?: 'story' | 'bug' | 'task' | 'subtask';
   issue_type?: 'story' | 'bug' | 'task' | 'subtask';
   priority: JiraPriority;
@@ -81,6 +82,7 @@ export type ConnectionState = 'connected' | 'connecting' | 'disconnected' | 'err
 
 export interface IssueUpdatePayload {
   summary?: string;
+  description?: string | null;
   issue_type?: 'story' | 'bug' | 'task' | 'subtask';
   priority?: JiraPriority;
   status_category?: JiraStatusCategory;
@@ -94,6 +96,7 @@ export interface IssueUpdatePayload {
 
 export interface IssueCreatePayload {
   summary: string;
+  description?: string | null;
   issue_type?: 'story' | 'bug' | 'task' | 'subtask';
   priority?: JiraPriority;
   status_category?: JiraStatusCategory;

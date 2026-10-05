@@ -165,6 +165,7 @@ class JiraClientProtocol(Protocol):
         self,
         issue_key: str,
         summary: str | None = None,
+        description: str | None = None,
         issue_type: IssueType | None = None,
         priority: Priority | None = None,
         status_category: StatusCategory | None = None,
@@ -182,6 +183,7 @@ class JiraClientProtocol(Protocol):
     async def create_issue(
         self,
         summary: str,
+        description: str | None = None,
         issue_type: IssueType = IssueType.TASK,
         priority: Priority = Priority.MEDIUM,
         status_category: StatusCategory = StatusCategory.TODO,
@@ -322,6 +324,7 @@ class FakeJiraClient:
         self,
         issue_key: str,
         summary: str | None = None,
+        description: str | None = None,
         issue_type: IssueType | None = None,
         priority: Priority | None = None,
         status_category: StatusCategory | None = None,
@@ -342,6 +345,7 @@ class FakeJiraClient:
             raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
 
         new_summary = summary if summary is not None else issue.summary
+        new_description = description if description is not None else issue.description
         new_type = issue_type if issue_type is not None else issue.issue_type
         new_priority = priority if priority is not None else issue.priority
 
@@ -377,6 +381,7 @@ class FakeJiraClient:
             id=issue.id,
             key=issue.key,
             summary=new_summary,
+            description=new_description,
             issue_type=new_type,
             priority=new_priority,
             status=new_status,
@@ -393,6 +398,7 @@ class FakeJiraClient:
     async def create_issue(
         self,
         summary: str,
+        description: str | None = None,
         issue_type: IssueType = IssueType.TASK,
         priority: Priority = Priority.MEDIUM,
         status_category: StatusCategory = StatusCategory.TODO,
@@ -453,6 +459,7 @@ class FakeJiraClient:
             id=str(next_num),
             key=new_key,
             summary=summary,
+            description=description,
             issue_type=issue_type,
             priority=priority,
             status=status,

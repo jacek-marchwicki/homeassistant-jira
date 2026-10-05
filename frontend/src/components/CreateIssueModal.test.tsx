@@ -31,11 +31,13 @@ describe('CreateIssueModal component', () => {
     container.remove();
   });
 
-  function setInputValue(element: HTMLInputElement | HTMLSelectElement, value: string) {
+  function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
     const prototype =
       element instanceof HTMLInputElement
         ? window.HTMLInputElement.prototype
-        : window.HTMLSelectElement.prototype;
+        : element instanceof HTMLTextAreaElement
+          ? window.HTMLTextAreaElement.prototype
+          : window.HTMLSelectElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
     if (setter) {
       setter.call(element, value);
@@ -69,6 +71,10 @@ describe('CreateIssueModal component', () => {
     const recreateAfterInput = container.querySelector('#create-recreate-after') as HTMLInputElement;
     expect(recreateAfterInput).not.toBeNull();
     expect(recreateAfterInput.value).toBe('');
+
+    const descriptionInput = container.querySelector('#create-description') as HTMLTextAreaElement;
+    expect(descriptionInput).not.toBeNull();
+    expect(descriptionInput.value).toBe('');
   });
 
   it('validates that summary is required', async () => {
@@ -97,6 +103,7 @@ describe('CreateIssueModal component', () => {
     });
 
     const summaryInput = container.querySelector('#create-summary') as HTMLInputElement;
+    const descriptionInput = container.querySelector('#create-description') as HTMLTextAreaElement;
     const prioritySelect = container.querySelector('#create-priority') as HTMLSelectElement;
     const typeSelect = container.querySelector('#create-type') as HTMLSelectElement;
     const assigneeInput = container.querySelector('#create-assignee') as HTMLInputElement;
@@ -105,6 +112,7 @@ describe('CreateIssueModal component', () => {
 
     await act(async () => {
       setInputValue(summaryInput, 'Brand new task');
+      setInputValue(descriptionInput, 'Detailed steps to reproduce');
       setInputValue(prioritySelect, 'high');
       setInputValue(typeSelect, 'bug');
       setInputValue(assigneeInput, 'Alice Bob');
@@ -118,6 +126,7 @@ describe('CreateIssueModal component', () => {
     expect(createSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         summary: 'Brand new task',
+        description: 'Detailed steps to reproduce',
         priority: 'high',
         issue_type: 'bug',
         assignee_name: 'Alice Bob',

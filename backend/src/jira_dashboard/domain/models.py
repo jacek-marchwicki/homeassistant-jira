@@ -76,6 +76,7 @@ class JiraIssue(BaseModel):
     id: str
     key: str
     summary: str
+    description: str | None = None
     issue_type: IssueType
     priority: Priority
     status: JiraStatus

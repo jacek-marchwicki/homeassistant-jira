@@ -308,6 +308,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       return {
         ...item,
         summary: updates.summary !== undefined ? updates.summary : item.summary,
+        description:
+          updates.description !== undefined ? updates.description : item.description,
         issue_type:
           updates.issue_type !== undefined
             ? updates.issue_type
@@ -385,6 +387,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       id: tempKey,
       key: tempKey,
       summary: payload.summary,
+      description: payload.description || null,
       issue_type: payload.issue_type || 'task',
       priority: payload.priority || 'medium',
       status: {

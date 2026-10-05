@@ -56,6 +56,7 @@ class TestPresentationApi(unittest.TestCase):
             "/api/issues/PROJ-101",
             json={
                 "summary": "Updated summary from API test",
+                "description": "Updated issue description details",
                 "priority": "highest",
                 "story_points": 5.0,
                 "recreate_after": "7 days",
@@ -65,6 +66,7 @@ class TestPresentationApi(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["key"], "PROJ-101")
         self.assertEqual(data["summary"], "Updated summary from API test")
+        self.assertEqual(data["description"], "Updated issue description details")
         self.assertEqual(data["priority"], "highest")
         self.assertEqual(data["story_points"], 5.0)
         self.assertEqual(data["recreate_after"], "7 days")
@@ -83,6 +85,7 @@ class TestPresentationApi(unittest.TestCase):
             "/api/issues",
             json={
                 "summary": "Created issue via REST",
+                "description": "New issue description body",
                 "issue_type": "bug",
                 "priority": "high",
                 "assignee_name": "Bob Jones",
@@ -94,6 +97,7 @@ class TestPresentationApi(unittest.TestCase):
         data = response.json()
         self.assertTrue(data["key"].startswith("PROJ-"))
         self.assertEqual(data["summary"], "Created issue via REST")
+        self.assertEqual(data["description"], "New issue description body")
         self.assertEqual(data["issue_type"], "bug")
         self.assertEqual(data["priority"], "high")
         self.assertEqual(data["assignee"]["display_name"], "Bob Jones")

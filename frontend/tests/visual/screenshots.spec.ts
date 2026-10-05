@@ -256,5 +256,27 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Create Issue Modal with Description and Details Filled Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const createButton = page.getByRole('button', { name: 'Create Issue' });
+    await createButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    await page.locator('#create-summary').fill('Investigate edge gateway telemetry latency');
+    await page
+      .locator('#create-description')
+      .fill(
+        'Detailed technical description:\n- Verify MQTT broker keepalive\n- Inspect bridge buffer utilisation\n- Measure roundtrip ACK latency'
+      );
+
+    const dialogBox = modal.locator('> div');
+    await dialogBox.screenshot({
+      path: './tests/screenshots/component-modal-create-description.png',
+      animations: 'disabled',
+    });
+  });
 });
 

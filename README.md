@@ -331,6 +331,7 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] **Issue Editing**: Full-stack capability to edit issue details (summary, issue type, priority, workflow status, assignee, story points, due date, start date) with sub-50ms optimistic UI updates, background Jira synchronization, WebSocket broadcast, and automatic rollback on failure
   - [x] **Issue Creation**: Direct issue creation modal accessible from the top navigation bar with optimistic UI state mutation (<50ms), field validation (summary, issue type, priority, destination status, assignee, story points, due/start dates), REST API endpoint (`POST /api/issues`), real-time WebSocket broadcast (`issue_created`), and duplicate resolution
   - [x] **Recent Done Column Filtering**: Limit issues displayed in the "DONE" status column to those updated within the last 2 days (<=48 hours or calendar day threshold), keeping active boards focused on recent accomplishments while retaining older completed issues in the backlog and history
+  - [x] **Visual Screenshot Testing for Issue Dialogs**: Automated Playwright visual regression testing suite capturing full-viewport and isolated component snapshots for both Create Issue and Edit Issue modal dialogs across UI themes
 - [ ] **Phase 4: Home Assistant Integration & Packaging**
   - [ ] Home Assistant Add-on container configuration (`config.yaml`, `build.yaml`, Ingress)
   - [ ] Standalone Docker packaging and docker-compose configurations

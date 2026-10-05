@@ -188,4 +188,51 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Create Issue Modal Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const createButton = page.getByRole('button', { name: 'Create Issue' });
+    await createButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#create-issue-title')).toHaveText('Create Issue');
+
+    // 1. Capture full screen modal snapshot
+    await page.screenshot({
+      path: './tests/screenshots/modal-create-issue.png',
+      animations: 'disabled',
+    });
+
+    // 2. Capture isolated modal dialog container
+    const dialogBox = modal.locator('> div');
+    await dialogBox.screenshot({
+      path: './tests/screenshots/component-modal-create.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Edit Issue Modal Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
+    await editButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#edit-issue-title')).toContainText('Edit Issue');
+
+    // 1. Capture full screen modal snapshot
+    await page.screenshot({
+      path: './tests/screenshots/modal-edit-issue.png',
+      animations: 'disabled',
+    });
+
+    // 2. Capture isolated modal dialog container
+    const dialogBox = modal.locator('> div');
+    await dialogBox.screenshot({
+      path: './tests/screenshots/component-modal-edit.png',
+      animations: 'disabled',
+    });
+  });
 });
+

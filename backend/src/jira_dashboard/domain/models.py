@@ -53,6 +53,15 @@ class JiraStatus(BaseModel):
     color: str | None = None
 
 
+class BoardColumn(BaseModel):
+    """Represents a column on the board matching a workflow status or group."""
+
+    id: str
+    name: str
+    category: StatusCategory
+    status_ids: list[str] = []
+
+
 class JiraTransition(BaseModel):
     """Represents an allowed status transition for an issue."""
 

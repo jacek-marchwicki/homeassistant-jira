@@ -1,6 +1,7 @@
 """Domain models and pure business logic for Jira issues, transitions, and boards."""
 
 from jira_dashboard.domain.models import (
+    BoardColumn,
     IssueType,
     JiraIssue,
     JiraStatus,
@@ -11,6 +12,7 @@ from jira_dashboard.domain.models import (
 )
 
 __all__ = [
+    "BoardColumn",
     "IssueType",
     "JiraIssue",
     "JiraStatus",

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from jira_dashboard.domain import (
+    BoardColumn,
     IssueType,
     JiraIssue,
     JiraStatus,
@@ -30,6 +31,23 @@ STATUS_MAP: dict[StatusCategory, JiraStatus] = {
     StatusCategory.DONE: JiraStatus(id="4", name="Done", category=StatusCategory.DONE),
     StatusCategory.BLOCKED: JiraStatus(id="5", name="Blocked", category=StatusCategory.BLOCKED),
 }
+
+DEFAULT_COLUMNS: list[BoardColumn] = [
+    BoardColumn(id="col-todo", name="To Do", category=StatusCategory.TODO, status_ids=["1"]),
+    BoardColumn(
+        id="col-inprogress",
+        name="In Progress",
+        category=StatusCategory.IN_PROGRESS,
+        status_ids=["2"],
+    ),
+    BoardColumn(
+        id="col-inreview",
+        name="In Review",
+        category=StatusCategory.IN_REVIEW,
+        status_ids=["3"],
+    ),
+    BoardColumn(id="col-done", name="Done", category=StatusCategory.DONE, status_ids=["4"]),
+]
 
 DEFAULT_SEED_ISSUES: list[JiraIssue] = [
     JiraIssue(
@@ -109,12 +127,21 @@ class JiraClientProtocol(Protocol):
         """Fetch all issues for a given board."""
         ...
 
+    async def get_board_columns(self, board_id: str) -> list[BoardColumn]:
+        """Fetch workflow columns for a given board or project."""
+        ...
+
     async def get_issue(self, issue_key: str) -> JiraIssue | None:
         """Fetch a single issue by key."""
         ...
 
-    async def transition_issue(self, issue_key: str, target_category: StatusCategory) -> JiraIssue:
-        """Transition an issue to a new status category."""
+    async def transition_issue(
+        self,
+        issue_key: str,
+        target_category: StatusCategory | None = None,
+        target_status: str | None = None,
+    ) -> JiraIssue:
+        """Transition an issue to a new status category or status name/ID."""
         ...
 
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
@@ -148,6 +175,15 @@ class FakeJiraClient:
         self.failure_status_code: int = 500
         self.failure_message: str = "Simulated Jira API failure"
 
+    def reset(self) -> None:
+        """Reset in-memory issues and simulated failure flags to initial seed state."""
+        self._issues = {issue.key: issue.model_copy(deep=True) for issue in DEFAULT_SEED_ISSUES}
+        self.simulate_failure = False
+        self.simulate_transition_failure = False
+        self.simulate_board_failure = False
+        self.failure_status_code = 500
+        self.failure_message = "Simulated Jira API failure"
+
     def set_simulate_failure(
         self,
         enable: bool,
@@ -168,14 +204,25 @@ class FakeJiraClient:
             raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
         return list(self._issues.values())
 
+    async def get_board_columns(self, board_id: str) -> list[BoardColumn]:
+        """Return default workflow columns."""
+        if self.simulate_board_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        return list(DEFAULT_COLUMNS)
+
     async def get_issue(self, issue_key: str) -> JiraIssue | None:
         """Return issue by key or None."""
         if self.simulate_board_failure:
             raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
         return self._issues.get(issue_key)
 
-    async def transition_issue(self, issue_key: str, target_category: StatusCategory) -> JiraIssue:
-        """Transition issue to target category or raise error."""
+    async def transition_issue(
+        self,
+        issue_key: str,
+        target_category: StatusCategory | None = None,
+        target_status: str | None = None,
+    ) -> JiraIssue:
+        """Transition issue to target category or status name."""
         if self.simulate_transition_failure:
             raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
 
@@ -183,9 +230,32 @@ class FakeJiraClient:
         if not issue:
             raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
 
-        new_status = STATUS_MAP.get(target_category)
-        if not new_status:
-            raise JiraAPIError(f"Invalid target category: {target_category}", status_code=400)
+        if target_status:
+            matched_cat = target_category
+            if not matched_cat:
+                lowered = target_status.lower()
+                if "done" in lowered:
+                    matched_cat = StatusCategory.DONE
+                elif "review" in lowered:
+                    matched_cat = StatusCategory.IN_REVIEW
+                elif "progress" in lowered:
+                    matched_cat = StatusCategory.IN_PROGRESS
+                else:
+                    matched_cat = StatusCategory.TODO
+
+            new_status = JiraStatus(
+                id=target_status,
+                name=target_status,
+                category=matched_cat,
+            )
+        elif target_category:
+            new_status = STATUS_MAP.get(target_category)
+            if not new_status:
+                raise JiraAPIError(f"Invalid target category: {target_category}", status_code=400)
+        else:
+            raise JiraAPIError(
+                "Either target_category or target_status must be provided", status_code=400
+            )
 
         # Update in-memory issue
         updated_issue = issue.model_copy(

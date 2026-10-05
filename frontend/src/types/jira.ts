@@ -47,6 +47,13 @@ export interface JiraIssue {
   _lastError?: string;
 }
 
+export interface BoardColumn {
+  id: string;
+  name: string;
+  category: JiraStatusCategory;
+  status_ids?: string[];
+}
+
 export interface KanbanColumnData {
   id: string;
   title: string;
@@ -65,3 +72,4 @@ export interface BoardState {
 }
 
 export type ConnectionState = 'connected' | 'connecting' | 'disconnected' | 'error';
+

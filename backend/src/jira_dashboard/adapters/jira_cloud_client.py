@@ -13,12 +13,14 @@ from typing import Any
 import httpx
 
 from jira_dashboard.adapters.jira_client import (
+    DEFAULT_COLUMNS,
     STATUS_MAP,
     JiraAPIError,
     JiraClientProtocol,
 )
 from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import (
+    BoardColumn,
     IssueType,
     JiraIssue,
     JiraStatus,
@@ -336,6 +338,70 @@ class JiraCloudClient(JiraClientProtocol):
         except httpx.RequestError as exc:
             raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
 
+    async def get_board_columns(self, board_id: str) -> list[BoardColumn]:
+        """Fetch workflow columns for a given project or board from Jira."""
+        category_order = {
+            StatusCategory.TODO: 0,
+            StatusCategory.IN_PROGRESS: 1,
+            StatusCategory.IN_REVIEW: 2,
+            StatusCategory.DONE: 3,
+            StatusCategory.BLOCKED: 4,
+        }
+        try:
+            # 1. Query project statuses
+            res = await self._send_request("GET", f"/rest/api/3/project/{board_id}/statuses")
+            if res.is_success and isinstance(res.json(), list):
+                seen_ids: set[str] = set()
+                discovered: list[BoardColumn] = []
+                for issue_type in res.json():
+                    for s in issue_type.get("statuses", []):
+                        sid = str(s.get("id"))
+                        sname = s.get("name", "").strip()
+                        if sid not in seen_ids and sname:
+                            seen_ids.add(sid)
+                            cat_info = s.get("statusCategory", {})
+                            cat_key = cat_info.get("key", "")
+                            cat = map_category_key(cat_key, sname)
+                            discovered.append(
+                                BoardColumn(
+                                    id=f"col-{sid}",
+                                    name=sname,
+                                    category=cat,
+                                    status_ids=[sid],
+                                )
+                            )
+
+                if discovered:
+                    discovered.sort(key=lambda col: category_order.get(col.category, 99))
+                    return discovered
+
+            # 2. Fallback: extract distinct statuses from issues on board
+            issues = await self.get_board_issues(board_id)
+            if issues:
+                seen_status_names: set[str] = set()
+                issue_cols: list[BoardColumn] = []
+                for issue in issues:
+                    s_name = issue.status.name
+                    if s_name not in seen_status_names:
+                        seen_status_names.add(s_name)
+                        col_id = f"col-{issue.status.id or s_name.lower().replace(' ', '-')}"
+                        issue_cols.append(
+                            BoardColumn(
+                                id=col_id,
+                                name=s_name,
+                                category=issue.status.category,
+                                status_ids=[issue.status.id] if issue.status.id else [],
+                            )
+                        )
+                if issue_cols:
+                    issue_cols.sort(key=lambda col: category_order.get(col.category, 99))
+                    return issue_cols
+
+            return list(DEFAULT_COLUMNS)
+        except Exception as exc:
+            logger.debug("Failed to fetch project statuses for %s: %s", board_id, exc)
+            return list(DEFAULT_COLUMNS)
+
     async def get_issue(self, issue_key: str) -> JiraIssue | None:
         """Fetch a single issue by key."""
         try:
@@ -347,8 +413,13 @@ class JiraCloudClient(JiraClientProtocol):
         except httpx.RequestError as exc:
             raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
 
-    async def transition_issue(self, issue_key: str, target_category: StatusCategory) -> JiraIssue:
-        """Transition an issue to a new status category."""
+    async def transition_issue(
+        self,
+        issue_key: str,
+        target_category: StatusCategory | None = None,
+        target_status: str | None = None,
+    ) -> JiraIssue:
+        """Transition an issue to a new status category or status name/ID."""
         try:
             trans_res = await self._send_request(
                 "GET", f"/rest/api/3/issue/{issue_key}/transitions"
@@ -357,22 +428,43 @@ class JiraCloudClient(JiraClientProtocol):
             trans_data = trans_res.json()
             available = trans_data.get("transitions", [])
 
-            # 2. Find transition whose destination category or name matches target_category
             target_trans_id: str | None = None
-            for t in available:
-                to_status = t.get("to", {})
-                to_name = to_status.get("name", "")
-                cat_info = to_status.get("statusCategory", {})
-                cat_key = cat_info.get("key", "")
-                cat = map_category_key(cat_key, to_name)
-                if cat == target_category:
-                    target_trans_id = str(t.get("id"))
-                    break
+
+            # 1. Match by specific target status name or ID
+            if target_status:
+                cleaned_target = target_status.strip().lower()
+                for t in available:
+                    to_status = t.get("to", {})
+                    to_id = str(to_status.get("id", ""))
+                    to_name = to_status.get("name", "").strip().lower()
+                    t_name = t.get("name", "").strip().lower()
+                    if (
+                        to_id == target_status
+                        or to_name == cleaned_target
+                        or t_name == cleaned_target
+                    ):
+                        target_trans_id = str(t.get("id"))
+                        break
+
+            # 2. Match by category if no status match found
+            if not target_trans_id and target_category:
+                for t in available:
+                    to_status = t.get("to", {})
+                    to_name = to_status.get("name", "")
+                    cat_info = to_status.get("statusCategory", {})
+                    cat_key = cat_info.get("key", "")
+                    cat = map_category_key(cat_key, to_name)
+                    if cat == target_category:
+                        target_trans_id = str(t.get("id"))
+                        break
 
             if not target_trans_id:
-                available_names = [t.get("name") for t in available]
+                available_names = [
+                    f"{t.get('name')} -> {t.get('to', {}).get('name')}" for t in available
+                ]
+                dest_desc = target_status or (target_category.value if target_category else "")
                 raise JiraAPIError(
-                    f"No transition available to move {issue_key} to '{target_category.value}'. "
+                    f"No transition available to move {issue_key} to '{dest_desc}'. "
                     f"Available transitions: {available_names}",
                     status_code=400,
                 )
@@ -389,13 +481,14 @@ class JiraCloudClient(JiraClientProtocol):
             updated = await self.get_issue(issue_key)
             if updated is None:
                 # Fallback if get_issue fails after transition
+                fallback_cat = target_category or StatusCategory.DONE
                 return JiraIssue(
                     id=issue_key,
                     key=issue_key,
                     summary="Updated Issue",
                     issue_type=IssueType.TASK,
                     priority=Priority.MEDIUM,
-                    status=STATUS_MAP.get(target_category, STATUS_MAP[StatusCategory.DONE]),
+                    status=STATUS_MAP.get(fallback_cat, STATUS_MAP[StatusCategory.DONE]),
                     updated_at="2026-10-05T00:00:00Z",
                 )
             return updated

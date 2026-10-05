@@ -9,6 +9,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
   test.beforeEach(async ({ page }) => {
+    await page.request.post('/api/test/reset');
     await page.goto('/');
     // Wait for the board title and issues to be fully rendered
     await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
@@ -88,6 +89,16 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const proj101 = page.locator('article', { hasText: 'PROJ-101' });
     await proj101.screenshot({
       path: './tests/screenshots/component-card.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Workflow Columns Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const board = page.locator('main');
+    await board.screenshot({
+      path: './tests/screenshots/board-workflow-columns.png',
       animations: 'disabled',
     });
   });

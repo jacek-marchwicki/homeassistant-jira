@@ -1,6 +1,7 @@
-"""Integration tests for FastAPI presentation layer endpoints."""
-
+import os
 import unittest
+
+os.environ.setdefault("JIRA_USE_FAKE", "1")
 
 from fastapi.testclient import TestClient
 

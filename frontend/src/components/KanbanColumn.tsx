@@ -16,7 +16,9 @@ export function KanbanColumn({ id, category, title, colorVar, issues }: KanbanCo
     id,
     data: {
       type: 'Column',
+      columnId: id,
       category,
+      statusName: title,
     },
   });
 
@@ -25,7 +27,8 @@ export function KanbanColumn({ id, category, title, colorVar, issues }: KanbanCo
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col rounded-xl bg-[var(--jira-surface)] border p-3 min-h-[400px] transition-colors ${
+      data-testid={`column-${id}`}
+      className={`flex flex-col rounded-xl bg-[var(--jira-surface)] border p-3 min-h-[400px] flex-1 min-w-[280px] transition-colors ${
         isOver
           ? 'border-[var(--jira-primary)] bg-[var(--jira-surface-elevated)] ring-1 ring-[var(--jira-primary)]'
           : 'border-[var(--jira-border)]'

@@ -13,36 +13,13 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useBoardStore } from '../store/boardStore.ts';
-import { JiraIssue, JiraStatusCategory } from '../types/jira.ts';
+import { BoardColumn, JiraIssue } from '../types/jira.ts';
 import { IssueCard } from './IssueCard.tsx';
 import { KanbanColumn } from './KanbanColumn.tsx';
-
-interface ColumnDef {
-  id: string;
-  category: JiraStatusCategory;
-  title: string;
-  colorVar: string;
-}
-
-const COLUMNS: ColumnDef[] = [
-  { id: 'col-todo', category: 'todo', title: 'To Do', colorVar: 'var(--jira-status-todo)' },
-  {
-    id: 'col-inprogress',
-    category: 'inprogress',
-    title: 'In Progress',
-    colorVar: 'var(--jira-status-inprogress)',
-  },
-  {
-    id: 'col-inreview',
-    category: 'inreview',
-    title: 'In Review',
-    colorVar: 'var(--jira-status-inreview)',
-  },
-  { id: 'col-done', category: 'done', title: 'Done', colorVar: 'var(--jira-status-done)' },
-];
+import { getCategoryColorVar, getColumnForIssue } from '../utils/boardUtils.ts';
 
 export function KanbanBoard() {
-  const { issues, activeFilter, searchQuery, transitionIssueOptimistic } = useBoardStore();
+  const { issues, columns, activeFilter, searchQuery, transitionIssueOptimistic } = useBoardStore();
   const [activeIssue, setActiveIssue] = useState<JiraIssue | null>(null);
 
   // Configure drag sensors with distance/delay constraints to distinguish click/touch-scroll from drag
@@ -102,24 +79,23 @@ export function KanbanBoard() {
     const activeItem = issues.find((i) => i.key === activeKey);
     if (!activeItem) return;
 
-    // Detect target category from dropped column or dropped issue
-    let targetCategory: JiraStatusCategory | null = null;
+    const currentColumn = getColumnForIssue(activeItem, columns);
+
+    // Detect target column from dropped column or dropped issue
+    let targetCol: BoardColumn | undefined = undefined;
     const overData = over.data.current;
 
-    if (overData?.type === 'Column' && overData.category) {
-      targetCategory = overData.category as JiraStatusCategory;
+    if (overData?.type === 'Column' && overData.columnId) {
+      targetCol = columns.find((c) => c.id === overData.columnId);
     } else if (overData?.type === 'Issue' && overData.issue) {
-      targetCategory = overData.issue.status.category as JiraStatusCategory;
+      targetCol = getColumnForIssue(overData.issue, columns);
     } else {
       // Fallback: match by column ID
-      const targetCol = COLUMNS.find((c) => c.id === over.id);
-      if (targetCol) {
-        targetCategory = targetCol.category;
-      }
+      targetCol = columns.find((c) => c.id === over.id);
     }
 
-    if (targetCategory && activeItem.status.category !== targetCategory) {
-      transitionIssueOptimistic(activeKey, targetCategory);
+    if (targetCol && currentColumn?.id !== targetCol.id) {
+      transitionIssueOptimistic(activeKey, targetCol.category, targetCol.name);
     }
   };
 
@@ -130,16 +106,19 @@ export function KanbanBoard() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <main className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 overflow-y-auto">
-        {COLUMNS.map((col) => {
-          const colIssues = filteredIssues.filter((i) => i.status.category === col.category);
+      <main className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-4 overflow-y-auto overflow-x-auto min-w-0">
+        {columns.map((col) => {
+          const colIssues = filteredIssues.filter(
+            (i) => getColumnForIssue(i, columns)?.id === col.id
+          );
+          const colorVar = getCategoryColorVar(col.category);
           return (
             <KanbanColumn
               key={col.id}
               id={col.id}
               category={col.category}
-              title={col.title}
-              colorVar={col.colorVar}
+              title={col.name}
+              colorVar={colorVar}
               issues={colIssues}
             />
           );

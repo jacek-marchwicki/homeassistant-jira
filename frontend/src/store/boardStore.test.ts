@@ -95,4 +95,55 @@ describe('Zustand BoardStore', () => {
     useBoardStore.getState().setSearchQuery('test query');
     expect(useBoardStore.getState().searchQuery).toBe('test query');
   });
+
+  it('loads dynamic board columns from /api/board', async () => {
+    const customColumns = [
+      { id: 'col-backlog', name: 'Backlog', category: 'todo' as const, status_ids: ['10002'] },
+      { id: 'col-ready', name: 'Ready', category: 'todo' as const, status_ids: ['10003'] },
+      { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' as const, status_ids: ['3'] },
+      { id: 'col-done', name: 'Done', category: 'done' as const, status_ids: ['10001'] },
+    ];
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        board_id: 'HOME',
+        board_name: 'HOME Board',
+        columns: customColumns,
+        issues: [mockIssue],
+      }),
+    });
+
+    await useBoardStore.getState().loadBoard();
+
+    expect(useBoardStore.getState().columns).toEqual(customColumns);
+    expect(useBoardStore.getState().boardName).toBe('HOME Board');
+  });
+
+  it('supports transitioning with specific targetStatus and sends payload in request body', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockIssue,
+        status: { id: '10003', name: 'Ready', category: 'todo' },
+      }),
+    });
+
+    await useBoardStore.getState().transitionIssueOptimistic('PROJ-101', 'todo', 'Ready');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/issues/PROJ-101/transition'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          target_category: 'todo',
+          target_status: 'Ready',
+        }),
+      })
+    );
+
+    const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+    expect(issue?.status.name).toBe('Ready');
+    expect(issue?.status.category).toBe('todo');
+  });
 });

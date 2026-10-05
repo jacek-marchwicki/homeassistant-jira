@@ -6,9 +6,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
+const testPort = process.env.PLAYWRIGHT_PORT || '8001';
+const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || `http://127.0.0.1:${testPort}`;
+
 /**
  * Playwright configuration for Jira Dashboard visual screenshot and integration tests.
- * Runs against the full-stack FastAPI backend serving the React SPA on port 8000.
+ * Runs against the full-stack FastAPI backend serving the React SPA.
  */
 export default defineConfig({
   testDir: './tests',
@@ -28,7 +31,7 @@ export default defineConfig({
   },
 
   use: {
-    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://127.0.0.1:8000',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -44,9 +47,9 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'JIRA_USE_FAKE=1 JIRA_BOARD_ID=engineering-1 PYTHONPATH=backend/src python3 -m uvicorn jira_dashboard.presentation.main:app --port 8000',
-    url: 'http://127.0.0.1:8000/health',
-    reuseExistingServer: !process.env.CI,
+    command: `JIRA_USE_FAKE=1 JIRA_BOARD_ID=engineering-1 PYTHONPATH=backend/src python3 -m uvicorn jira_dashboard.presentation.main:app --port ${testPort}`,
+    url: `${baseURL}/health`,
+    reuseExistingServer: false,
     cwd: projectRoot,
     timeout: 30000,
   },

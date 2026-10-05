@@ -9,10 +9,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake Jira)', () => {
   test.beforeEach(async ({ page }) => {
-    // Reset any simulated errors before each test
-    await page.request.post('/api/test/simulate-error', {
-      data: { enable: false },
-    });
+    // Reset test state and errors before each test to guarantee determinism
+    await page.request.post('/api/test/reset');
     await page.goto('/');
   });
 
@@ -118,5 +116,72 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await page.request.post('/api/test/simulate-error', {
       data: { enable: false },
     });
+  });
+
+  test('5. Dynamic Workflow Columns: renders workflow columns from backend and distributes cards', async ({
+    page,
+  }) => {
+    // 1. Verify all 4 column headings are rendered with proper uppercase titles
+    await expect(page.locator('h2', { hasText: 'To Do' })).toBeVisible();
+    await expect(page.locator('h2', { hasText: 'In Progress' })).toBeVisible();
+    await expect(page.locator('h2', { hasText: 'In Review' })).toBeVisible();
+    await expect(page.locator('h2', { hasText: 'Done' })).toBeVisible();
+
+    // 2. Verify that cards appear within their respective column containers
+    const todoColumn = page.getByTestId('column-col-todo');
+    await expect(todoColumn.locator('article', { hasText: 'PROJ-101' })).toBeVisible();
+
+    const inProgressColumn = page.getByTestId('column-col-inprogress');
+    await expect(inProgressColumn.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
+
+    const inReviewColumn = page.getByTestId('column-col-inreview');
+    await expect(inReviewColumn.locator('article', { hasText: 'PROJ-85' })).toBeVisible();
+
+    const doneColumn = page.getByTestId('column-col-done');
+    await expect(doneColumn.locator('article', { hasText: 'PROJ-72' })).toBeVisible();
+  });
+
+  test('6. Status Dropdown Transition: moving issue via select dropdown updates status and syncs', async ({
+    page,
+  }) => {
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(proj101Article).toBeVisible();
+
+    const statusSelect = proj101Article.getByLabel('Change status for PROJ-101');
+    await expect(statusSelect).toHaveValue('col-todo');
+
+    // Intercept transition request
+    const transitionPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues/PROJ-101/transition') && res.status() === 200
+    );
+
+    // Select "In Progress" column option
+    await statusSelect.selectOption('col-inprogress');
+
+    // Verify backend received transition call
+    const res = await transitionPromise;
+    expect(res.ok()).toBeTruthy();
+
+    // Verify select value is now updated
+    await expect(statusSelect).toHaveValue('col-inprogress');
+  });
+
+  test('7. Filter and Search: instant search query filters displayed cards', async ({
+    page,
+  }) => {
+    const searchInput = page.getByPlaceholder('Filter issues...');
+    await expect(searchInput).toBeVisible();
+
+    // Filter by specific keyword
+    await searchInput.fill('dynamic proxy');
+
+    // PROJ-101 matches summary
+    await expect(page.locator('article', { hasText: 'PROJ-101' })).toBeVisible();
+    // PROJ-98 does not match
+    await expect(page.locator('article', { hasText: 'PROJ-98' })).not.toBeVisible();
+
+    // Clear search
+    await searchInput.clear();
+    await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
   });
 });

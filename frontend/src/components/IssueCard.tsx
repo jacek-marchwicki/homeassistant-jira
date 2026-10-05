@@ -9,8 +9,9 @@ import {
   ChevronsUp,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
-import { JiraIssue, JiraStatusCategory } from '../types/jira.ts';
+import { JiraIssue } from '../types/jira.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
+import { getColumnForIssue } from '../utils/boardUtils.ts';
 
 interface IssueCardProps {
   issue: JiraIssue;
@@ -18,7 +19,9 @@ interface IssueCardProps {
 }
 
 export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
-  const { transitionIssueOptimistic } = useBoardStore();
+  const { columns, transitionIssueOptimistic } = useBoardStore();
+  const currentColumn = getColumnForIssue(issue, columns);
+  const isDone = (currentColumn?.category || issue.status.category) === 'done';
 
   const {
     attributes,
@@ -44,12 +47,16 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
 
   const handleQuickDone = (e: React.MouseEvent) => {
     e.stopPropagation();
-    transitionIssueOptimistic(issue.key, 'done');
+    const doneCol = columns.find((c) => c.category === 'done');
+    transitionIssueOptimistic(issue.key, 'done', doneCol?.name);
   };
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     e.stopPropagation();
-    transitionIssueOptimistic(issue.key, e.target.value as JiraStatusCategory);
+    const chosenCol = columns.find((c) => c.id === e.target.value);
+    if (chosenCol) {
+      transitionIssueOptimistic(issue.key, chosenCol.category, chosenCol.name);
+    }
   };
 
   return (
@@ -69,7 +76,7 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
 
         <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
           {/* Direct One-Tap Quick Action: Mark as Done */}
-          {issue.status.category !== 'done' && (
+          {!isDone && (
             <button
               onClick={handleQuickDone}
               className="flex items-center gap-1 px-2 py-1 rounded text-2xs font-semibold text-[var(--jira-action-done-text)] bg-[var(--jira-action-done-bg)] hover:bg-[var(--jira-action-done-hover)] transition-colors min-h-[32px] cursor-pointer"
@@ -84,16 +91,17 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
           {/* Direct Transition Selector (Move to any column without dragging) */}
           <div className="relative">
             <select
-              value={issue.status.category}
+              value={currentColumn?.id || ''}
               onChange={handleStatusChange}
               className="text-2xs bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] rounded px-1.5 py-1 outline-none cursor-pointer min-h-[32px]"
               title="Change Status"
               aria-label={`Change status for ${issue.key}`}
             >
-              <option value="todo">To Do</option>
-              <option value="inprogress">In Progress</option>
-              <option value="inreview">In Review</option>
-              <option value="done">Done</option>
+              {columns.map((col) => (
+                <option key={col.id} value={col.id}>
+                  {col.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -101,7 +109,7 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
 
       <p
         className={`text-sm font-medium mb-3 line-clamp-2 ${
-          issue.status.category === 'done'
+          isDone
             ? 'line-through text-[var(--jira-text-secondary)] opacity-75'
             : 'text-[var(--jira-text-primary)]'
         }`}

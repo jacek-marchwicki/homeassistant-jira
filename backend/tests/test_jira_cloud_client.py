@@ -170,6 +170,115 @@ def test_transition_no_matching_transition_raises_400() -> None:
     asyncio.run(_test())
 
 
+def test_transition_issue_by_target_status() -> None:
+    """Verify transition_issue matches specific destination status name."""
+
+    async def _test() -> None:
+        executed_trans_id = None
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal executed_trans_id
+            url_str = str(request.url)
+            if request.method == "GET" and "/transitions" in url_str:
+                return httpx.Response(
+                    200,
+                    json={
+                        "transitions": [
+                            {
+                                "id": "11",
+                                "name": "Backlog",
+                                "to": {
+                                    "id": "10002",
+                                    "name": "Backlog",
+                                    "statusCategory": {"key": "new"},
+                                },
+                            },
+                            {
+                                "id": "21",
+                                "name": "Ready",
+                                "to": {
+                                    "id": "10003",
+                                    "name": "Ready",
+                                    "statusCategory": {"key": "new"},
+                                },
+                            },
+                        ]
+                    },
+                )
+            if request.method == "POST" and "/transitions" in url_str:
+                import json
+
+                body = json.loads(request.content)
+                executed_trans_id = body.get("transition", {}).get("id")
+                return httpx.Response(204)
+            if request.method == "GET" and "/rest/api/3/issue/DEV-1001" in url_str:
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "1001",
+                        "key": "DEV-1001",
+                        "fields": {
+                            "summary": "Fix dynamic ingress proxying",
+                            "status": {
+                                "id": "10003",
+                                "name": "Ready",
+                                "statusCategory": {"key": "new"},
+                            },
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        updated = await client.transition_issue("DEV-1001", target_status="Ready")
+        assert executed_trans_id == "21"
+        assert updated.status.name == "Ready"
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_get_board_columns_from_project_statuses() -> None:
+    """Verify get_board_columns fetches and orders workflow statuses from Jira project."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "/rest/api/3/project/HOME/statuses" in str(request.url):
+                return httpx.Response(
+                    200,
+                    json=[
+                        {
+                            "name": "Task",
+                            "statuses": [
+                                {
+                                    "id": "10002",
+                                    "name": "Backlog",
+                                    "statusCategory": {"key": "new"},
+                                },
+                                {"id": "10001", "name": "Done", "statusCategory": {"key": "done"}},
+                                {
+                                    "id": "3",
+                                    "name": "In Progress",
+                                    "statusCategory": {"key": "indeterminate"},
+                                },
+                                {"id": "10003", "name": "Ready", "statusCategory": {"key": "new"}},
+                            ],
+                        }
+                    ],
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        cols = await client.get_board_columns("HOME")
+        assert len(cols) == 4
+        # Ordered by status category (todo -> inprogress -> done)
+        col_names = [c.name for c in cols]
+        assert col_names == ["Backlog", "Ready", "In Progress", "Done"]
+        await client.close()
+
+    asyncio.run(_test())
+
+
 def test_jira_error_handling_401_and_429() -> None:
     """Verify 401 and 429 status codes raise appropriately typed JiraAPIErrors."""
 

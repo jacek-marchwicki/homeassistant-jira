@@ -26,6 +26,7 @@ from jira_dashboard.adapters import (
 )
 from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import (
+    BoardColumn,
     JiraIssue,
     StatusCategory,
 )
@@ -149,17 +150,19 @@ async def fallback_polling_loop(
 
 
 class TransitionRequest(BaseModel):
-    """Payload to transition an issue to a new status category."""
+    """Payload to transition an issue to a new status category or status name/ID."""
 
-    target_category: StatusCategory
+    target_category: StatusCategory | None = None
+    target_status: str | None = None
 
 
 class BoardResponse(BaseModel):
-    """Response containing board metadata and issues grouped by status."""
+    """Response containing board metadata, workflow columns, and issues."""
 
     board_id: str
     board_name: str
     sprint_name: str | None = None
+    columns: list[BoardColumn] = []
     issues: list[JiraIssue]
 
 
@@ -240,6 +243,7 @@ async def get_board() -> BoardResponse:
     board_id = settings.jira_board_id
     try:
         issues = await jira_client.get_board_issues(board_id)
+        columns = await jira_client.get_board_columns(board_id)
     except JiraAPIError as exc:
         logger.error("Failed to fetch board issues from Jira: %s", exc)
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
@@ -267,15 +271,25 @@ async def get_board() -> BoardResponse:
         board_id=board_id,
         board_name=board_name,
         sprint_name=sprint_name,
+        columns=columns,
         issues=issues,
     )
 
 
 @app.post("/api/issues/{key}/transition", response_model=JiraIssue)
 async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
-    """Transition an issue to a target status category and broadcast to all connected clients."""
+    """Transition an issue to a target status category/name and broadcast to connected clients."""
+    if not request.target_category and not request.target_status:
+        raise HTTPException(
+            status_code=400,
+            detail="Either target_category or target_status must be provided.",
+        )
     try:
-        issue = await jira_client.transition_issue(key, request.target_category)
+        issue = await jira_client.transition_issue(
+            key,
+            target_category=request.target_category,
+            target_status=request.target_status,
+        )
     except JiraAPIError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
@@ -352,6 +366,16 @@ def simulate_error(request: SimulateErrorRequest) -> dict[str, Any]:
             target=request.target,
         )
         return {"status": "configured", "simulate_failure": request.enable}
+    return {"status": "ignored", "message": "Client is not FakeJiraClient"}
+
+
+@app.post("/api/test/reset")
+def reset_test_state() -> dict[str, Any]:
+    """Reset FakeJiraClient state back to initial seed issues and clear caches."""
+    if isinstance(jira_client, FakeJiraClient):
+        jira_client.reset()
+        _cached_issue_state.clear()
+        return {"status": "reset", "message": "Test state reset to initial seed"}
     return {"status": "ignored", "message": "Client is not FakeJiraClient"}
 
 

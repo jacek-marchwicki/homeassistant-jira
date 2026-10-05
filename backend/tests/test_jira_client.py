@@ -39,6 +39,30 @@ def test_fake_jira_client_transition_issue() -> None:
     asyncio.run(_test())
 
 
+def test_fake_jira_client_transition_by_status_name() -> None:
+    """Verify issue transition supports specific target status name."""
+
+    async def _test() -> None:
+        client = FakeJiraClient()
+        updated = await client.transition_issue("PROJ-101", target_status="Ready")
+        assert updated.status.name == "Ready"
+        assert updated.status.category == StatusCategory.TODO
+
+    asyncio.run(_test())
+
+
+def test_fake_jira_client_get_board_columns() -> None:
+    """Verify get_board_columns returns default workflow columns."""
+
+    async def _test() -> None:
+        client = FakeJiraClient()
+        cols = await client.get_board_columns("engineering-1")
+        assert len(cols) == 4
+        assert [c.name for c in cols] == ["To Do", "In Progress", "In Review", "Done"]
+
+    asyncio.run(_test())
+
+
 def test_fake_jira_client_transition_nonexistent_raises() -> None:
     """Verify transitioning unknown key raises 404 JiraAPIError."""
 

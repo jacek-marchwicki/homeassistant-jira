@@ -42,7 +42,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         assignee=JiraUser(
             account_id="usr-1",
             display_name="Jacek Marchwicki",
-            avatar_url="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&fit=crop&crop=faces",
+            avatar_url=None,
         ),
         story_points=5.0,
         updated_at="2026-10-04T22:30:00Z",
@@ -68,7 +68,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         assignee=JiraUser(
             account_id="usr-2",
             display_name="Alex Lead",
-            avatar_url="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=64&h=64&fit=crop&crop=faces",
+            avatar_url=None,
         ),
         story_points=5.0,
         updated_at="2026-10-04T22:40:00Z",
@@ -94,7 +94,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         assignee=JiraUser(
             account_id="usr-1",
             display_name="Jacek Marchwicki",
-            avatar_url="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&fit=crop&crop=faces",
+            avatar_url=None,
         ),
         story_points=2.0,
         updated_at="2026-10-04T22:50:00Z",

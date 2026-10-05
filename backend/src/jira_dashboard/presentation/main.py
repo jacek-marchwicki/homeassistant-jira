@@ -1,32 +1,68 @@
 """FastAPI Presentation layer for Home Assistant Jira Dashboard.
 
 Provides REST endpoints, WebSocket broadcasting for real-time state synchronization,
-Jira webhook ingestion, and optional static asset serving for Ingress/standalone deployment.
+Jira webhook ingestion, optional static asset serving for Ingress/standalone deployment,
+dynamic Ingress root_path handling, and fallback background polling.
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from jira_dashboard.adapters import FakeJiraClient, JiraAPIError
+from jira_dashboard.adapters import (
+    FakeJiraClient,
+    JiraAPIError,
+    create_jira_client,
+)
+from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import (
     JiraIssue,
     StatusCategory,
 )
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
-# Jira Client Instance (Test double / Fake by default, pluggable for Jira Cloud)
+# Configuration & Client Initialization
 # ---------------------------------------------------------------------------
 
-jira_client = FakeJiraClient()
+settings = JiraDashboardSettings.load()
+jira_client = create_jira_client(settings)
+
+
+# ---------------------------------------------------------------------------
+# Dynamic Home Assistant Ingress ASGI Middleware
+# ---------------------------------------------------------------------------
+
+
+class DynamicIngressMiddleware:
+    """ASGI Middleware to dynamically update scope['root_path'] based on X-Ingress-Path header.
+
+    Home Assistant Ingress sends 'X-Ingress-Path: /api/hassio_ingress/<token>'.
+    Updating root_path allows FastAPI routing, redirects, and OpenAPI docs
+    to function seamlessly behind dynamic Ingress proxies.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] in ("http", "websocket"):
+            headers = dict(scope.get("headers", []))
+            ingress_path = headers.get(b"x-ingress-path")
+            if ingress_path:
+                scope["root_path"] = ingress_path.decode("utf-8").rstrip("/")
+        await self.app(scope, receive, send)
 
 
 # ---------------------------------------------------------------------------
@@ -57,6 +93,54 @@ class WebSocketHub:
 
 
 ws_hub = WebSocketHub()
+
+
+# ---------------------------------------------------------------------------
+# Fallback Polling Background Task
+# ---------------------------------------------------------------------------
+
+_cached_issue_state: dict[str, str] = {}
+
+
+async def poll_board_issues(board_id: str) -> None:
+    """Fetch board issues and broadcast any detected deltas."""
+    issues = await jira_client.get_board_issues(board_id)
+    for issue in issues:
+        status_val = issue.status.category.value
+        state_signature = f"{status_val}:{issue.summary}:{issue.updated_at}"
+        prev_signature = _cached_issue_state.get(issue.key)
+        if prev_signature is not None and prev_signature != state_signature:
+            logger.info("Polling detected update on issue %s", issue.key)
+            await ws_hub.broadcast(
+                {
+                    "event": "issue_transitioned",
+                    "issue_key": issue.key,
+                    "status_category": issue.status.category.value,
+                    "status_name": issue.status.name,
+                    "issue": issue.model_dump(),
+                }
+            )
+        _cached_issue_state[issue.key] = state_signature
+
+
+async def fallback_polling_loop(
+    poll_interval: int, board_id: str, stop_event: asyncio.Event
+) -> None:
+    """Periodically poll Jira for board issues if webhook delivery is not directly accessible."""
+    logger.info(
+        "Starting background polling loop (interval=%ds, board=%s)", poll_interval, board_id
+    )
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=float(poll_interval))
+            break
+        except asyncio.TimeoutError:
+            pass
+
+        try:
+            await poll_board_issues(board_id)
+        except Exception as exc:
+            logger.warning("Error during periodic Jira polling: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -95,8 +179,28 @@ class SimulateErrorRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan context."""
+    """Application lifespan context managing background polling."""
+    stop_event = asyncio.Event()
+    polling_task: asyncio.Task[None] | None = None
+
+    if settings.polling_interval_seconds > 0 and settings.has_jira_credentials:
+        polling_task = asyncio.create_task(
+            fallback_polling_loop(
+                settings.polling_interval_seconds,
+                settings.jira_board_id,
+                stop_event,
+            )
+        )
+
     yield
+
+    stop_event.set()
+    if polling_task is not None:
+        polling_task.cancel()
+        try:
+            await polling_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
@@ -105,6 +209,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Dynamic Ingress Middleware for Home Assistant dynamic URL prefixes
+app.add_middleware(DynamicIngressMiddleware)
 
 # Enable CORS for local dev server (port 3000) and Home Assistant Ingress
 app.add_middleware(
@@ -130,13 +237,20 @@ def health() -> dict[str, str]:
 @app.get("/api/board", response_model=BoardResponse)
 async def get_board() -> BoardResponse:
     """Retrieve current board metadata and all active issues from Jira client."""
+    board_id = settings.jira_board_id
     try:
-        issues = await jira_client.get_board_issues("engineering-1")
+        issues = await jira_client.get_board_issues(board_id)
     except JiraAPIError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
+    # Seed cache for polling loop
+    for issue in issues:
+        _cached_issue_state[issue.key] = (
+            f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+        )
+
     return BoardResponse(
-        board_id="engineering-1",
+        board_id=board_id,
         board_name="Engineering Sprint Board",
         sprint_name="Active Sprint 42",
         issues=issues,
@@ -150,6 +264,11 @@ async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
         issue = await jira_client.transition_issue(key, request.target_category)
     except JiraAPIError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    # Update cache signature
+    _cached_issue_state[issue.key] = (
+        f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+    )
 
     # Broadcast real-time delta via WebSockets
     await ws_hub.broadcast(
@@ -166,11 +285,29 @@ async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
 
 
 @app.post("/api/webhooks/jira")
-async def handle_jira_webhook(payload: dict[str, Any]) -> dict[str, Any]:
+async def handle_jira_webhook(
+    request: Request,
+    payload: dict[str, Any],
+    secret: str | None = Query(default=None),
+    x_webhook_secret: str | None = Header(default=None, alias="X-Webhook-Secret"),
+    x_atlassian_webhook_secret: str | None = Header(
+        default=None, alias="X-Atlassian-Webhook-Secret"
+    ),
+) -> dict[str, Any]:
     """Ingest incoming Jira Cloud webhook, update domain state, and broadcast to clients."""
+    # Webhook Secret Authentication
+    if settings.webhook_secret:
+        provided_secret = x_atlassian_webhook_secret or x_webhook_secret or secret
+        if provided_secret != settings.webhook_secret:
+            raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
     issue = await jira_client.process_webhook(payload)
     if not issue:
         return {"status": "ignored", "message": "No actionable issue delta found in payload"}
+
+    _cached_issue_state[issue.key] = (
+        f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+    )
 
     # Broadcast real-time delta via WebSockets to all connected browsers
     await ws_hub.broadcast(
@@ -193,13 +330,15 @@ async def handle_jira_webhook(payload: dict[str, Any]) -> dict[str, Any]:
 @app.post("/api/test/simulate-error")
 def simulate_error(request: SimulateErrorRequest) -> dict[str, Any]:
     """Configure FakeJiraClient to simulate failures for testing optimistic UI rollback."""
-    jira_client.set_simulate_failure(
-        enable=request.enable,
-        status_code=request.status_code,
-        message=request.message,
-        target=request.target,
-    )
-    return {"status": "configured", "simulate_failure": request.enable}
+    if isinstance(jira_client, FakeJiraClient):
+        jira_client.set_simulate_failure(
+            enable=request.enable,
+            status_code=request.status_code,
+            message=request.message,
+            target=request.target,
+        )
+        return {"status": "configured", "simulate_failure": request.enable}
+    return {"status": "ignored", "message": "Client is not FakeJiraClient"}
 
 
 # ---------------------------------------------------------------------------
@@ -221,11 +360,23 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             }
         )
 
-        # Keep connection open and handle incoming client messages/pings
+        # Keep connection open and handle incoming client messages/pings/sync requests
         while True:
-            data = await websocket.receive_text()
-            if data == "ping":
+            raw_text = await websocket.receive_text()
+            if raw_text == "ping":
                 await websocket.send_text("pong")
+            elif "sync_request" in raw_text:
+                try:
+                    issues = await jira_client.get_board_issues(settings.jira_board_id)
+                    await websocket.send_json(
+                        {
+                            "event": "board_synced",
+                            "board_id": settings.jira_board_id,
+                            "issues": [issue.model_dump() for issue in issues],
+                        }
+                    )
+                except Exception as exc:
+                    logger.error("Failed to sync board for websocket: %s", exc)
     except WebSocketDisconnect:
         ws_hub.disconnect(websocket)
     except Exception:

@@ -21,24 +21,29 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await page.screenshot({
       path: './tests/screenshots/desktop-dark.png',
       fullPage: true,
+      animations: 'disabled',
     });
 
     // 2. Switch to Light Mode and Capture
     const lightButton = page.getByTitle('Light Mode');
     await lightButton.click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.waitForTimeout(200); // Allow 150ms CSS color transition to fully settle
     await page.screenshot({
       path: './tests/screenshots/desktop-light.png',
       fullPage: true,
+      animations: 'disabled',
     });
 
     // 3. Switch to Kiosk / Wallboard Mode and Capture
     const kioskButton = page.getByTitle('Kiosk / Wallboard Mode');
     await kioskButton.click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'kiosk');
+    await page.waitForTimeout(200); // Allow 150ms CSS color transition to fully settle
     await page.screenshot({
       path: './tests/screenshots/desktop-kiosk.png',
       fullPage: true,
+      animations: 'disabled',
     });
   });
 
@@ -47,6 +52,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await page.screenshot({
       path: './tests/screenshots/tablet-768x1024.png',
       fullPage: true,
+      animations: 'disabled',
     });
   });
 
@@ -55,6 +61,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await page.screenshot({
       path: './tests/screenshots/mobile-375x667.png',
       fullPage: true,
+      animations: 'disabled',
     });
   });
 
@@ -63,6 +70,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await page.screenshot({
       path: './tests/screenshots/wallboard-1920x1080.png',
       fullPage: true,
+      animations: 'disabled',
     });
   });
 
@@ -71,10 +79,16 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     // 1. Navigation Header & Status Badge
     const header = page.locator('header');
-    await header.screenshot({ path: './tests/screenshots/component-header.png' });
+    await header.screenshot({
+      path: './tests/screenshots/component-header.png',
+      animations: 'disabled',
+    });
 
     // 2. Kanban Column & Issue Card with Quick Action
     const proj101 = page.locator('article', { hasText: 'PROJ-101' });
-    await proj101.screenshot({ path: './tests/screenshots/component-card.png' });
+    await proj101.screenshot({
+      path: './tests/screenshots/component-card.png',
+      animations: 'disabled',
+    });
   });
 });

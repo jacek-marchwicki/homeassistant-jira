@@ -1,0 +1,62 @@
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { JiraIssue, JiraStatusCategory } from '../types/jira.ts';
+import { IssueCard } from './IssueCard.tsx';
+
+interface KanbanColumnProps {
+  id: string;
+  category: JiraStatusCategory;
+  title: string;
+  colorVar: string;
+  issues: JiraIssue[];
+}
+
+export function KanbanColumn({ id, category, title, colorVar, issues }: KanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id,
+    data: {
+      type: 'Column',
+      category,
+    },
+  });
+
+  const issueIds = issues.map((i) => i.key);
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex flex-col rounded-xl bg-[var(--jira-surface)] border p-3 min-h-[400px] transition-colors ${
+        isOver
+          ? 'border-[var(--jira-primary)] bg-[var(--jira-surface-elevated)] ring-1 ring-[var(--jira-primary)]'
+          : 'border-[var(--jira-border)]'
+      }`}
+    >
+      {/* Column Header */}
+      <div className="flex items-center justify-between pb-2 mb-3 border-b border-[var(--jira-border-subtle)]">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colorVar }} />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--jira-text-primary)]">
+            {title}
+          </h2>
+        </div>
+        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
+          {issues.length}
+        </span>
+      </div>
+
+      {/* Column Issues List */}
+      <div className="flex flex-col gap-2.5 flex-1">
+        <SortableContext items={issueIds} strategy={verticalListSortingStrategy}>
+          {issues.map((issue) => (
+            <IssueCard key={issue.key} issue={issue} />
+          ))}
+        </SortableContext>
+        {issues.length === 0 && (
+          <div className="flex-1 flex items-center justify-center p-4 border border-dashed border-[var(--jira-border-subtle)] rounded-lg text-xs text-[var(--jira-text-secondary)]">
+            No issues
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

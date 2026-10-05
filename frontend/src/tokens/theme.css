@@ -5,15 +5,15 @@
     /* Base Surfaces (Dark-First Default, with fallback bridge to Home Assistant CSS variables) */
     --jira-canvas: var(--primary-background-color, #0f172a);
     --jira-surface: var(--card-background-color, #1e293b);
-    --jira-surface-elevated: var(--ha-card-background, #334155);
-    --jira-surface-hover: #475569;
-    --jira-border: var(--divider-color, #334155);
-    --jira-border-subtle: #1e293b;
+    --jira-surface-elevated: var(--ha-card-background, #283548);
+    --jira-surface-hover: #334155;
+    --jira-border: var(--divider-color, #384556);
+    --jira-border-subtle: #243042;
 
-    /* Content & Typography */
+    /* Content & Typography (WCAG 2.1 AA compliant) */
     --jira-text-primary: var(--primary-text-color, #f8fafc);
-    --jira-text-secondary: var(--secondary-text-color, #94a3b8);
-    --jira-text-muted: #64748b;
+    --jira-text-secondary: var(--secondary-text-color, #cbd5e1);
+    --jira-text-muted: #94a3b8;
     --jira-text-inverse: #0f172a;
 
     /* Brand / Primary Accent */
@@ -22,46 +22,105 @@
     --jira-focus-ring: #60a5fa;
 
     /* Semantic Jira Status Categories */
-    --jira-status-todo: #64748b;
+    --jira-status-todo: #94a3b8;
     --jira-status-inprogress: #3b82f6;
-    --jira-status-inreview: #8b5cf6;
+    --jira-status-inreview: #a855f7;
     --jira-status-done: #22c55e;
     --jira-status-blocked: #ef4444;
 
+    /* Quick Action: Done Button */
+    --jira-action-done-text: #4ade80;
+    --jira-action-done-bg: rgba(34, 197, 94, 0.15);
+    --jira-action-done-hover: rgba(34, 197, 94, 0.25);
+
+    /* Live WebSocket Status Pill */
+    --jira-live-badge-text: #4ade80;
+    --jira-live-badge-bg: rgba(34, 197, 94, 0.12);
+    --jira-live-badge-border: rgba(34, 197, 94, 0.25);
+
     /* Priorities */
-    --jira-priority-highest: #ef4444;
-    --jira-priority-high: #f97316;
-    --jira-priority-medium: #eab308;
-    --jira-priority-low: #3b82f6;
-    --jira-priority-lowest: #94a3b8;
+    --jira-priority-highest: #f87171;
+    --jira-priority-high: #fb923c;
+    --jira-priority-medium: #60a5fa;
+    --jira-priority-low: #94a3b8;
+    --jira-priority-lowest: #64748b;
   }
 
-  /* Explicit Standalone Light Mode Override */
+  /* Standalone Light Mode */
   [data-theme="light"] {
     --jira-canvas: #f8fafc;
-    --jira-surface: #ffffff;
-    --jira-surface-elevated: #f1f5f9;
-    --jira-surface-hover: #e2e8f0;
+    --jira-surface: #f1f5f9;
+    --jira-surface-elevated: #ffffff;
+    --jira-surface-hover: #f8fafc;
     --jira-border: #cbd5e1;
-    --jira-border-subtle: #f1f5f9;
+    --jira-border-subtle: #e2e8f0;
 
     --jira-text-primary: #0f172a;
     --jira-text-secondary: #475569;
-    --jira-text-muted: #94a3b8;
+    --jira-text-muted: #64748b;
     --jira-text-inverse: #ffffff;
 
     --jira-primary: #2563eb;
     --jira-primary-hover: #1d4ed8;
     --jira-focus-ring: #3b82f6;
+
+    --jira-status-todo: #475569;
+    --jira-status-inprogress: #2563eb;
+    --jira-status-inreview: #7c3aed;
+    --jira-status-done: #16a34a;
+    --jira-status-blocked: #dc2626;
+
+    --jira-action-done-text: #15803d;
+    --jira-action-done-bg: rgba(34, 197, 94, 0.15);
+    --jira-action-done-hover: rgba(34, 197, 94, 0.25);
+
+    --jira-live-badge-text: #15803d;
+    --jira-live-badge-bg: rgba(34, 197, 94, 0.15);
+    --jira-live-badge-border: rgba(34, 197, 94, 0.35);
+
+    --jira-priority-highest: #dc2626;
+    --jira-priority-high: #ea580c;
+    --jira-priority-medium: #2563eb;
+    --jira-priority-low: #475569;
+    --jira-priority-lowest: #64748b;
   }
 
-  /* True OLED Black Kiosk Mode for Wall Displays */
+  /* True OLED Black High-Contrast Kiosk Mode for Wall Displays */
   [data-theme="kiosk"] {
     --jira-canvas: #000000;
-    --jira-surface: #0f0f12;
-    --jira-surface-elevated: #1a1a20;
-    --jira-surface-hover: #282832;
-    --jira-border: #22222a;
-    --jira-border-subtle: #141418;
+    --jira-surface: #0e131d;
+    --jira-surface-elevated: #1b2230;
+    --jira-surface-hover: #263044;
+    --jira-border: #2d3748;
+    --jira-border-subtle: #1a2230;
+
+    --jira-text-primary: #ffffff;
+    --jira-text-secondary: #cbd5e1;
+    --jira-text-muted: #94a3b8;
+    --jira-text-inverse: #000000;
+
+    --jira-primary: #3b82f6;
+    --jira-primary-hover: #60a5fa;
+    --jira-focus-ring: #93c5fd;
+
+    --jira-status-todo: #cbd5e1;
+    --jira-status-inprogress: #60a5fa;
+    --jira-status-inreview: #c084fc;
+    --jira-status-done: #4ade80;
+    --jira-status-blocked: #f87171;
+
+    --jira-action-done-text: #4ade80;
+    --jira-action-done-bg: rgba(34, 197, 94, 0.20);
+    --jira-action-done-hover: rgba(34, 197, 94, 0.32);
+
+    --jira-live-badge-text: #4ade80;
+    --jira-live-badge-bg: rgba(34, 197, 94, 0.18);
+    --jira-live-badge-border: rgba(34, 197, 94, 0.40);
+
+    --jira-priority-highest: #f87171;
+    --jira-priority-high: #fb923c;
+    --jira-priority-medium: #60a5fa;
+    --jira-priority-low: #cbd5e1;
+    --jira-priority-lowest: #94a3b8;
   }
 }

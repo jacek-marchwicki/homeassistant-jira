@@ -18,6 +18,10 @@ A high-performance, real-time Jira dashboard built for **Home Assistant** and **
 - **Optimistic UI (Zero Perceptual Latency)**:
   - User actions (moving cards, transitioning statuses, changing assignments) update the interface immediately.
   - Asynchronous background synchronization to Jira with automatic rollback and visual notification if an operation is rejected.
+- **Installable Progressive Web App (PWA)**:
+  - Installable in browsers on **Android** (Google Chrome, Samsung Internet, Edge, Brave), **iOS** (Safari), and **Desktop**.
+  - Includes a Web App Manifest, Service Worker (`sw.js`) with app-shell caching, and adaptive Android maskable icons (192x192 and 512x512).
+  - Built-in one-tap "Install App" prompt and touch-friendly mobile installation banner.
 - **Real-Time Bidirectional Event Streaming**:
   - Python backend listens for incoming **Jira Webhooks** to capture external updates instantly.
   - Connected browsers receive delta updates in real time via **WebSockets**.
@@ -317,11 +321,18 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] Publish Architecture Decision Record ([`ADR-001`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/architecture_decision_records/ADR-001-technology-stack.md))
   - [x] Define comprehensive [Design System](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/design_system.md) with Home Assistant theme bridge
   - [x] Scaffold initial backend and frontend directory structures
-- [ ] **Phase 3: Core Implementation**
-  - [ ] Jira Cloud adapter and webhook parser
-  - [ ] WebSocket hub and client state reconciliation
-  - [ ] Responsive board and card components with optimistic UI
-  - [ ] Comprehensive unit and integration test coverage
+- [x] **Phase 3: Core Implementation**
+  - [x] Jira Cloud adapter and webhook parser
+  - [x] WebSocket hub and client state reconciliation
+  - [x] Responsive board and card components with optimistic UI
+  - [x] Comprehensive unit and integration test coverage
+- [ ] **Phase 3.5:
+  - [ ] When the webpage is loading, for a few seconds I see "Engineering Sprint Board", "Active Sprint 42", and some "TO DO", "IN PROGRESS" sample data.
+    Instead of those I'd like to have normal progress indicator that data is loading. Could you implement this. With an tests.
+  - [ ] Could you ensure, that when doing screenshot tests, no real JIRA is used, but only fake API with mocks? Please re-run screenshot test
+  - [ ] Implement ability to edit issues.
+  - [ ] Implement ability to create issues.
+  - [ ] Could you change "DONE" to display only issues that where updated no longer then a 2 days ago?
 - [ ] **Phase 4: Home Assistant Integration & Packaging**
   - [ ] Home Assistant Add-on container configuration (`config.yaml`, `build.yaml`, Ingress)
   - [ ] Standalone Docker packaging and docker-compose configurations

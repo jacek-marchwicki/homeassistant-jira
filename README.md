@@ -326,9 +326,8 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] WebSocket hub and client state reconciliation
   - [x] Responsive board and card components with optimistic UI
   - [x] Comprehensive unit and integration test coverage
-- [ ] **Phase 3.5:
-  - [ ] When the webpage is loading, for a few seconds I see "Engineering Sprint Board", "Active Sprint 42", and some "TO DO", "IN PROGRESS" sample data.
-    Instead of those I'd like to have normal progress indicator that data is loading. Could you implement this. With an tests.
+- [ ] **Phase 3.5: User Experience Polish & Issue Management**
+  - [x] **Initial Board Loading State**: Display a dedicated, accessible progress indicator while sprint data is loading, preventing the flash of placeholder text ("Engineering Sprint Board", "Active Sprint 42") and sample columns
   - [ ] Implement ability to edit issues.
   - [ ] Implement ability to create issues.
   - [ ] Could you change "DONE" to display only issues that where updated no longer then a 2 days ago?

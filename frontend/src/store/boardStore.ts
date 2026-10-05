@@ -22,6 +22,7 @@ export type DashboardView = 'board' | 'backlog';
 
 export interface BoardStoreState {
   theme: ThemeMode;
+  isLoading: boolean;
   issues: JiraIssue[];
   columns: BoardColumn[];
   boardName: string;
@@ -58,10 +59,11 @@ export interface BoardStoreState {
 
 export const useBoardStore = create<BoardStoreState>((set, get) => ({
   theme: getInitialTheme(),
+  isLoading: true,
   issues: [],
   columns: DEFAULT_COLUMNS,
-  boardName: 'Engineering Sprint Board',
-  sprintName: 'Active Sprint 42',
+  boardName: '',
+  sprintName: '',
   wsConnected: false,
   activeFilters: ['my', 'active'],
   activeFilter: 'my,active',
@@ -143,6 +145,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   },
 
   loadBoard: async () => {
+    set({ isLoading: true });
     try {
       const res = await fetch(getApiUrl('/api/board'));
       if (res.ok) {
@@ -153,15 +156,20 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           columns: data.columns && data.columns.length > 0 ? data.columns : DEFAULT_COLUMNS,
           issues: data.issues || [],
           errorMessage: null,
+          isLoading: false,
         });
       } else {
         const err = await res.json().catch(() => ({}));
         set({
           errorMessage: err.detail || `Failed to load board (HTTP ${res.status})`,
+          isLoading: false,
         });
       }
     } catch {
-      set({ errorMessage: 'Unable to connect to Jira backend server.' });
+      set({
+        errorMessage: 'Unable to connect to Jira backend server.',
+        isLoading: false,
+      });
     }
   },
 

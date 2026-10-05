@@ -129,6 +129,7 @@ describe('Zustand BoardStore', () => {
 
     expect(useBoardStore.getState().columns).toEqual(customColumns);
     expect(useBoardStore.getState().boardName).toBe('HOME Board');
+    expect(useBoardStore.getState().isLoading).toBe(false);
   });
 
   it('supports transitioning with specific targetStatus and sends payload in request body', async () => {

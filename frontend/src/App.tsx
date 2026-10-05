@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { BacklogView } from './components/BacklogView.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { Header } from './components/Header.tsx';
@@ -11,8 +11,16 @@ import { getWsUrl } from './utils/paths.ts';
 import { usePwaInstall } from './utils/usePwaInstall.ts';
 
 export default function App() {
-  const { loadBoard, handleWsMessage, setWsConnected, errorMessage, currentView } =
-    useBoardStore();
+  const {
+    loadBoard,
+    handleWsMessage,
+    setWsConnected,
+    errorMessage,
+    currentView,
+    isLoading,
+    boardName,
+    issues,
+  } = useBoardStore();
   const {
     canInstall,
     triggerInstall,
@@ -70,6 +78,53 @@ export default function App() {
       }
     };
   }, [handleWsMessage, setWsConnected]);
+
+  if (isLoading) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]"
+        role="status"
+        aria-live="polite"
+        data-testid="loading-indicator"
+      >
+        <div className="flex flex-col items-center gap-4 text-center p-6">
+          <div className="p-3 rounded-2xl bg-[var(--jira-primary)]/10 text-[var(--jira-primary)] shadow-inner">
+            <Loader2 className="w-10 h-10 animate-spin text-[var(--jira-primary)]" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-[var(--jira-text-primary)]">
+              Loading board data...
+            </h2>
+            <p className="text-xs text-[var(--jira-text-secondary)] mt-1">
+              Connecting to Jira and fetching active sprint issues...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorMessage && !boardName && issues.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)] p-6">
+        <div className="flex flex-col items-center gap-4 text-center max-w-md">
+          <div className="p-3 rounded-2xl bg-red-500/10 text-red-400">
+            <AlertCircle className="w-10 h-10" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-[var(--jira-text-primary)]">Failed to load board</h2>
+            <p className="text-xs text-red-400 mt-1">{errorMessage}</p>
+          </div>
+          <button
+            onClick={() => loadBoard()}
+            className="mt-2 px-4 py-2 bg-[var(--jira-primary)] hover:bg-[var(--jira-primary-hover)] text-white text-xs font-semibold rounded-lg cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]">

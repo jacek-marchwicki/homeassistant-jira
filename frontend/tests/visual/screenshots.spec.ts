@@ -102,4 +102,90 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Ready Column Sub-Sections (Overdue and Expedited) Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // Mock /api/board with Ready column containing Overdue, Expedited, and Other issues
+    await page.route('**/api/board', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          board_id: 'engineering-1',
+          board_name: 'Engineering Sprint Board',
+          sprint_name: 'Active Sprint 42',
+          columns: [
+            { id: 'col-ready', name: 'Ready', category: 'todo', status_ids: ['10003'] },
+            { id: 'col-inprogress', name: 'In Progress', category: 'inprogress', status_ids: ['2'] },
+            { id: 'col-done', name: 'Done', category: 'done', status_ids: ['4'] },
+          ],
+          issues: [
+            {
+              id: '101',
+              key: 'PROJ-101',
+              summary: 'Critical server outage remediation',
+              issue_type: 'bug',
+              priority: 'highest',
+              status: { id: '10003', name: 'Ready', category: 'todo' },
+              due_date: '2020-01-01',
+              updated_at: '2026-10-05T00:00:00Z',
+            },
+            {
+              id: '102',
+              key: 'PROJ-102',
+              summary: 'Zero-day vulnerability patch deployment',
+              issue_type: 'task',
+              priority: 'highest',
+              status: { id: '10003', name: 'Ready', category: 'todo' },
+              start_date: null,
+              due_date: '2026-10-05',
+              updated_at: '2026-10-05T00:00:00Z',
+            },
+            {
+              id: '103',
+              key: 'PROJ-103',
+              summary: 'Quarterly roadmap documentation cleanup',
+              issue_type: 'story',
+              priority: 'medium',
+              status: { id: '10003', name: 'Ready', category: 'todo' },
+              due_date: '2028-06-01',
+              updated_at: '2026-10-05T00:00:00Z',
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto('/');
+
+    const readyColumn = page.getByTestId('column-col-ready');
+    await expect(readyColumn).toBeVisible();
+
+    const overdueSection = page.getByTestId('ready-section-overdue');
+    const expeditedSection = page.getByTestId('ready-section-expedited');
+    const otherSection = page.getByTestId('ready-section-other');
+
+    await expect(overdueSection).toBeVisible();
+    await expect(expeditedSection).toBeVisible();
+    await expect(otherSection).toBeVisible();
+
+    // 1. Capture Overdue section snapshot
+    await overdueSection.screenshot({
+      path: './tests/screenshots/ready-section-overdue.png',
+      animations: 'disabled',
+    });
+
+    // 2. Capture Expedited section snapshot
+    await expeditedSection.screenshot({
+      path: './tests/screenshots/ready-section-expedited.png',
+      animations: 'disabled',
+    });
+
+    // 3. Capture full Ready column snapshot with all sub-sections
+    await readyColumn.screenshot({
+      path: './tests/screenshots/ready-column-sections.png',
+      animations: 'disabled',
+    });
+  });
 });

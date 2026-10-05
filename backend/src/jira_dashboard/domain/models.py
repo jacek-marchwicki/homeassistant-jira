@@ -81,6 +81,8 @@ class JiraIssue(BaseModel):
     status: JiraStatus
     assignee: JiraUser | None = None
     story_points: float | None = None
+    due_date: str | None = None
+    start_date: str | None = None
     updated_at: str
 
     def is_done(self) -> bool:

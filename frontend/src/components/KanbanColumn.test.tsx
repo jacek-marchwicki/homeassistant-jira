@@ -120,4 +120,213 @@ describe('KanbanColumn component', () => {
       root.unmount();
     });
   });
+
+  it('splits Ready column into Overdue, Expedited, and Other sub-sections', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    const issues: JiraIssue[] = [
+      {
+        id: '1',
+        key: 'TEST-OVERDUE',
+        summary: 'Fix overdue leak',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        due_date: '2020-01-01', // Overdue
+      },
+      {
+        id: '2',
+        key: 'TEST-EXPEDITED',
+        summary: 'Immediate urgent fix',
+        priority: 'highest',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        start_date: null, // Expedited (highest with empty start date)
+      },
+      {
+        id: '3',
+        key: 'TEST-OTHER',
+        summary: 'Regular task for next month',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        due_date: '2099-12-31', // Future (Other)
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-ready"
+            category="todo"
+            title="Ready"
+            colorVar="var(--jira-status-todo)"
+            issues={issues}
+            isHighlighted={false}
+          />
+        </DndContext>
+      );
+    });
+
+    // Check that all 3 sub-sections are rendered
+    const overdueSection = container.querySelector('[data-testid="ready-section-overdue"]');
+    const expeditedSection = container.querySelector('[data-testid="ready-section-expedited"]');
+    const otherSection = container.querySelector('[data-testid="ready-section-other"]');
+
+    expect(overdueSection).not.toBeNull();
+    expect(expeditedSection).not.toBeNull();
+    expect(otherSection).not.toBeNull();
+
+    // Check headings & counts
+    expect(overdueSection?.textContent).toContain('Overdue');
+    expect(overdueSection?.textContent).toContain('1');
+    expect(overdueSection?.textContent).toContain('TEST-OVERDUE');
+
+    expect(expeditedSection?.textContent).toContain('Expedited');
+    expect(expeditedSection?.textContent).toContain('1');
+    expect(expeditedSection?.textContent).toContain('TEST-EXPEDITED');
+
+    expect(otherSection?.textContent).toContain('Other');
+    expect(otherSection?.textContent).toContain('1');
+    expect(otherSection?.textContent).toContain('TEST-OTHER');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('hides Expedited section when empty, keeping Overdue and Other with header', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    const issues: JiraIssue[] = [
+      {
+        id: '1',
+        key: 'TEST-OVERDUE',
+        summary: 'Fix overdue leak',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        due_date: '2020-01-01', // Overdue
+      },
+      {
+        id: '2',
+        key: 'TEST-OTHER',
+        summary: 'Regular task',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        due_date: '2099-12-31',
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-ready"
+            category="todo"
+            title="Ready"
+            colorVar="var(--jira-status-todo)"
+            issues={issues}
+            isHighlighted={false}
+          />
+        </DndContext>
+      );
+    });
+
+    const overdueSection = container.querySelector('[data-testid="ready-section-overdue"]');
+    const expeditedSection = container.querySelector('[data-testid="ready-section-expedited"]');
+    const otherSection = container.querySelector('[data-testid="ready-section-other"]');
+
+    expect(overdueSection).not.toBeNull();
+    expect(expeditedSection).toBeNull(); // Hidden when empty!
+    expect(otherSection).not.toBeNull(); // Displayed with header because Overdue exists
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('hides Overdue and Expedited sections when empty, and omits Other section header when only Other exists', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    const issues: JiraIssue[] = [
+      {
+        id: '1',
+        key: 'TEST-OTHER-1',
+        summary: 'Regular task 1',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+      },
+      {
+        id: '2',
+        key: 'TEST-OTHER-2',
+        summary: 'Regular task 2',
+        priority: 'low',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-ready"
+            category="todo"
+            title="Ready"
+            colorVar="var(--jira-status-todo)"
+            issues={issues}
+            isHighlighted={false}
+          />
+        </DndContext>
+      );
+    });
+
+    const overdueSection = container.querySelector('[data-testid="ready-section-overdue"]');
+    const expeditedSection = container.querySelector('[data-testid="ready-section-expedited"]');
+    const otherSection = container.querySelector('[data-testid="ready-section-other"]');
+
+    // Neither Overdue nor Expedited should exist
+    expect(overdueSection).toBeNull();
+    expect(expeditedSection).toBeNull();
+    // Other section header must NOT be displayed
+    expect(otherSection).toBeNull();
+
+    // The cards themselves should be rendered directly in the column
+    expect(container.textContent).toContain('TEST-OTHER-1');
+    expect(container.textContent).toContain('TEST-OTHER-2');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows standard "No issues" empty state when Ready column has 0 issues', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-ready"
+            category="todo"
+            title="Ready"
+            colorVar="var(--jira-status-todo)"
+            issues={[]}
+            isHighlighted={false}
+          />
+        </DndContext>
+      );
+    });
+
+    // Sub-sections are not rendered, standard empty state is shown
+    expect(container.querySelector('[data-testid="ready-section-overdue"]')).toBeNull();
+    expect(container.querySelector('[data-testid="ready-section-expedited"]')).toBeNull();
+    expect(container.querySelector('[data-testid="ready-section-other"]')).toBeNull();
+    expect(container.textContent).toContain('No issues');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

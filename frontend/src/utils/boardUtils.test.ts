@@ -7,6 +7,10 @@ import {
   getActiveBoardColumns,
   splitIssuesByBacklog,
   getAvailableStatuses,
+  parseDate,
+  isIssueOverdue,
+  isIssueExpedited,
+  splitReadyIssues,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -199,6 +203,167 @@ describe('boardUtils', () => {
       expect(options.some((o) => o.name === 'Backlog')).toBe(true);
       expect(options.some((o) => o.name === 'To Do')).toBe(true);
       expect(options.some((o) => o.name === 'Done')).toBe(true);
+    });
+  });
+
+  describe('Ready section splitting (Overdue, Expedited, Other)', () => {
+    // Fixed reference time for deterministic testing: 2026-10-05 12:00:00 local time
+    const fixedNow = new Date(2026, 9, 5, 12, 0, 0); // October 5, 2026
+
+    it('correctly parses dates in YYYY-MM-DD format in local time', () => {
+      const parsed = parseDate('2026-10-05');
+      expect(parsed).not.toBeNull();
+      expect(parsed?.getFullYear()).toBe(2026);
+      expect(parsed?.getMonth()).toBe(9); // 0-indexed October
+      expect(parsed?.getDate()).toBe(5);
+
+      expect(parseDate(null)).toBeNull();
+      expect(parseDate(undefined)).toBeNull();
+      expect(parseDate('')).toBeNull();
+      expect(parseDate('invalid-date')).toBeNull();
+    });
+
+    it('identifies an issue as Overdue when due date is strictly before today', () => {
+      const overdueIssue: JiraIssue = {
+        ...mockBaseIssue,
+        due_date: '2026-10-04', // Yesterday
+      };
+      const todayIssue: JiraIssue = {
+        ...mockBaseIssue,
+        due_date: '2026-10-05', // Today
+      };
+      const futureIssue: JiraIssue = {
+        ...mockBaseIssue,
+        due_date: '2026-10-06', // Tomorrow
+      };
+      const noDueDateIssue: JiraIssue = {
+        ...mockBaseIssue,
+        due_date: null,
+      };
+
+      expect(isIssueOverdue(overdueIssue, fixedNow)).toBe(true);
+      expect(isIssueOverdue(todayIssue, fixedNow)).toBe(false);
+      expect(isIssueOverdue(futureIssue, fixedNow)).toBe(false);
+      expect(isIssueOverdue(noDueDateIssue, fixedNow)).toBe(false);
+    });
+
+    it('identifies an issue as Expedited when priority = Highest and Start date is EMPTY or <= now', () => {
+      const highestNoStartDate: JiraIssue = {
+        ...mockBaseIssue,
+        priority: 'highest',
+        start_date: null,
+      };
+      const highestStartedPast: JiraIssue = {
+        ...mockBaseIssue,
+        priority: 'highest',
+        start_date: '2026-10-01', // Before now
+      };
+      const highestStartInFuture: JiraIssue = {
+        ...mockBaseIssue,
+        priority: 'highest',
+        start_date: '2026-10-15', // After now
+      };
+      const highPriorityIssue: JiraIssue = {
+        ...mockBaseIssue,
+        priority: 'high',
+        start_date: null,
+      };
+
+      expect(isIssueExpedited(highestNoStartDate, fixedNow)).toBe(true);
+      expect(isIssueExpedited(highestStartedPast, fixedNow)).toBe(true);
+      expect(isIssueExpedited(highestStartInFuture, fixedNow)).toBe(false);
+      expect(isIssueExpedited(highPriorityIssue, fixedNow)).toBe(false);
+    });
+
+    it('identifies an issue as Expedited when due date is <= endOfDay', () => {
+      const dueToday: JiraIssue = {
+        ...mockBaseIssue,
+        priority: 'medium',
+        due_date: '2026-10-05', // Today
+      };
+      const dueTomorrow: JiraIssue = {
+        ...mockBaseIssue,
+        priority: 'medium',
+        due_date: '2026-10-06',
+      };
+
+      expect(isIssueExpedited(dueToday, fixedNow)).toBe(true);
+      expect(isIssueExpedited(dueTomorrow, fixedNow)).toBe(false);
+    });
+
+    it('excludes overdue issues from Expedited (overdue takes precedence)', () => {
+      const overdueHighest: JiraIssue = {
+        ...mockBaseIssue,
+        priority: 'highest',
+        due_date: '2026-10-01',
+      };
+
+      expect(isIssueOverdue(overdueHighest, fixedNow)).toBe(true);
+      expect(isIssueExpedited(overdueHighest, fixedNow)).toBe(false);
+    });
+
+    it('splits a collection of Ready issues into Overdue, Expedited, and Other cleanly', () => {
+      const issues: JiraIssue[] = [
+        // 1. Overdue issue (due date in past)
+        {
+          ...mockBaseIssue,
+          key: 'TASK-OVERDUE',
+          summary: 'Overdue task',
+          due_date: '2026-09-30',
+          priority: 'medium',
+        },
+        // 2. Expedited: Highest priority with empty start date
+        {
+          ...mockBaseIssue,
+          key: 'TASK-EXP-HIGHEST',
+          summary: 'Highest priority active task',
+          priority: 'highest',
+          start_date: null,
+          due_date: '2026-10-20',
+        },
+        // 3. Expedited: Medium priority but due today
+        {
+          ...mockBaseIssue,
+          key: 'TASK-EXP-TODAY',
+          summary: 'Due today task',
+          priority: 'medium',
+          due_date: '2026-10-05',
+        },
+        // 4. Other: Highest priority but start date is in the future
+        {
+          ...mockBaseIssue,
+          key: 'TASK-OTHER-FUTURE-START',
+          summary: 'Highest priority future task',
+          priority: 'highest',
+          start_date: '2026-10-25',
+          due_date: '2026-10-30',
+        },
+        // 5. Other: Normal medium priority task due in future
+        {
+          ...mockBaseIssue,
+          key: 'TASK-OTHER-NORMAL',
+          summary: 'Normal scheduled task',
+          priority: 'medium',
+          due_date: '2026-10-15',
+        },
+        // 6. Other: Task with no due date and no start date
+        {
+          ...mockBaseIssue,
+          key: 'TASK-OTHER-NO-DATES',
+          summary: 'Unscheduled task',
+          priority: 'low',
+        },
+      ];
+
+      const { overdue, expedited, other } = splitReadyIssues(issues, fixedNow);
+
+      expect(overdue.map((i) => i.key)).toEqual(['TASK-OVERDUE']);
+      expect(expedited.map((i) => i.key)).toEqual(['TASK-EXP-HIGHEST', 'TASK-EXP-TODAY']);
+      expect(other.map((i) => i.key)).toEqual([
+        'TASK-OTHER-FUTURE-START',
+        'TASK-OTHER-NORMAL',
+        'TASK-OTHER-NO-DATES',
+      ]);
     });
   });
 });

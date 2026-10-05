@@ -5,6 +5,7 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUpRight,
+  Calendar,
   ChevronUp,
   ChevronsUp,
   GripVertical,
@@ -18,6 +19,8 @@ import {
   getAvailableStatuses,
   getCategoryColorVar,
   isBacklogIssue,
+  isIssueExpedited,
+  isIssueOverdue,
 } from '../utils/boardUtils.ts';
 
 interface BacklogIssueRowProps {
@@ -138,6 +141,28 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
             <ArrowDown className="w-4 h-4 text-[var(--jira-priority-low)]" />
           )}
         </div>
+
+        {/* Due Date */}
+        {(issue.due_date || issue.dueDate) && (() => {
+          const dueDateStr = issue.due_date ?? issue.dueDate;
+          const isOverdue = isIssueOverdue(issue);
+          const isExpedited = isIssueExpedited(issue);
+          return (
+            <span
+              className={`flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded border ${
+                isOverdue
+                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30 font-bold'
+                  : isExpedited
+                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 font-bold'
+                  : 'bg-[var(--jira-canvas)] text-[var(--jira-text-secondary)] border-[var(--jira-border-subtle)]'
+              }`}
+              title={`Due date: ${dueDateStr}${isOverdue ? ' (Overdue)' : isExpedited ? ' (Expedited)' : ''}`}
+            >
+              <Calendar className="w-3 h-3 shrink-0" />
+              <span>{dueDateStr}</span>
+            </span>
+          );
+        })()}
 
         {/* Story Points */}
         {storyPoints !== undefined && (

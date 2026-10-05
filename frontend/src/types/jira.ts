@@ -39,6 +39,10 @@ export interface JiraIssue {
   assignee?: JiraUser;
   storyPoints?: number;
   story_points?: number;
+  dueDate?: string | null;
+  due_date?: string | null;
+  startDate?: string | null;
+  start_date?: string | null;
   updatedAt?: string;
   updated_at?: string;
   // Optimistic tracking state

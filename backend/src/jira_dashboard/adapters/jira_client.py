@@ -317,17 +317,33 @@ class FakeJiraClient:
         category = category_mapping.get(cat_key, StatusCategory.TODO)
         status = STATUS_MAP.get(category, STATUS_MAP[StatusCategory.TODO])
 
+        # Extract due date & start date
+        raw_due_date = fields.get("duedate") or fields.get("due_date")
+        raw_start_date = (
+            fields.get("customfield_10015") or fields.get("startDate") or fields.get("start_date")
+        )
+
         # If issue already exists, update its status & summary
         existing = self._issues.get(issue_key)
         if existing:
             summary = fields.get("summary", existing.summary)
+            due_date = str(raw_due_date) if raw_due_date is not None else existing.due_date
+            start_date = str(raw_start_date) if raw_start_date is not None else existing.start_date
             updated = existing.model_copy(
-                update={"summary": summary, "status": status, "updated_at": "2026-10-05T00:00:00Z"}
+                update={
+                    "summary": summary,
+                    "status": status,
+                    "due_date": due_date,
+                    "start_date": start_date,
+                    "updated_at": "2026-10-05T00:00:00Z",
+                }
             )
             self._issues[issue_key] = updated
             return updated
 
         # Otherwise create new issue representation
+        due_date = str(raw_due_date) if raw_due_date is not None else None
+        start_date = str(raw_start_date) if raw_start_date is not None else None
         new_issue = JiraIssue(
             id=str(issue_data.get("id", "999")),
             key=issue_key,
@@ -337,6 +353,8 @@ class FakeJiraClient:
             status=status,
             assignee=None,
             story_points=None,
+            due_date=due_date,
+            start_date=start_date,
             updated_at="2026-10-05T00:00:00Z",
         )
         self._issues[issue_key] = new_issue

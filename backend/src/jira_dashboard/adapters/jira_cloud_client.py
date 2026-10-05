@@ -295,6 +295,16 @@ class JiraCloudClient(JiraClientProtocol):
                 except (ValueError, TypeError):
                     pass
 
+        # Due date
+        raw_due_date = fields.get("duedate") or fields.get("due_date")
+        due_date = str(raw_due_date) if raw_due_date is not None else None
+
+        # Start date (Jira Cloud standard customfield_10015 or standard aliases)
+        raw_start_date = (
+            fields.get("customfield_10015") or fields.get("startDate") or fields.get("start_date")
+        )
+        start_date = str(raw_start_date) if raw_start_date is not None else None
+
         return JiraIssue(
             id=issue_id,
             key=key,
@@ -304,6 +314,8 @@ class JiraCloudClient(JiraClientProtocol):
             status=status,
             assignee=assignee,
             story_points=story_points,
+            due_date=due_date,
+            start_date=start_date,
             updated_at=updated_at,
         )
 

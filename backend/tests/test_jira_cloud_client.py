@@ -60,6 +60,8 @@ def test_get_board_issues_success() -> None:
                                     "avatarUrls": {"48x48": "https://avatar.url/48"},
                                 },
                                 "customfield_10016": 5.0,
+                                "duedate": "2026-10-15",
+                                "customfield_10015": "2026-10-10",
                                 "updated": "2026-10-05T01:00:00Z",
                             },
                         }
@@ -78,6 +80,8 @@ def test_get_board_issues_success() -> None:
         assert issue.assignee is not None
         assert issue.assignee.display_name == "Jacek M"
         assert issue.story_points == 5.0
+        assert issue.due_date == "2026-10-15"
+        assert issue.start_date == "2026-10-10"
         await client.close()
 
     asyncio.run(_test())

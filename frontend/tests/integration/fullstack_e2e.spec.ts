@@ -52,19 +52,19 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
   });
 
   test('3. Real-Time Webhook Push: incoming Jira webhook updates UI automatically via WebSocket', async ({ page }) => {
-    // Verify PROJ-104 is initially in To Do column (not line-through)
-    const proj104Article = page.locator('article', { hasText: 'PROJ-104' });
-    await expect(proj104Article).toBeVisible();
-    await expect(proj104Article.locator('p')).not.toHaveClass(/line-through/);
+    // Verify PROJ-85 is initially on board (not line-through)
+    const proj85Article = page.locator('article', { hasText: 'PROJ-85' });
+    await expect(proj85Article).toBeVisible();
+    await expect(proj85Article.locator('p')).not.toHaveClass(/line-through/);
 
     // Simulate an external Jira Cloud webhook arriving at the FastAPI backend
     const webhookPayload = {
       webhookEvent: 'jira:issue_updated',
       issue: {
-        id: '104',
-        key: 'PROJ-104',
+        id: '85',
+        key: 'PROJ-85',
         fields: {
-          summary: 'Setup WebSocket broadcast client for live browser pushes (Done via Jira Webhook)',
+          summary: 'Jira webhook ingestion & signature validation engine (Done via Jira Webhook)',
           status: {
             name: 'Done',
             statusCategory: { id: 3, key: 'done', name: 'Done' },
@@ -79,11 +79,11 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     expect(webhookRes.ok()).toBeTruthy();
 
     // Verify UI updates live over WebSocket without page refresh!
-    await expect(proj104Article.locator('p')).toHaveText(
-      'Setup WebSocket broadcast client for live browser pushes (Done via Jira Webhook)',
+    await expect(proj85Article.locator('p')).toHaveText(
+      'Jira webhook ingestion & signature validation engine (Done via Jira Webhook)',
       { timeout: 5000 }
     );
-    await expect(proj104Article.locator('p')).toHaveClass(/line-through/);
+    await expect(proj85Article.locator('p')).toHaveClass(/line-through/);
   });
 
   test('4. Optimistic Rollback: simulated Jira API rejection gracefully reverts UI and shows error banner', async ({
@@ -148,7 +148,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(proj101Article).toBeVisible();
 
     const statusSelect = proj101Article.getByLabel('Change status for PROJ-101');
-    await expect(statusSelect).toHaveValue('col-todo');
+    await expect(statusSelect).toHaveValue('To Do');
 
     // Intercept transition request
     const transitionPromise = page.waitForResponse(
@@ -156,14 +156,14 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     );
 
     // Select "In Progress" column option
-    await statusSelect.selectOption('col-inprogress');
+    await statusSelect.selectOption('In Progress');
 
     // Verify backend received transition call
     const res = await transitionPromise;
     expect(res.ok()).toBeTruthy();
 
     // Verify select value is now updated
-    await expect(statusSelect).toHaveValue('col-inprogress');
+    await expect(statusSelect).toHaveValue('In Progress');
   });
 
   test('7. Filter and Search: instant search query filters displayed cards', async ({

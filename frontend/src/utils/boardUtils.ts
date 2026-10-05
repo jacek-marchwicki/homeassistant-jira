@@ -190,4 +190,90 @@ export function getAvailableStatuses(columns: BoardColumn[]): StatusOption[] {
   return options;
 }
 
+/**
+ * Parses a date string (YYYY-MM-DD or ISO timestamp) into a Date object in local time.
+ */
+export function parseDate(dateStr?: string | null): Date | null {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+
+  // Handle YYYY-MM-DD format explicitly in local time to avoid UTC shift
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (match) {
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const day = parseInt(match[3], 10);
+    return new Date(year, month, day);
+  }
+
+  const d = new Date(trimmed);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Returns true if an issue is Overdue (has a due date strictly before today).
+ */
+export function isIssueOverdue(issue: JiraIssue, now: Date = new Date()): boolean {
+  const dueDateStr = issue.due_date ?? issue.dueDate;
+  if (!dueDateStr) return false;
+  const dueDate = parseDate(dueDateStr);
+  if (!dueDate) return false;
+
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  return dueDate < startOfToday;
+}
+
+/**
+ * Returns true if an issue is Expedited according to:
+ * priority = Highest AND ("Start date" is EMPTY OR "Start date" <= now()) OR duedate <= endOfDay()
+ */
+export function isIssueExpedited(issue: JiraIssue, now: Date = new Date()): boolean {
+  if (isIssueOverdue(issue, now)) return false;
+
+  const priorityLower = (issue.priority || '').trim().toLowerCase();
+  const startDateStr = issue.start_date ?? issue.startDate;
+  const startDate = parseDate(startDateStr);
+  const hasNoStartDate = !startDateStr || !startDate;
+  const isStarted = hasNoStartDate || startDate <= now;
+  const matchesHighestPriority = priorityLower === 'highest' && isStarted;
+
+  const dueDateStr = issue.due_date ?? issue.dueDate;
+  const dueDate = parseDate(dueDateStr);
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const matchesDueTodayOrEarlier = dueDate !== null && dueDate <= endOfToday;
+
+  return matchesHighestPriority || matchesDueTodayOrEarlier;
+}
+
+export interface ReadySections {
+  overdue: JiraIssue[];
+  expedited: JiraIssue[];
+  other: JiraIssue[];
+}
+
+/**
+ * Splits an array of issues into Overdue, Expedited, and Other groups.
+ */
+export function splitReadyIssues(
+  issues: JiraIssue[],
+  now: Date = new Date()
+): ReadySections {
+  const overdue: JiraIssue[] = [];
+  const expedited: JiraIssue[] = [];
+  const other: JiraIssue[] = [];
+
+  for (const issue of issues) {
+    if (isIssueOverdue(issue, now)) {
+      overdue.push(issue);
+    } else if (isIssueExpedited(issue, now)) {
+      expedited.push(issue);
+    } else {
+      other.push(issue);
+    }
+  }
+
+  return { overdue, expedited, other };
+}
+
 

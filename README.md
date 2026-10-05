@@ -329,7 +329,6 @@ This file defines coding standards, testing requirements, architectural boundari
 - [ ] **Phase 3.5:
   - [ ] When the webpage is loading, for a few seconds I see "Engineering Sprint Board", "Active Sprint 42", and some "TO DO", "IN PROGRESS" sample data.
     Instead of those I'd like to have normal progress indicator that data is loading. Could you implement this. With an tests.
-  - [ ] Could you ensure, that when doing screenshot tests, no real JIRA is used, but only fake API with mocks? Please re-run screenshot test
   - [ ] Implement ability to edit issues.
   - [ ] Implement ability to create issues.
   - [ ] Could you change "DONE" to display only issues that where updated no longer then a 2 days ago?

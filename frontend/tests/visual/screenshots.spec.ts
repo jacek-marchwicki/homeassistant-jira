@@ -234,5 +234,27 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Create Issue Modal with Assignee Picker Open Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const createButton = page.getByRole('button', { name: 'Create Issue' });
+    await createButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    // Click assignee combobox to open the suggestions dropdown
+    const assigneePicker = modal.locator('[role="combobox"][aria-label="Assignee"]');
+    await assigneePicker.click();
+
+    const listbox = modal.locator('[role="listbox"]');
+    await expect(listbox).toBeVisible();
+
+    // Capture the modal with open assignee suggestions dropdown
+    await modal.locator('> div').screenshot({
+      path: './tests/screenshots/component-modal-create-assignee-picker.png',
+      animations: 'disabled',
+    });
+  });
 });
 

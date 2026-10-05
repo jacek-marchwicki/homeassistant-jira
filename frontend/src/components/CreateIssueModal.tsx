@@ -4,6 +4,7 @@ import { useBoardStore } from '../store/boardStore.ts';
 import { JiraPriority, JiraStatusCategory } from '../types/jira.ts';
 import { getAvailableStatuses } from '../utils/boardUtils.ts';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
+import { AssigneeSelect } from './AssigneeSelect.tsx';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -225,13 +226,10 @@ export function CreateIssueModal({
               >
                 Assignee
               </label>
-              <input
+              <AssigneeSelect
                 id="create-assignee"
-                type="text"
                 value={assigneeName}
-                onChange={(e) => setAssigneeName(e.target.value)}
-                placeholder="Unassigned (leave empty)"
-                className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
+                onChange={setAssigneeName}
               />
             </div>
           </div>

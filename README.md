@@ -332,6 +332,7 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] **Issue Creation**: Direct issue creation modal accessible from the top navigation bar with optimistic UI state mutation (<50ms), field validation (summary, issue type, priority, destination status, assignee, story points, due/start dates), REST API endpoint (`POST /api/issues`), real-time WebSocket broadcast (`issue_created`), and duplicate resolution
   - [x] **Recent Done Column Filtering**: Limit issues displayed in the "DONE" status column to those updated within the last 2 days (<=48 hours or calendar day threshold), keeping active boards focused on recent accomplishments while retaining older completed issues in the backlog and history
   - [x] **Visual Screenshot Testing for Issue Dialogs**: Automated Playwright visual regression testing suite capturing full-viewport and isolated component snapshots for both Create Issue and Edit Issue modal dialogs across UI themes
+  - [x] **Interactive Assignee Selector with Suggestions & Search**: Dedicated touch-friendly assignee picker for issue creation and editing with avatar previews, quick suggestion list populated from active board assignees, unassigned quick-toggle, instant search filtering, and custom assignee entry
 - [ ] **Phase 4: Home Assistant Integration & Packaging**
   - [ ] Home Assistant Add-on container configuration (`config.yaml`, `build.yaml`, Ingress)
   - [ ] Standalone Docker packaging and docker-compose configurations

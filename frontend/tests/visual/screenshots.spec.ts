@@ -278,5 +278,42 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Create Issue Modal with Status Selector Open Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const createButton = page.getByRole('button', { name: 'Create Issue' });
+    await createButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    const statusPicker = modal.locator('[role="combobox"][aria-label="Status"]');
+    await statusPicker.click();
+
+    const listbox = modal.locator('[role="listbox"][aria-label="Status"]');
+    await expect(listbox).toBeVisible();
+
+    await modal.locator('> div').screenshot({
+      path: './tests/screenshots/component-modal-create-status-picker.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Issue Card with Status Selector Open Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const card = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(card).toBeVisible();
+
+    const statusPicker = card.locator('[role="combobox"][aria-label="Change status for PROJ-101"]');
+    await statusPicker.click();
+
+    const listbox = card.locator('[role="listbox"][aria-label="Change status for PROJ-101"]');
+    await expect(listbox).toBeVisible();
+
+    await card.screenshot({
+      path: './tests/screenshots/component-card-status-picker.png',
+      animations: 'disabled',
+    });
+  });
 });
 

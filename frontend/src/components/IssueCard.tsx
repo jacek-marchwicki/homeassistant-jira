@@ -2,19 +2,17 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  ArrowDown,
-  ArrowRight,
   Calendar,
   CheckCircle2,
-  ChevronUp,
-  ChevronsUp,
   Pencil,
   RotateCw,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
-import { JiraIssue } from '../types/jira.ts';
+import { JiraIssue, JiraStatusCategory } from '../types/jira.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
+import { PriorityIcon } from './PriorityIcon.tsx';
+import { StatusSelect } from './StatusSelect.tsx';
 import {
   getAvailableStatuses,
   getColumnForIssue,
@@ -65,14 +63,12 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
     transitionIssueOptimistic(issue.key, 'done', doneCol?.name);
   };
 
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    e.stopPropagation();
+  const handleStatusSelect = (statusName: string, category?: JiraStatusCategory) => {
     const chosenStatus = statusOptions.find(
-      (c) => c.id === e.target.value || c.name === e.target.value
+      (c) => c.name.toLowerCase() === statusName.toLowerCase()
     );
-    if (chosenStatus) {
-      transitionIssueOptimistic(issue.key, chosenStatus.category, chosenStatus.name);
-    }
+    const cat = category || chosenStatus?.category || 'todo';
+    transitionIssueOptimistic(issue.key, cat, statusName);
   };
 
   return (
@@ -121,21 +117,14 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
           )}
 
           {/* Direct Transition Selector (Move to any column or Backlog without dragging) */}
-          <div className="relative">
-            <select
-              value={currentColumn?.name || issue.status.name}
-              onChange={handleStatusChange}
-              className="text-2xs bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] rounded px-1.5 py-1 outline-none cursor-pointer min-h-[32px]"
-              title="Change Status"
-              aria-label={`Change status for ${issue.key}`}
-            >
-              {statusOptions.map((opt) => (
-                <option key={opt.id} value={opt.name}>
-                  {opt.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <StatusSelect
+            value={currentColumn?.name || issue.status.name}
+            onChange={handleStatusSelect}
+            options={statusOptions}
+            size="sm"
+            ariaLabel={`Change status for ${issue.key}`}
+            title="Change Status"
+          />
         </div>
       </div>
 
@@ -156,18 +145,7 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
 
       <div className="flex items-center justify-between text-xs text-[var(--jira-text-secondary)]">
         <div className="flex items-center gap-1.5">
-          {issue.priority === 'highest' && (
-            <ChevronsUp className="w-4 h-4 text-[var(--jira-priority-highest)]" />
-          )}
-          {issue.priority === 'high' && (
-            <ChevronUp className="w-4 h-4 text-[var(--jira-priority-high)]" />
-          )}
-          {issue.priority === 'medium' && (
-            <ArrowRight className="w-4 h-4 text-[var(--jira-priority-medium)]" />
-          )}
-          {(issue.priority === 'low' || issue.priority === 'lowest') && (
-            <ArrowDown className="w-4 h-4 text-[var(--jira-priority-low)]" />
-          )}
+          <PriorityIcon priority={issue.priority} />
           <span className="text-2xs font-bold uppercase text-[var(--jira-text-secondary)]">
             {issue.priority}
           </span>

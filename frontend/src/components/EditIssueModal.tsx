@@ -5,6 +5,9 @@ import { JiraIssue, JiraPriority } from '../types/jira.ts';
 import { getAvailableStatuses } from '../utils/boardUtils.ts';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 import { AssigneeSelect } from './AssigneeSelect.tsx';
+import { IssueTypeSelect } from './IssueTypeSelect.tsx';
+import { PrioritySelect } from './PrioritySelect.tsx';
+import { StatusSelect } from './StatusSelect.tsx';
 
 interface EditIssueModalProps {
   issue: JiraIssue | null;
@@ -174,19 +177,11 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               >
                 Issue Type
               </label>
-              <select
+              <IssueTypeSelect
                 id="edit-type"
                 value={issueType}
-                onChange={(e) =>
-                  setIssueType(e.target.value as 'story' | 'bug' | 'task' | 'subtask')
-                }
-                className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)] cursor-pointer"
-              >
-                <option value="story">Story</option>
-                <option value="task">Task</option>
-                <option value="bug">Bug</option>
-                <option value="subtask">Subtask</option>
-              </select>
+                onChange={setIssueType}
+              />
             </div>
 
             <div>
@@ -196,18 +191,11 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               >
                 Priority
               </label>
-              <select
+              <PrioritySelect
                 id="edit-priority"
                 value={priority}
-                onChange={(e) => setPriority(e.target.value as JiraPriority)}
-                className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)] cursor-pointer"
-              >
-                <option value="highest">Highest</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-                <option value="lowest">Lowest</option>
-              </select>
+                onChange={setPriority}
+              />
             </div>
           </div>
 
@@ -220,18 +208,13 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               >
                 Status
               </label>
-              <select
+              <StatusSelect
                 id="edit-status"
                 value={statusName}
-                onChange={(e) => setStatusName(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)] cursor-pointer"
-              >
-                {statusOptions.map((opt) => (
-                  <option key={opt.id} value={opt.name}>
-                    {opt.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(name) => setStatusName(name)}
+                options={statusOptions}
+                size="md"
+              />
             </div>
 
             <div>

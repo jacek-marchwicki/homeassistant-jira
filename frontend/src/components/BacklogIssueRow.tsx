@@ -2,20 +2,18 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  ArrowDown,
-  ArrowRight,
   ArrowUpRight,
   Calendar,
-  ChevronUp,
-  ChevronsUp,
   GripVertical,
   Inbox,
   Pencil,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
-import { JiraIssue } from '../types/jira.ts';
+import { JiraIssue, JiraStatusCategory } from '../types/jira.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
+import { PriorityIcon } from './PriorityIcon.tsx';
+import { StatusSelect } from './StatusSelect.tsx';
 import {
   getAvailableStatuses,
   getCategoryColorVar,
@@ -67,12 +65,12 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
     }
   };
 
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    e.stopPropagation();
-    const chosenStatus = statusOptions.find((s) => s.id === e.target.value || s.name === e.target.value);
-    if (chosenStatus) {
-      transitionIssueOptimistic(issue.key, chosenStatus.category, chosenStatus.name);
-    }
+  const handleStatusSelect = (statusName: string, category?: JiraStatusCategory) => {
+    const chosenStatus = statusOptions.find(
+      (s) => s.name.toLowerCase() === statusName.toLowerCase()
+    );
+    const cat = category || chosenStatus?.category || 'todo';
+    transitionIssueOptimistic(issue.key, cat, statusName);
   };
 
   const storyPoints = issue.story_points ?? issue.storyPoints;
@@ -134,18 +132,7 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
       >
         {/* Priority Icon */}
         <div className="flex items-center" title={`Priority: ${issue.priority}`}>
-          {issue.priority === 'highest' && (
-            <ChevronsUp className="w-4 h-4 text-[var(--jira-priority-highest)]" />
-          )}
-          {issue.priority === 'high' && (
-            <ChevronUp className="w-4 h-4 text-[var(--jira-priority-high)]" />
-          )}
-          {issue.priority === 'medium' && (
-            <ArrowRight className="w-4 h-4 text-[var(--jira-priority-medium)]" />
-          )}
-          {(issue.priority === 'low' || issue.priority === 'lowest') && (
-            <ArrowDown className="w-4 h-4 text-[var(--jira-priority-low)]" />
-          )}
+          <PriorityIcon priority={issue.priority} />
         </div>
 
         {/* Due Date */}
@@ -233,21 +220,14 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
         </button>
 
         {/* Status Dropdown Selector */}
-        <div className="relative">
-          <select
-            value={issue.status.name}
-            onChange={handleStatusChange}
-            className="text-2xs bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] rounded px-1.5 py-1 outline-none cursor-pointer min-h-[36px]"
-            title="Change Status"
-            aria-label={`Change status for ${issue.key}`}
-          >
-            {statusOptions.map((opt) => (
-              <option key={opt.id} value={opt.name}>
-                {opt.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <StatusSelect
+          value={issue.status.name}
+          onChange={handleStatusSelect}
+          options={statusOptions}
+          size="sm"
+          ariaLabel={`Change status for ${issue.key}`}
+          title="Change Status"
+        />
       </div>
     </article>
   );

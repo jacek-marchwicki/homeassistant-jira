@@ -27,7 +27,9 @@ from jira_dashboard.adapters import (
 from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import (
     BoardColumn,
+    IssueType,
     JiraIssue,
+    Priority,
     StatusCategory,
 )
 
@@ -154,6 +156,21 @@ class TransitionRequest(BaseModel):
 
     target_category: StatusCategory | None = None
     target_status: str | None = None
+
+
+class IssueUpdateRequest(BaseModel):
+    """Payload to update an existing issue."""
+
+    summary: str | None = None
+    issue_type: IssueType | None = None
+    priority: Priority | None = None
+    status_category: StatusCategory | None = None
+    status_name: str | None = None
+    assignee_name: str | None = None
+    assignee_account_id: str | None = None
+    story_points: float | None = None
+    due_date: str | None = None
+    start_date: str | None = None
 
 
 class BoardResponse(BaseModel):
@@ -302,6 +319,46 @@ async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
     await ws_hub.broadcast(
         {
             "event": "issue_transitioned",
+            "issue_key": issue.key,
+            "status_category": issue.status.category.value,
+            "status_name": issue.status.name,
+            "issue": issue.model_dump(),
+        }
+    )
+
+    return issue
+
+
+@app.patch("/api/issues/{key}", response_model=JiraIssue)
+@app.put("/api/issues/{key}", response_model=JiraIssue)
+async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
+    """Update issue details and broadcast delta to connected WebSocket clients."""
+    try:
+        issue = await jira_client.update_issue(
+            key,
+            summary=request.summary,
+            issue_type=request.issue_type,
+            priority=request.priority,
+            status_category=request.status_category,
+            status_name=request.status_name,
+            assignee_name=request.assignee_name,
+            assignee_account_id=request.assignee_account_id,
+            story_points=request.story_points,
+            due_date=request.due_date,
+            start_date=request.start_date,
+        )
+    except JiraAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    # Update cache signature
+    _cached_issue_state[issue.key] = (
+        f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+    )
+
+    # Broadcast real-time delta via WebSockets
+    await ws_hub.broadcast(
+        {
+            "event": "issue_updated",
             "issue_key": issue.key,
             "status_category": issue.status.category.value,
             "status_name": issue.status.name,

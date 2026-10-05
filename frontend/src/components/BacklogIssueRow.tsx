@@ -10,6 +10,7 @@ import {
   ChevronsUp,
   GripVertical,
   Inbox,
+  Pencil,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
@@ -29,7 +30,8 @@ interface BacklogIssueRowProps {
 }
 
 export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRowProps) {
-  const { columns, transitionIssueOptimistic, moveToBoard, moveToBacklog } = useBoardStore();
+  const { columns, transitionIssueOptimistic, moveToBoard, moveToBacklog, setEditingIssue } =
+    useBoardStore();
   const isBacklog = isBacklogIssue(issue, columns);
   const statusColorVar = getCategoryColorVar(issue.status.category);
   const statusOptions = getAvailableStatuses(columns);
@@ -110,8 +112,12 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
 
         {/* Issue Summary */}
         <span
-          title={issue.summary}
-          className={`truncate font-medium text-xs ${
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingIssue(issue);
+          }}
+          title={`Click to edit ${issue.key}`}
+          className={`truncate font-medium text-xs cursor-pointer hover:underline ${
             isDone
               ? 'line-through text-[var(--jira-text-secondary)] opacity-75'
               : 'text-[var(--jira-text-primary)]'
@@ -188,6 +194,19 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
 
         {/* Assignee Avatar */}
         <AssigneeAvatar assignee={issue.assignee} />
+
+        {/* Edit Issue Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingIssue(issue);
+          }}
+          className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
+          title={`Edit ${issue.key}`}
+          aria-label={`Edit ${issue.key}`}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
 
         {/* Quick Move Action: One-Click Move to Board / Move to Backlog */}
         <button

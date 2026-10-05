@@ -507,6 +507,52 @@ class JiraCloudClient(JiraClientProtocol):
         except httpx.RequestError as exc:
             raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
 
+    async def update_issue(
+        self,
+        issue_key: str,
+        summary: str | None = None,
+        issue_type: IssueType | None = None,
+        priority: Priority | None = None,
+        status_category: StatusCategory | None = None,
+        status_name: str | None = None,
+        assignee_name: str | None = None,
+        assignee_account_id: str | None = None,
+        story_points: float | None = None,
+        due_date: str | None = None,
+        start_date: str | None = None,
+    ) -> JiraIssue:
+        """Update issue fields via Jira Cloud REST API."""
+        fields: dict[str, Any] = {}
+        if summary is not None:
+            fields["summary"] = summary
+        if priority is not None:
+            fields["priority"] = {"name": priority.value.capitalize()}
+        if issue_type is not None:
+            fields["issuetype"] = {"name": issue_type.value.capitalize()}
+        if due_date is not None:
+            fields["duedate"] = due_date if due_date else None
+        if assignee_account_id is not None:
+            fields["assignee"] = {"accountId": assignee_account_id} if assignee_account_id else None
+
+        if fields:
+            try:
+                res = await self._send_request(
+                    "PUT", f"/rest/api/3/issue/{issue_key}", json={"fields": fields}
+                )
+                self._handle_response_errors(res)
+            except httpx.RequestError as exc:
+                raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+
+        if status_name or status_category:
+            await self.transition_issue(
+                issue_key, target_category=status_category, target_status=status_name
+            )
+
+        updated = await self.get_issue(issue_key)
+        if not updated:
+            raise JiraAPIError(f"Issue {issue_key} not found after update", status_code=404)
+        return updated
+
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
         """Parse incoming Jira Cloud webhook payload."""
         webhook_event = payload.get("webhookEvent")

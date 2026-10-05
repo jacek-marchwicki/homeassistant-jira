@@ -213,4 +213,76 @@ describe('Zustand BoardStore', () => {
     expect(issue?.status.name).toBe('To Do');
     expect(issue?.status.category).toBe('todo');
   });
+
+  it('updateIssueOptimistic mutates issue fields immediately and sends PATCH request', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockIssue,
+        summary: 'Updated via Store',
+        priority: 'highest',
+      }),
+    });
+
+    const startTime = performance.now();
+    const promise = useBoardStore.getState().updateIssueOptimistic('PROJ-101', {
+      summary: 'Updated via Store',
+      priority: 'highest',
+    });
+
+    // Synchronously mutated within 50ms
+    const synchronousIssue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+    expect(performance.now() - startTime).toBeLessThan(50);
+    expect(synchronousIssue?.summary).toBe('Updated via Store');
+    expect(synchronousIssue?.priority).toBe('highest');
+    expect(synchronousIssue?._optimisticState).toBe('pending');
+
+    await promise;
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/issues/PROJ-101'),
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          summary: 'Updated via Store',
+          priority: 'highest',
+        }),
+      })
+    );
+
+    const syncedIssue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+    expect(syncedIssue?._optimisticState).toBe('synced');
+  });
+
+  it('updateIssueOptimistic rolls back on failure', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    });
+
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-101', {
+      summary: 'Will Fail',
+    });
+
+    const revertedIssue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+    expect(revertedIssue?.summary).toBe('Test Issue');
+    expect(revertedIssue?._optimisticState).toBe('failed');
+    expect(useBoardStore.getState().errorMessage).toContain('Failed to update PROJ-101');
+  });
+
+  it('handles WebSocket issue_updated event', () => {
+    useBoardStore.getState().handleWsMessage({
+      event: 'issue_updated',
+      issue: {
+        ...mockIssue,
+        summary: 'Updated over WS',
+        priority: 'lowest',
+      },
+    });
+
+    const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+    expect(issue?.summary).toBe('Updated over WS');
+    expect(issue?.priority).toBe('lowest');
+  });
 });
+

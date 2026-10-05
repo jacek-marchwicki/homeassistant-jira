@@ -77,3 +77,15 @@ export interface BoardState {
 
 export type ConnectionState = 'connected' | 'connecting' | 'disconnected' | 'error';
 
+export interface IssueUpdatePayload {
+  summary?: string;
+  issue_type?: 'story' | 'bug' | 'task' | 'subtask';
+  priority?: JiraPriority;
+  status_category?: JiraStatusCategory;
+  status_name?: string;
+  assignee_name?: string;
+  story_points?: number;
+  due_date?: string | null;
+  start_date?: string | null;
+}
+

@@ -314,3 +314,48 @@ def test_jira_error_handling_401_and_429() -> None:
         await client_429.close()
 
     asyncio.run(_test())
+
+
+def test_update_issue_success() -> None:
+    """Verify JiraCloudClient update_issue sends PUT to issue endpoint."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "PUT" and "/rest/api/3/issue/DEV-1001" in str(request.url):
+                return httpx.Response(204)
+            if request.method == "GET" and "/rest/api/3/issue/DEV-1001" in str(request.url):
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "1001",
+                        "key": "DEV-1001",
+                        "fields": {
+                            "summary": "Updated Jira Summary",
+                            "priority": {"name": "Highest"},
+                            "issuetype": {"name": "Bug"},
+                            "status": {
+                                "id": "3",
+                                "name": "In Progress",
+                                "statusCategory": {
+                                    "id": 2,
+                                    "key": "indeterminate",
+                                    "name": "In Progress",
+                                },
+                            },
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        updated = await client.update_issue(
+            "DEV-1001",
+            summary="Updated Jira Summary",
+            priority=Priority.HIGHEST,
+        )
+        assert updated.key == "DEV-1001"
+        assert updated.summary == "Updated Jira Summary"
+        assert updated.priority == Priority.HIGHEST
+        await client.close()
+
+    asyncio.run(_test())

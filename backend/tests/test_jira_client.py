@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from jira_dashboard.adapters.jira_client import FakeJiraClient, JiraAPIError
-from jira_dashboard.domain import StatusCategory
+from jira_dashboard.domain import Priority, StatusCategory
 
 
 def test_fake_jira_client_fetches_seed_issues() -> None:
@@ -49,6 +49,35 @@ def test_fake_jira_client_transition_by_status_name() -> None:
         updated = await client.transition_issue("PROJ-101", target_status="Ready")
         assert updated.status.name == "Ready"
         assert updated.status.category == StatusCategory.TODO
+
+    asyncio.run(_test())
+
+
+def test_fake_jira_client_update_issue() -> None:
+    """Verify FakeJiraClient update_issue modifies fields appropriately."""
+
+    async def _test() -> None:
+        client = FakeJiraClient()
+        updated = await client.update_issue(
+            "PROJ-101",
+            summary="New Summary for PROJ-101",
+            priority=Priority.HIGHEST,
+            story_points=8.0,
+            assignee_name="Updated Engineer",
+            due_date="2026-12-31",
+        )
+        assert updated.summary == "New Summary for PROJ-101"
+        assert updated.priority == Priority.HIGHEST
+        assert updated.story_points == 8.0
+        assert updated.assignee is not None
+        assert updated.assignee.display_name == "Updated Engineer"
+        assert updated.due_date == "2026-12-31"
+
+        # Verify persistence
+        fetched = await client.get_issue("PROJ-101")
+        assert fetched is not None
+        assert fetched.summary == "New Summary for PROJ-101"
+        assert fetched.priority == Priority.HIGHEST
 
     asyncio.run(_test())
 

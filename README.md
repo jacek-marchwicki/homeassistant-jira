@@ -328,7 +328,7 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] Comprehensive unit and integration test coverage
 - [ ] **Phase 3.5: User Experience Polish & Issue Management**
   - [x] **Initial Board Loading State**: Display a dedicated, accessible progress indicator while sprint data is loading, preventing the flash of placeholder text ("Engineering Sprint Board", "Active Sprint 42") and sample columns
-  - [ ] Implement ability to edit issues.
+  - [x] **Issue Editing**: Full-stack capability to edit issue details (summary, issue type, priority, workflow status, assignee, story points, due date, start date) with sub-50ms optimistic UI updates, background Jira synchronization, WebSocket broadcast, and automatic rollback on failure
   - [ ] Implement ability to create issues.
   - [ ] Could you change "DONE" to display only issues that where updated no longer then a 2 days ago?
 - [ ] **Phase 4: Home Assistant Integration & Packaging**

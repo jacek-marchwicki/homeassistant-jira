@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { BacklogView } from './components/BacklogView.tsx';
+import { EditIssueModal } from './components/EditIssueModal.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { Header } from './components/Header.tsx';
 import { InstallHelpModal } from './components/InstallHelpModal.tsx';
@@ -20,6 +21,8 @@ export default function App() {
     isLoading,
     boardName,
     issues,
+    editingIssue,
+    setEditingIssue,
   } = useBoardStore();
   const {
     canInstall,
@@ -154,6 +157,13 @@ export default function App() {
         onClose={closeHelpModal}
         isAndroid={isAndroid}
         isIOS={isIOS}
+      />
+
+      {/* Edit Issue Modal */}
+      <EditIssueModal
+        issue={editingIssue}
+        isOpen={Boolean(editingIssue)}
+        onClose={() => setEditingIssue(null)}
       />
     </div>
   );

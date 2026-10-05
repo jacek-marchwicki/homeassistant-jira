@@ -50,6 +50,31 @@ class TestPresentationApi(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    def test_update_issue_endpoint(self) -> None:
+        """Verify PATCH and PUT /api/issues/{key} updates issue fields."""
+        response = self.client.patch(
+            "/api/issues/PROJ-101",
+            json={
+                "summary": "Updated summary from API test",
+                "priority": "highest",
+                "story_points": 5.0,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["key"], "PROJ-101")
+        self.assertEqual(data["summary"], "Updated summary from API test")
+        self.assertEqual(data["priority"], "highest")
+        self.assertEqual(data["story_points"], 5.0)
+
+    def test_update_nonexistent_issue(self) -> None:
+        """Verify 404 is returned when updating an invalid issue key."""
+        response = self.client.patch(
+            "/api/issues/NONEXISTENT-999",
+            json={"summary": "New summary"},
+        )
+        self.assertEqual(response.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

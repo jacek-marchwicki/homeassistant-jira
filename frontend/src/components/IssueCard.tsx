@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronUp,
   ChevronsUp,
+  Pencil,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
@@ -26,7 +27,7 @@ interface IssueCardProps {
 }
 
 export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
-  const { columns, transitionIssueOptimistic } = useBoardStore();
+  const { columns, transitionIssueOptimistic, setEditingIssue } = useBoardStore();
   const currentColumn = getColumnForIssue(issue, columns);
   const isDone = (currentColumn?.category || issue.status.category) === 'done';
   const dueDateStr = issue.due_date ?? issue.dueDate;
@@ -92,6 +93,19 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
         </div>
 
         <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
+          {/* Edit Issue Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingIssue(issue);
+            }}
+            className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center cursor-pointer"
+            title={`Edit ${issue.key}`}
+            aria-label={`Edit ${issue.key}`}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+
           {/* Direct One-Tap Quick Action: Mark as Done */}
           {!isDone && (
             <button
@@ -125,7 +139,12 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
       </div>
 
       <p
-        className={`text-sm font-medium mb-3 line-clamp-2 ${
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditingIssue(issue);
+        }}
+        title={`Click to edit ${issue.key}`}
+        className={`text-sm font-medium mb-3 line-clamp-2 cursor-pointer hover:underline ${
           isDone
             ? 'line-through text-[var(--jira-text-secondary)] opacity-75'
             : 'text-[var(--jira-text-primary)]'

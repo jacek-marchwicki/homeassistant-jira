@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { BoardColumn, JiraIssue, JiraStatusCategory } from '../types/jira.ts';
+import { BoardColumn, IssueUpdatePayload, JiraIssue, JiraStatusCategory } from '../types/jira.ts';
 import { applyTheme, getInitialTheme, ThemeMode } from '../tokens/themeBridge.ts';
 import { getApiUrl } from '../utils/paths.ts';
 
@@ -35,6 +35,7 @@ export interface BoardStoreState {
   rollbackQueue: Record<string, JiraIssue>;
   currentView: DashboardView;
   isBacklogExpandedOnBoard: boolean;
+  editingIssue: JiraIssue | null;
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
@@ -46,6 +47,7 @@ export interface BoardStoreState {
   setErrorMessage: (msg: string | null) => void;
   setCurrentView: (view: DashboardView) => void;
   toggleBacklogExpandedOnBoard: () => void;
+  setEditingIssue: (issue: JiraIssue | null) => void;
   moveToBacklog: (issueKey: string) => Promise<void>;
   moveToBoard: (issueKey: string) => Promise<void>;
   loadBoard: () => Promise<void>;
@@ -54,6 +56,7 @@ export interface BoardStoreState {
     targetCategory: JiraStatusCategory,
     targetStatus?: string
   ) => Promise<void>;
+  updateIssueOptimistic: (issueKey: string, updates: IssueUpdatePayload) => Promise<void>;
   handleWsMessage: (data: unknown) => void;
 }
 
@@ -72,6 +75,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   rollbackQueue: {},
   currentView: 'board',
   isBacklogExpandedOnBoard: false,
+  editingIssue: null,
+
+  setEditingIssue: (issue: JiraIssue | null) => {
+    set({ editingIssue: issue });
+  },
 
   setCurrentView: (view: DashboardView) => {
     set({ currentView: view });
@@ -251,11 +259,108 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 
+  updateIssueOptimistic: async (issueKey: string, updates: IssueUpdatePayload) => {
+    const { issues, rollbackQueue } = get();
+    const originalIssue = issues.find((i) => i.key === issueKey);
+    if (!originalIssue) return;
+
+    // 1. Instant Optimistic State Mutation (< 50ms)
+    let newStatus = originalIssue.status;
+    if (updates.status_name || updates.status_category) {
+      const targetCategory = updates.status_category || originalIssue.status.category;
+      const targetName = updates.status_name || originalIssue.status.name;
+      newStatus = {
+        ...originalIssue.status,
+        category: targetCategory,
+        name: targetName,
+      };
+    }
+
+    let newAssignee = originalIssue.assignee;
+    if (updates.assignee_name !== undefined) {
+      if (updates.assignee_name.trim() === '') {
+        newAssignee = null;
+      } else {
+        newAssignee = {
+          accountId: originalIssue.assignee?.accountId || 'usr-1',
+          displayName: updates.assignee_name.trim(),
+        };
+      }
+    }
+
+    const updatedIssues = issues.map((item) => {
+      if (item.key !== issueKey) return item;
+      return {
+        ...item,
+        summary: updates.summary !== undefined ? updates.summary : item.summary,
+        issue_type:
+          updates.issue_type !== undefined
+            ? updates.issue_type
+            : item.issue_type || item.issueType,
+        priority: updates.priority !== undefined ? updates.priority : item.priority,
+        status: newStatus,
+        assignee: newAssignee,
+        story_points:
+          updates.story_points !== undefined
+            ? updates.story_points
+            : item.story_points ?? item.storyPoints,
+        due_date:
+          updates.due_date !== undefined ? updates.due_date : item.due_date ?? item.dueDate,
+        start_date:
+          updates.start_date !== undefined ? updates.start_date : item.start_date ?? item.startDate,
+        _optimisticState: 'pending' as const,
+      };
+    });
+
+    set({
+      issues: updatedIssues,
+      rollbackQueue: { ...rollbackQueue, [issueKey]: originalIssue },
+      editingIssue: null,
+    });
+
+    // 2. Background Asynchronous Sync to Backend
+    try {
+      const res = await fetch(getApiUrl(`/api/issues/${issueKey}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}`);
+      }
+
+      const updated = await res.json();
+      set((state) => ({
+        issues: state.issues.map((item) =>
+          item.key === issueKey ? { ...updated, _optimisticState: 'synced' } : item
+        ),
+      }));
+    } catch {
+      // 3. Graceful Rollback on Sync Rejection
+      set((state) => {
+        const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
+        return {
+          issues: state.issues.map((item) =>
+            item.key === issueKey ? { ...rollbackIssue, _optimisticState: 'failed' } : item
+          ),
+          errorMessage: `Failed to update ${issueKey}. Reverting changes.`,
+        };
+      });
+
+      setTimeout(() => {
+        if (get().errorMessage?.includes(issueKey)) {
+          set({ errorMessage: null });
+        }
+      }, 5000);
+    }
+  },
+
   handleWsMessage: (data: unknown) => {
     if (!data || typeof data !== 'object') return;
     const msg = data as Record<string, unknown>;
 
-    if (msg.event === 'issue_transitioned' && msg.issue) {
+    if ((msg.event === 'issue_transitioned' || msg.event === 'issue_updated') && msg.issue) {
       const incomingIssue = msg.issue as JiraIssue;
       set((state) => ({
         issues: state.issues.map((item) =>

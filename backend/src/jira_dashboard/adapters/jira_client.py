@@ -161,6 +161,23 @@ class JiraClientProtocol(Protocol):
         """Transition an issue to a new status category or status name/ID."""
         ...
 
+    async def update_issue(
+        self,
+        issue_key: str,
+        summary: str | None = None,
+        issue_type: IssueType | None = None,
+        priority: Priority | None = None,
+        status_category: StatusCategory | None = None,
+        status_name: str | None = None,
+        assignee_name: str | None = None,
+        assignee_account_id: str | None = None,
+        story_points: float | None = None,
+        due_date: str | None = None,
+        start_date: str | None = None,
+    ) -> JiraIssue:
+        """Update fields on an existing issue."""
+        ...
+
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
         """Parse and apply an incoming Jira webhook payload."""
         ...
@@ -277,6 +294,75 @@ class FakeJiraClient:
         # Update in-memory issue
         updated_issue = issue.model_copy(
             update={"status": new_status, "updated_at": "2026-10-05T00:00:00Z"}
+        )
+        self._issues[issue_key] = updated_issue
+        return updated_issue
+
+    async def update_issue(
+        self,
+        issue_key: str,
+        summary: str | None = None,
+        issue_type: IssueType | None = None,
+        priority: Priority | None = None,
+        status_category: StatusCategory | None = None,
+        status_name: str | None = None,
+        assignee_name: str | None = None,
+        assignee_account_id: str | None = None,
+        story_points: float | None = None,
+        due_date: str | None = None,
+        start_date: str | None = None,
+    ) -> JiraIssue:
+        """Update issue fields in memory."""
+        if self.simulate_transition_failure or self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+
+        issue = self._issues.get(issue_key)
+        if not issue:
+            raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
+
+        new_summary = summary if summary is not None else issue.summary
+        new_type = issue_type if issue_type is not None else issue.issue_type
+        new_priority = priority if priority is not None else issue.priority
+
+        new_status = issue.status
+        if status_name or status_category:
+            matched_cat = status_category or issue.status.category
+            matched_name = status_name or issue.status.name
+            if status_name and not status_category:
+                clean = status_name.strip().lower()
+                for c, s in STATUS_MAP.items():
+                    if s.name.lower() == clean:
+                        matched_cat = c
+                        break
+            new_status = JiraStatus(id=issue.status.id, name=matched_name, category=matched_cat)
+
+        new_assignee = issue.assignee
+        if assignee_name is not None:
+            if assignee_name.strip() == "":
+                new_assignee = None
+            else:
+                new_assignee = JiraUser(
+                    account_id=assignee_account_id
+                    or (issue.assignee.account_id if issue.assignee else "usr-1"),
+                    display_name=assignee_name.strip(),
+                )
+
+        new_story_points = story_points if story_points is not None else issue.story_points
+        new_due_date = due_date if due_date is not None else issue.due_date
+        new_start_date = start_date if start_date is not None else issue.start_date
+
+        updated_issue = JiraIssue(
+            id=issue.id,
+            key=issue.key,
+            summary=new_summary,
+            issue_type=new_type,
+            priority=new_priority,
+            status=new_status,
+            assignee=new_assignee,
+            story_points=new_story_points,
+            due_date=new_due_date,
+            start_date=new_start_date,
+            updated_at="2026-10-05T00:00:00Z",
         )
         self._issues[issue_key] = updated_issue
         return updated_issue

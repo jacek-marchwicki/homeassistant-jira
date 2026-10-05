@@ -303,5 +303,50 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await page.getByRole('button', { name: 'Got it' }).click();
     await expect(page.getByRole('dialog', { name: 'Install Jira Dashboard' })).not.toBeVisible();
   });
+
+  test('10. Issue Editing: opens modal, edits issue details, and saves to backend', async ({
+    page,
+  }) => {
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(proj101Article).toBeVisible();
+
+    // Click the Edit button on PROJ-101
+    const editBtn = proj101Article.getByRole('button', { name: 'Edit PROJ-101' });
+    await editBtn.click();
+
+    // Modal dialog appears
+    const dialog = page.getByRole('dialog', { name: /Edit Issue PROJ-101/ });
+    await expect(dialog).toBeVisible();
+
+    const summaryInput = dialog.locator('#edit-summary');
+    await expect(summaryInput).toHaveValue(
+      'Configure Home Assistant Ingress dynamic proxy support'
+    );
+
+    // Intercept PATCH request
+    const patchPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues/PROJ-101') && res.status() === 200
+    );
+
+    // Edit summary
+    await summaryInput.fill('Configure Home Assistant Ingress dynamic proxy support (Edited)');
+
+    // Save changes
+    await dialog.getByRole('button', { name: 'Save Changes' }).click();
+
+    // Verify modal closes
+    await expect(dialog).not.toBeVisible();
+
+    // Verify backend received update
+    const patchRes = await patchPromise;
+    expect(patchRes.ok()).toBeTruthy();
+
+    // Verify card summary updated on board
+    await expect(
+      proj101Article.getByText(
+        'Configure Home Assistant Ingress dynamic proxy support (Edited)'
+      )
+    ).toBeVisible();
+  });
 });
 

@@ -58,6 +58,7 @@ class TestPresentationApi(unittest.TestCase):
                 "summary": "Updated summary from API test",
                 "priority": "highest",
                 "story_points": 5.0,
+                "recreate_after": "7 days",
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -66,6 +67,7 @@ class TestPresentationApi(unittest.TestCase):
         self.assertEqual(data["summary"], "Updated summary from API test")
         self.assertEqual(data["priority"], "highest")
         self.assertEqual(data["story_points"], 5.0)
+        self.assertEqual(data["recreate_after"], "7 days")
 
     def test_update_nonexistent_issue(self) -> None:
         """Verify 404 is returned when updating an invalid issue key."""
@@ -85,6 +87,7 @@ class TestPresentationApi(unittest.TestCase):
                 "priority": "high",
                 "assignee_name": "Bob Jones",
                 "story_points": 3.0,
+                "recreate_after": "1 month",
             },
         )
         self.assertEqual(response.status_code, 201)
@@ -95,6 +98,7 @@ class TestPresentationApi(unittest.TestCase):
         self.assertEqual(data["priority"], "high")
         self.assertEqual(data["assignee"]["display_name"], "Bob Jones")
         self.assertEqual(data["story_points"], 3.0)
+        self.assertEqual(data["recreate_after"], "1 month")
 
 
 if __name__ == "__main__":

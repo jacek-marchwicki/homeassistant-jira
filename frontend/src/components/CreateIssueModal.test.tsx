@@ -65,6 +65,10 @@ describe('CreateIssueModal component', () => {
 
     const assigneeInput = container.querySelector('#create-assignee') as HTMLInputElement;
     expect(assigneeInput.value).toBe('');
+
+    const recreateAfterInput = container.querySelector('#create-recreate-after') as HTMLInputElement;
+    expect(recreateAfterInput).not.toBeNull();
+    expect(recreateAfterInput.value).toBe('');
   });
 
   it('validates that summary is required', async () => {
@@ -96,6 +100,7 @@ describe('CreateIssueModal component', () => {
     const prioritySelect = container.querySelector('#create-priority') as HTMLSelectElement;
     const typeSelect = container.querySelector('#create-type') as HTMLSelectElement;
     const assigneeInput = container.querySelector('#create-assignee') as HTMLInputElement;
+    const recreateAfterInput = container.querySelector('#create-recreate-after') as HTMLInputElement;
     const form = container.querySelector('form') as HTMLFormElement;
 
     await act(async () => {
@@ -103,6 +108,7 @@ describe('CreateIssueModal component', () => {
       setInputValue(prioritySelect, 'high');
       setInputValue(typeSelect, 'bug');
       setInputValue(assigneeInput, 'Alice Bob');
+      setInputValue(recreateAfterInput, '7 days');
     });
 
     await act(async () => {
@@ -115,6 +121,7 @@ describe('CreateIssueModal component', () => {
         priority: 'high',
         issue_type: 'bug',
         assignee_name: 'Alice Bob',
+        recreate_after: '7 days',
       })
     );
     expect(handleClose).toHaveBeenCalledTimes(1);

@@ -323,6 +323,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           updates.due_date !== undefined ? updates.due_date : item.due_date ?? item.dueDate,
         start_date:
           updates.start_date !== undefined ? updates.start_date : item.start_date ?? item.startDate,
+        recreate_after:
+          updates.recreate_after !== undefined
+            ? updates.recreate_after
+            : item.recreate_after ?? item.recreateAfter,
         updated_at: new Date().toISOString(),
         _optimisticState: 'pending' as const,
       };
@@ -394,6 +398,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       story_points: payload.story_points,
       due_date: payload.due_date,
       start_date: payload.start_date,
+      recreate_after: payload.recreate_after,
       _optimisticState: 'pending',
     };
 

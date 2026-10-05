@@ -18,6 +18,7 @@ const testIssue: JiraIssue = {
   story_points: 3,
   due_date: '2026-11-01',
   start_date: '2026-10-01',
+  recreate_after: '14 days',
   updated_at: '2026-10-05T00:00:00Z',
 };
 
@@ -68,6 +69,10 @@ describe('EditIssueModal component', () => {
 
     const pointsInput = container.querySelector('#edit-points') as HTMLInputElement;
     expect(pointsInput.value).toBe('3');
+
+    const recreateAfterInput = container.querySelector('#edit-recreate-after') as HTMLInputElement;
+    expect(recreateAfterInput).not.toBeNull();
+    expect(recreateAfterInput.value).toBe('14 days');
   });
 
 function setInputValue(element: HTMLInputElement | HTMLSelectElement, value: string) {
@@ -117,11 +122,13 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement, value: str
 
     const summaryInput = container.querySelector('#edit-summary') as HTMLInputElement;
     const prioritySelect = container.querySelector('#edit-priority') as HTMLSelectElement;
+    const recreateAfterInput = container.querySelector('#edit-recreate-after') as HTMLInputElement;
     const form = container.querySelector('form') as HTMLFormElement;
 
     await act(async () => {
       setInputValue(summaryInput, 'Updated Summary via Modal');
       setInputValue(prioritySelect, 'highest');
+      setInputValue(recreateAfterInput, '30 days');
     });
 
     await act(async () => {
@@ -133,6 +140,7 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement, value: str
       expect.objectContaining({
         summary: 'Updated Summary via Modal',
         priority: 'highest',
+        recreate_after: '30 days',
       })
     );
     expect(handleClose).toHaveBeenCalledTimes(1);

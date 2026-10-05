@@ -9,6 +9,7 @@ import {
   ChevronUp,
   ChevronsUp,
   Pencil,
+  RotateCw,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
@@ -191,6 +192,15 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
           {(issue.story_points ?? issue.storyPoints) !== undefined && (
             <span className="px-1.5 py-0.5 rounded text-2xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
               {issue.story_points ?? issue.storyPoints} pts
+            </span>
+          )}
+          {(issue.recreate_after ?? issue.recreateAfter) && (
+            <span
+              className="flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded border bg-[var(--jira-canvas)] text-[var(--jira-text-secondary)] border-[var(--jira-border-subtle)]"
+              title={`Recreate after: ${issue.recreate_after ?? issue.recreateAfter}`}
+            >
+              <RotateCw className="w-3 h-3 shrink-0" />
+              <span>{issue.recreate_after ?? issue.recreateAfter}</span>
             </span>
           )}
           <AssigneeAvatar assignee={issue.assignee} />

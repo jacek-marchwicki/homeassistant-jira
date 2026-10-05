@@ -171,6 +171,7 @@ class IssueUpdateRequest(BaseModel):
     story_points: float | None = None
     due_date: str | None = None
     start_date: str | None = None
+    recreate_after: str | None = None
 
 
 class IssueCreateRequest(BaseModel):
@@ -186,6 +187,7 @@ class IssueCreateRequest(BaseModel):
     story_points: float | None = None
     due_date: str | None = None
     start_date: str | None = None
+    recreate_after: str | None = None
     board_id: str | None = None
     project_key: str | None = None
 
@@ -363,6 +365,7 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
             story_points=request.story_points,
             due_date=request.due_date,
             start_date=request.start_date,
+            recreate_after=request.recreate_after,
         )
     except JiraAPIError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
@@ -401,6 +404,7 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
             story_points=request.story_points,
             due_date=request.due_date,
             start_date=request.start_date,
+            recreate_after=request.recreate_after,
             board_id=request.board_id,
             project_key=request.project_key,
         )

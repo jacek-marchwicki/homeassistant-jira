@@ -174,6 +174,7 @@ class JiraClientProtocol(Protocol):
         story_points: float | None = None,
         due_date: str | None = None,
         start_date: str | None = None,
+        recreate_after: str | None = None,
     ) -> JiraIssue:
         """Update fields on an existing issue."""
         ...
@@ -190,6 +191,7 @@ class JiraClientProtocol(Protocol):
         story_points: float | None = None,
         due_date: str | None = None,
         start_date: str | None = None,
+        recreate_after: str | None = None,
         board_id: str | None = None,
         project_key: str | None = None,
     ) -> JiraIssue:
@@ -329,6 +331,7 @@ class FakeJiraClient:
         story_points: float | None = None,
         due_date: str | None = None,
         start_date: str | None = None,
+        recreate_after: str | None = None,
     ) -> JiraIssue:
         """Update issue fields in memory."""
         if self.simulate_transition_failure or self.simulate_failure:
@@ -368,6 +371,7 @@ class FakeJiraClient:
         new_story_points = story_points if story_points is not None else issue.story_points
         new_due_date = due_date if due_date is not None else issue.due_date
         new_start_date = start_date if start_date is not None else issue.start_date
+        new_recreate_after = recreate_after if recreate_after is not None else issue.recreate_after
 
         updated_issue = JiraIssue(
             id=issue.id,
@@ -380,6 +384,7 @@ class FakeJiraClient:
             story_points=new_story_points,
             due_date=new_due_date,
             start_date=new_start_date,
+            recreate_after=new_recreate_after,
             updated_at="2026-10-05T00:00:00Z",
         )
         self._issues[issue_key] = updated_issue
@@ -397,6 +402,7 @@ class FakeJiraClient:
         story_points: float | None = None,
         due_date: str | None = None,
         start_date: str | None = None,
+        recreate_after: str | None = None,
         board_id: str | None = None,
         project_key: str | None = None,
     ) -> JiraIssue:
@@ -454,6 +460,7 @@ class FakeJiraClient:
             story_points=story_points,
             due_date=due_date,
             start_date=start_date,
+            recreate_after=recreate_after,
             updated_at="2026-10-05T00:00:00Z",
         )
         self._issues[new_key] = new_issue

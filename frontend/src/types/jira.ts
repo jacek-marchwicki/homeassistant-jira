@@ -43,6 +43,8 @@ export interface JiraIssue {
   due_date?: string | null;
   startDate?: string | null;
   start_date?: string | null;
+  recreateAfter?: string | null;
+  recreate_after?: string | null;
   updatedAt?: string;
   updated_at?: string;
   // Optimistic tracking state
@@ -87,6 +89,7 @@ export interface IssueUpdatePayload {
   story_points?: number;
   due_date?: string | null;
   start_date?: string | null;
+  recreate_after?: string | null;
 }
 
 export interface IssueCreatePayload {
@@ -99,6 +102,7 @@ export interface IssueCreatePayload {
   story_points?: number;
   due_date?: string | null;
   start_date?: string | null;
+  recreate_after?: string | null;
   project_key?: string;
 }
 

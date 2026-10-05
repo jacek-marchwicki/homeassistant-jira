@@ -520,6 +520,7 @@ class JiraCloudClient(JiraClientProtocol):
         story_points: float | None = None,
         due_date: str | None = None,
         start_date: str | None = None,
+        recreate_after: str | None = None,
     ) -> JiraIssue:
         """Update issue fields via Jira Cloud REST API."""
         fields: dict[str, Any] = {}
@@ -565,6 +566,7 @@ class JiraCloudClient(JiraClientProtocol):
         story_points: float | None = None,
         due_date: str | None = None,
         start_date: str | None = None,
+        recreate_after: str | None = None,
         board_id: str | None = None,
         project_key: str | None = None,
     ) -> JiraIssue:

@@ -83,6 +83,7 @@ class JiraIssue(BaseModel):
     story_points: float | None = None
     due_date: str | None = None
     start_date: str | None = None
+    recreate_after: str | None = None
     updated_at: str
 
     def is_done(self) -> bool:

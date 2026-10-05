@@ -29,6 +29,7 @@ export function CreateIssueModal({
   const [storyPoints, setStoryPoints] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [startDate, setStartDate] = useState('');
+  const [recreateAfter, setRecreateAfter] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const statusOptions = useMemo(() => getAvailableStatuses(columns), [columns]);
@@ -49,6 +50,7 @@ export function CreateIssueModal({
       setStoryPoints('');
       setDueDate('');
       setStartDate('');
+      setRecreateAfter('');
       setValidationError(null);
     }
   }, [isOpen]);
@@ -87,6 +89,7 @@ export function CreateIssueModal({
       story_points: storyPoints !== '' ? parseFloat(storyPoints) : undefined,
       due_date: dueDate.trim() || null,
       start_date: startDate.trim() || null,
+      recreate_after: recreateAfter.trim() || null,
     });
 
     onClose();
@@ -285,6 +288,24 @@ export function CreateIssueModal({
                 className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
               />
             </div>
+          </div>
+
+          {/* Recreate after */}
+          <div>
+            <label
+              htmlFor="create-recreate-after"
+              className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
+            >
+              Recreate after
+            </label>
+            <input
+              id="create-recreate-after"
+              type="text"
+              value={recreateAfter}
+              onChange={(e) => setRecreateAfter(e.target.value)}
+              placeholder="e.g. 7d, 2 weeks, 1 month"
+              className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
+            />
           </div>
 
           {/* Action Buttons */}

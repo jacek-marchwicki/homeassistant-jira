@@ -23,6 +23,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
   const [storyPoints, setStoryPoints] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [startDate, setStartDate] = useState('');
+  const [recreateAfter, setRecreateAfter] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const statusOptions = getAvailableStatuses(columns);
@@ -40,6 +41,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
       setStoryPoints(points !== undefined && points !== null ? String(points) : '');
       setDueDate(issue.due_date ?? issue.dueDate ?? '');
       setStartDate(issue.start_date ?? issue.startDate ?? '');
+      setRecreateAfter(issue.recreate_after ?? issue.recreateAfter ?? '');
       setValidationError(null);
     }
   }, [issue]);
@@ -78,6 +80,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
       story_points: storyPoints !== '' ? parseFloat(storyPoints) : undefined,
       due_date: dueDate.trim() || null,
       start_date: startDate.trim() || null,
+      recreate_after: recreateAfter.trim() || null,
     });
 
     onClose();
@@ -276,6 +279,24 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
                 className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
               />
             </div>
+          </div>
+
+          {/* Recreate after */}
+          <div>
+            <label
+              htmlFor="edit-recreate-after"
+              className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
+            >
+              Recreate after
+            </label>
+            <input
+              id="edit-recreate-after"
+              type="text"
+              value={recreateAfter}
+              onChange={(e) => setRecreateAfter(e.target.value)}
+              placeholder="e.g. 7d, 2 weeks, 1 month"
+              className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
+            />
           </div>
 
           {/* Action Buttons */}

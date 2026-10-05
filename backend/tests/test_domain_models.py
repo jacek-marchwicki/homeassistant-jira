@@ -49,9 +49,11 @@ class TestDomainModels(unittest.TestCase):
             status=self.todo_status,
             assignee=self.user,
             story_points=3.0,
+            recreate_after="7d",
             updated_at="2026-10-04T22:00:00Z",
         )
         self.assertEqual(issue.key, "PROJ-101")
+        self.assertEqual(issue.recreate_after, "7d")
         self.assertFalse(issue.is_done())
         self.assertFalse(issue.is_blocked())
 

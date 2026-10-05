@@ -14,6 +14,8 @@ import {
   isAssignedToMeOrUnassigned,
   isIssueActive,
   filterIssues,
+  isDoneIssueWithinDays,
+  filterIssuesForColumn,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -567,4 +569,111 @@ describe('boardUtils', () => {
       expect(result.map((i) => i.key)).toEqual(['ISSUE-2']);
     });
   });
+
+  describe('Done column filtering (updated <= 2 days ago)', () => {
+    // fixedNow = 2026-10-05 12:00:00
+    it('returns true for issues not in the Done category', () => {
+      const todoIssue: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '1', name: 'To Do', category: 'todo' },
+        updated_at: '2026-09-01T00:00:00Z', // 1 month ago
+      };
+      expect(isDoneIssueWithinDays(todoIssue, 2, fixedNow)).toBe(true);
+    });
+
+    it('returns true for Done issues with no updated_at timestamp', () => {
+      const doneNoTimestamp: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '4', name: 'Done', category: 'done' },
+        updated_at: undefined,
+      };
+      expect(isDoneIssueWithinDays(doneNoTimestamp, 2, fixedNow)).toBe(true);
+    });
+
+    it('returns true for Done issues updated within the last 2 days', () => {
+      // 1 day ago: 2026-10-04 12:00:00
+      const done1DayAgo: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '4', name: 'Done', category: 'done' },
+        updated_at: '2026-10-04T12:00:00Z',
+      };
+      expect(isDoneIssueWithinDays(done1DayAgo, 2, fixedNow)).toBe(true);
+
+      // 2 days ago: 2026-10-03 12:00:00
+      const done2DaysAgo: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '4', name: 'Done', category: 'done' },
+        updated_at: '2026-10-03T12:00:00Z',
+      };
+      expect(isDoneIssueWithinDays(done2DaysAgo, 2, fixedNow)).toBe(true);
+    });
+
+    it('returns false for Done issues updated more than 2 days ago', () => {
+      // 3 days ago: 2026-10-02 00:00:00
+      const done3DaysAgo: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '4', name: 'Done', category: 'done' },
+        updated_at: '2026-10-02T00:00:00Z',
+      };
+      expect(isDoneIssueWithinDays(done3DaysAgo, 2, fixedNow)).toBe(false);
+
+      // 7 days ago: 2026-09-28 12:00:00
+      const done7DaysAgo: JiraIssue = {
+        ...mockBaseIssue,
+        status: { id: '4', name: 'Done', category: 'done' },
+        updated_at: '2026-09-28T12:00:00Z',
+      };
+      expect(isDoneIssueWithinDays(done7DaysAgo, 2, fixedNow)).toBe(false);
+    });
+
+    it('splitIssuesByBacklog excludes Done issues older than 2 days from boardIssues', () => {
+      const issues: JiraIssue[] = [
+        {
+          ...mockBaseIssue,
+          key: 'RECENT-DONE',
+          status: { id: '10001', name: 'Done', category: 'done' },
+          updated_at: '2026-10-04T10:00:00Z',
+        },
+        {
+          ...mockBaseIssue,
+          key: 'OLD-DONE',
+          status: { id: '10001', name: 'Done', category: 'done' },
+          updated_at: '2026-10-01T10:00:00Z',
+        },
+        {
+          ...mockBaseIssue,
+          key: 'ACTIVE-TODO',
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+          updated_at: '2026-10-01T10:00:00Z',
+        },
+      ];
+
+      const { boardIssues } = splitIssuesByBacklog(issues, homeColumns, 2, fixedNow);
+      expect(boardIssues.map((i) => i.key)).toContain('RECENT-DONE');
+      expect(boardIssues.map((i) => i.key)).toContain('ACTIVE-TODO');
+      expect(boardIssues.map((i) => i.key)).not.toContain('OLD-DONE');
+    });
+
+    it('filterIssuesForColumn filters Done column issues while leaving other columns untouched', () => {
+      const issues: JiraIssue[] = [
+        {
+          ...mockBaseIssue,
+          key: 'DONE-1',
+          status: { id: '10001', name: 'Done', category: 'done' },
+          updated_at: '2026-10-04T12:00:00Z',
+        },
+        {
+          ...mockBaseIssue,
+          key: 'DONE-OLD',
+          status: { id: '10001', name: 'Done', category: 'done' },
+          updated_at: '2026-10-01T12:00:00Z',
+        },
+      ];
+
+      const doneCol = homeColumns.find((c) => c.category === 'done')!;
+      const filtered = filterIssuesForColumn(issues, doneCol, homeColumns, 2, fixedNow);
+      expect(filtered.map((i) => i.key)).toEqual(['DONE-1']);
+    });
+  });
 });
+

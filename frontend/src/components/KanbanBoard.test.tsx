@@ -155,4 +155,49 @@ describe('KanbanBoard component', () => {
       root.unmount();
     });
   });
+
+  it('displays only Done issues updated no longer than 2 days ago in the DONE column', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000).toISOString();
+
+    const issuesWithDone: JiraIssue[] = [
+      {
+        id: 'done-recent',
+        key: 'DONE-RECENT',
+        summary: 'Recent Done Task',
+        priority: 'medium',
+        status: { id: 'col-done', name: 'Done', category: 'done' },
+        updated_at: oneDayAgo,
+      },
+      {
+        id: 'done-old',
+        key: 'DONE-OLD',
+        summary: 'Old Done Task From Last Week',
+        priority: 'low',
+        status: { id: 'col-done', name: 'Done', category: 'done' },
+        updated_at: fourDaysAgo,
+      },
+    ];
+
+    await act(async () => {
+      useBoardStore.setState({
+        issues: issuesWithDone,
+        activeFilters: [],
+        activeFilter: 'all',
+      });
+      root.render(<KanbanBoard />);
+    });
+
+    expect(container.textContent).toContain('Recent Done Task');
+    expect(container.textContent).not.toContain('Old Done Task From Last Week');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
+

@@ -385,6 +385,65 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // Verify newly created issue appears on board
     await expect(page.locator('article', { hasText: 'Automated E2E Created Issue' })).toBeVisible();
   });
+
+  test('12. Done Column Filter: displays recently updated Done issues and hides Done issues older than 2 days', async ({
+    page,
+  }) => {
+    // 1. Post webhook with a Done issue completed 5 days ago
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    const oldDoneRes = await page.request.post('/api/webhooks/jira', {
+      data: {
+        webhookEvent: 'jira:issue_created',
+        issue: {
+          id: '990',
+          key: 'PROJ-990',
+          fields: {
+            summary: 'Done Issue Completed 5 Days Ago',
+            status: {
+              id: '4',
+              name: 'Done',
+              statusCategory: { id: 3, key: 'done', name: 'Done' },
+            },
+            updated: fiveDaysAgo,
+          },
+        },
+      },
+    });
+    expect(oldDoneRes.ok()).toBeTruthy();
+
+    // 2. Post webhook with a Done issue completed 1 hour ago
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const recentDoneRes = await page.request.post('/api/webhooks/jira', {
+      data: {
+        webhookEvent: 'jira:issue_created',
+        issue: {
+          id: '991',
+          key: 'PROJ-991',
+          fields: {
+            summary: 'Done Issue Completed 1 Hour Ago',
+            status: {
+              id: '4',
+              name: 'Done',
+              statusCategory: { id: 3, key: 'done', name: 'Done' },
+            },
+            updated: oneHourAgo,
+          },
+        },
+      },
+    });
+    expect(recentDoneRes.ok()).toBeTruthy();
+
+    // 3. Clear quick filters to show all issues
+    const allBtn = page.getByRole('button', { name: /All Issues/ });
+    await allBtn.click();
+
+    // 4. Verify recently completed issue is displayed in the Done column
+    await expect(page.locator('article', { hasText: 'PROJ-991' })).toBeVisible();
+
+    // 5. Verify issue completed 5 days ago is NOT displayed in the Done column
+    await expect(page.locator('article', { hasText: 'PROJ-990' })).not.toBeVisible();
+  });
 });
+
 
 

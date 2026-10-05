@@ -141,11 +141,56 @@ export function getActiveBoardColumns(columns: BoardColumn[]): BoardColumn[] {
 }
 
 /**
+ * Checks whether an issue in the Done category was updated within the specified number of days (default: 2 days).
+ *
+ * Rules:
+ * - If the issue is not in the Done category (category !== 'done' and status name !== 'done'), returns true.
+ * - If the issue is in the Done category:
+ *   - If updated_at (or updatedAt) is missing or cannot be parsed, returns true (so optimistic or untracked issues are shown).
+ *   - If updated_at is within the last `days` days (<= days * 24h ago or on/after the calendar start of `days` days ago), returns true.
+ *   - Otherwise returns false (hides completed issues older than `days` days).
+ */
+export function isDoneIssueWithinDays(
+  issue: JiraIssue,
+  days: number = 2,
+  now: Date = new Date()
+): boolean {
+  const category = issue.status?.category;
+  const statusName = (issue.status?.name || '').trim().toLowerCase();
+  const isDone = category === 'done' || statusName === 'done';
+  if (!isDone) return true;
+
+  const dateStr = issue.updated_at ?? issue.updatedAt;
+  if (!dateStr) return true;
+
+  const updatedDate = parseDate(dateStr);
+  if (!updatedDate) return true;
+
+  const maxAgeMs = days * 24 * 60 * 60 * 1000;
+  const ageMs = now.getTime() - updatedDate.getTime();
+  const calendarCutoff = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - days,
+    0,
+    0,
+    0,
+    0
+  );
+
+  return ageMs <= maxAgeMs || updatedDate >= calendarCutoff;
+}
+
+/**
  * Splits issues into Active Board issues and Backlog issues.
+ * For the active board, issues in the Done category older than doneMaxDays (default: 2 days)
+ * are filtered out so the DONE column displays only recently completed issues.
  */
 export function splitIssuesByBacklog(
   issues: JiraIssue[],
-  columns?: BoardColumn[]
+  columns?: BoardColumn[],
+  doneMaxDays: number = 2,
+  now: Date = new Date()
 ): { boardIssues: JiraIssue[]; backlogIssues: JiraIssue[] } {
   const backlogIssues: JiraIssue[] = [];
   const boardIssues: JiraIssue[] = [];
@@ -154,11 +199,35 @@ export function splitIssuesByBacklog(
     if (isBacklogIssue(issue, columns)) {
       backlogIssues.push(issue);
     } else {
-      boardIssues.push(issue);
+      if (isDoneIssueWithinDays(issue, doneMaxDays, now)) {
+        boardIssues.push(issue);
+      }
     }
   }
 
   return { boardIssues, backlogIssues };
+}
+
+/**
+ * Filters an array of issues for a specific column, ensuring that if the column is
+ * in the Done category, only issues updated within the specified days (default: 2) are included.
+ */
+export function filterIssuesForColumn(
+  issues: JiraIssue[],
+  column: BoardColumn,
+  allColumns: BoardColumn[],
+  doneMaxDays: number = 2,
+  now: Date = new Date()
+): JiraIssue[] {
+  const isDone = column.category === 'done' || column.name.trim().toLowerCase() === 'done';
+  return issues.filter((issue) => {
+    const col = getColumnForIssue(issue, allColumns);
+    if (col?.id !== column.id) return false;
+    if (isDone && !isDoneIssueWithinDays(issue, doneMaxDays, now)) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export interface StatusOption {

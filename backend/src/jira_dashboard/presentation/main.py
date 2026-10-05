@@ -452,9 +452,11 @@ async def handle_jira_webhook(
     )
 
     # Broadcast real-time delta via WebSockets to all connected browsers
+    webhook_event = payload.get("webhookEvent")
+    event_type = "issue_created" if webhook_event == "jira:issue_created" else "issue_transitioned"
     await ws_hub.broadcast(
         {
-            "event": "issue_transitioned",
+            "event": event_type,
             "issue_key": issue.key,
             "status_category": issue.status.category.value,
             "status_name": issue.status.name,

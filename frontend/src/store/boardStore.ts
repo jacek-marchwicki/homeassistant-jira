@@ -221,6 +221,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           category: targetCategory,
           name: targetTitle,
         },
+        updated_at: new Date().toISOString(),
         _optimisticState: 'pending' as const,
         _pendingTargetStatusId: targetCategory,
       };
@@ -322,6 +323,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           updates.due_date !== undefined ? updates.due_date : item.due_date ?? item.dueDate,
         start_date:
           updates.start_date !== undefined ? updates.start_date : item.start_date ?? item.startDate,
+        updated_at: new Date().toISOString(),
         _optimisticState: 'pending' as const,
       };
     });
@@ -474,11 +476,17 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       });
     } else if ((msg.event === 'issue_transitioned' || msg.event === 'issue_updated') && msg.issue) {
       const incomingIssue = msg.issue as JiraIssue;
-      set((state) => ({
-        issues: state.issues.map((item) =>
-          item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
-        ),
-      }));
+      set((state) => {
+        const exists = state.issues.some((item) => item.key === incomingIssue.key);
+        if (!exists) {
+          return { issues: [incomingIssue, ...state.issues] };
+        }
+        return {
+          issues: state.issues.map((item) =>
+            item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
+          ),
+        };
+      });
     } else if (msg.event === 'board_synced' && Array.isArray(msg.issues)) {
       set({ issues: msg.issues as JiraIssue[] });
     }

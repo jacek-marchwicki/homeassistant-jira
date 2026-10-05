@@ -23,6 +23,7 @@ import { IssueCard } from './IssueCard.tsx';
 import { KanbanColumn } from './KanbanColumn.tsx';
 import {
   filterIssues,
+  filterIssuesForColumn,
   getActiveBoardColumns,
   getCategoryColorVar,
   getColumnForIssue,
@@ -165,9 +166,7 @@ export function KanbanBoard() {
         {/* Kanban Board Active Workflow Columns */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-4 overflow-x-auto min-w-0">
           {activeColumns.map((col) => {
-            const colIssues = boardIssues.filter(
-              (i) => getColumnForIssue(i, activeColumns)?.id === col.id
-            );
+            const colIssues = filterIssuesForColumn(boardIssues, col, activeColumns);
             const colorVar = getCategoryColorVar(col.category);
             return (
               <KanbanColumn

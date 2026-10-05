@@ -495,11 +495,13 @@ class FakeJiraClient:
         category = category_mapping.get(cat_key, StatusCategory.TODO)
         status = STATUS_MAP.get(category, STATUS_MAP[StatusCategory.TODO])
 
-        # Extract due date & start date
+        # Extract due date, start date & updated at
         raw_due_date = fields.get("duedate") or fields.get("due_date")
         raw_start_date = (
             fields.get("customfield_10015") or fields.get("startDate") or fields.get("start_date")
         )
+        raw_updated_at = fields.get("updated") or fields.get("updated_at")
+        updated_at = str(raw_updated_at) if raw_updated_at is not None else "2026-10-05T00:00:00Z"
 
         # If issue already exists, update its status & summary
         existing = self._issues.get(issue_key)
@@ -513,7 +515,7 @@ class FakeJiraClient:
                     "status": status,
                     "due_date": due_date,
                     "start_date": start_date,
-                    "updated_at": "2026-10-05T00:00:00Z",
+                    "updated_at": updated_at,
                 }
             )
             self._issues[issue_key] = updated
@@ -533,7 +535,7 @@ class FakeJiraClient:
             story_points=None,
             due_date=due_date,
             start_date=start_date,
-            updated_at="2026-10-05T00:00:00Z",
+            updated_at=updated_at,
         )
         self._issues[issue_key] = new_issue
         return new_issue

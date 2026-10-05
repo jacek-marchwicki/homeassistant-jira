@@ -37,6 +37,7 @@ export interface BoardStoreState {
   activeFilters: string[];
   activeFilter: string;
   searchQuery: string;
+  currentUser: string;
   errorMessage: string | null;
   rollbackQueue: Record<string, JiraIssue>;
   currentView: DashboardView;
@@ -51,6 +52,7 @@ export interface BoardStoreState {
   toggleFilter: (filter: string) => void;
   setActiveFilter: (filter: string) => void;
   setSearchQuery: (query: string) => void;
+  setCurrentUser: (userName: string) => void;
   setErrorMessage: (msg: string | null) => void;
   setCurrentView: (view: DashboardView) => void;
   toggleBacklogExpandedOnBoard: () => void;
@@ -80,12 +82,27 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   activeFilters: ['my', 'active'],
   activeFilter: 'my,active',
   searchQuery: '',
+  currentUser: (() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('ha_jira_current_user');
+      if (saved && saved.trim()) return saved.trim();
+    }
+    return 'Jacek Marchwicki';
+  })(),
   errorMessage: null,
   rollbackQueue: {},
   currentView: 'board',
   isBacklogExpandedOnBoard: false,
   editingIssue: null,
   isCreateModalOpen: false,
+
+  setCurrentUser: (userName: string) => {
+    const trimmed = userName.trim();
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('ha_jira_current_user', trimmed);
+    }
+    set({ currentUser: trimmed });
+  },
 
   setEditingIssue: (issue: JiraIssue | null) => {
     set({ editingIssue: issue });

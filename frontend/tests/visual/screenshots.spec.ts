@@ -329,5 +329,22 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Filter Bar with "Who is Me" Picker Open Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const mePickerBtn = page.getByRole('button', { name: 'Change who is Me' });
+    await expect(mePickerBtn).toBeVisible();
+    await mePickerBtn.click();
+
+    const listbox = page.locator('[role="listbox"][aria-label="Choose who is Me"]');
+    await expect(listbox).toBeVisible();
+
+    await page.screenshot({
+      path: './tests/screenshots/filter-who-is-me-picker.png',
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
 });
 

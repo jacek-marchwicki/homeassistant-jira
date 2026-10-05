@@ -105,6 +105,10 @@ describe('Zustand BoardStore', () => {
 
     useBoardStore.getState().setSearchQuery('test query');
     expect(useBoardStore.getState().searchQuery).toBe('test query');
+
+    useBoardStore.getState().setCurrentUser('Alex Lead');
+    expect(useBoardStore.getState().currentUser).toBe('Alex Lead');
+    expect(window.localStorage.getItem('ha_jira_current_user')).toBe('Alex Lead');
   });
 
   it('loads dynamic board columns from /api/board', async () => {

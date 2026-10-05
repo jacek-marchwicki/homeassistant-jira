@@ -148,4 +148,57 @@ describe('FilterBar component', () => {
       root.unmount();
     });
   });
+
+  it('renders current user badge and opens "Who is Me" dropdown to select user', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({ currentUser: 'Jacek Marchwicki' });
+      root.render(<FilterBar />);
+    });
+
+    // Badge showing first name
+    expect(container.textContent).toContain('Jacek');
+
+    // Find the dropdown chevron button
+    const chevronBtn = container.querySelector(
+      'button[aria-label="Change who is Me"]'
+    ) as HTMLButtonElement;
+    expect(chevronBtn).not.toBeNull();
+    expect(chevronBtn.getAttribute('aria-expanded')).toBe('false');
+
+    // Click to open dropdown
+    await act(async () => {
+      chevronBtn.click();
+    });
+
+    expect(chevronBtn.getAttribute('aria-expanded')).toBe('true');
+    const dropdown = container.querySelector('[role="listbox"]');
+    expect(dropdown).not.toBeNull();
+    expect(dropdown?.textContent).toContain('Choose who is "Me"');
+    expect(dropdown?.textContent).toContain('Alex Lead');
+
+    // Select Alex Lead
+    const options = container.querySelectorAll('[role="option"]');
+    const alexOption = Array.from(options).find((opt) =>
+      opt.textContent?.includes('Alex Lead')
+    ) as HTMLElement;
+    expect(alexOption).toBeDefined();
+
+    await act(async () => {
+      alexOption.click();
+    });
+
+    expect(useBoardStore.getState().currentUser).toBe('Alex Lead');
+    expect(useBoardStore.getState().activeFilters).toContain('my');
+    expect(container.querySelector('[role="listbox"]')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
+  });
 });
+

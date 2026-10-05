@@ -30,6 +30,7 @@ export function BacklogView() {
     activeFilters,
     activeFilter,
     searchQuery,
+    currentUser,
     moveToBoard,
     moveToBacklog,
   } = useBoardStore();
@@ -53,8 +54,8 @@ export function BacklogView() {
 
   // Filter issues based on active filter and search query
   const filteredIssues = useMemo(
-    () => filterIssues(issues, { activeFilters, activeFilter, searchQuery }),
-    [issues, activeFilters, activeFilter, searchQuery]
+    () => filterIssues(issues, { activeFilters, activeFilter, searchQuery, currentUser }),
+    [issues, activeFilters, activeFilter, searchQuery, currentUser]
   );
 
   const { boardIssues, backlogIssues } = splitIssuesByBacklog(filteredIssues, columns);

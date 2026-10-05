@@ -75,6 +75,27 @@ class TestPresentationApi(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    def test_create_issue_endpoint(self) -> None:
+        """Verify POST /api/issues creates a new issue and returns 201."""
+        response = self.client.post(
+            "/api/issues",
+            json={
+                "summary": "Created issue via REST",
+                "issue_type": "bug",
+                "priority": "high",
+                "assignee_name": "Bob Jones",
+                "story_points": 3.0,
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertTrue(data["key"].startswith("PROJ-"))
+        self.assertEqual(data["summary"], "Created issue via REST")
+        self.assertEqual(data["issue_type"], "bug")
+        self.assertEqual(data["priority"], "high")
+        self.assertEqual(data["assignee"]["display_name"], "Bob Jones")
+        self.assertEqual(data["story_points"], 3.0)
+
 
 if __name__ == "__main__":
     unittest.main()

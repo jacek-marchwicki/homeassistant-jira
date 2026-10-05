@@ -553,6 +553,64 @@ class JiraCloudClient(JiraClientProtocol):
             raise JiraAPIError(f"Issue {issue_key} not found after update", status_code=404)
         return updated
 
+    async def create_issue(
+        self,
+        summary: str,
+        issue_type: IssueType = IssueType.TASK,
+        priority: Priority = Priority.MEDIUM,
+        status_category: StatusCategory = StatusCategory.TODO,
+        status_name: str | None = None,
+        assignee_name: str | None = None,
+        assignee_account_id: str | None = None,
+        story_points: float | None = None,
+        due_date: str | None = None,
+        start_date: str | None = None,
+        board_id: str | None = None,
+        project_key: str | None = None,
+    ) -> JiraIssue:
+        """Create a new issue via Jira Cloud REST API."""
+        proj = project_key
+        if not proj and board_id and not board_id.isdigit():
+            proj = board_id.split("-")[0].upper()
+        if not proj and self.settings.jira_board_id and not self.settings.jira_board_id.isdigit():
+            proj = self.settings.jira_board_id.split("-")[0].upper()
+        if not proj:
+            proj = "PROJ"
+
+        fields: dict[str, Any] = {
+            "summary": summary,
+            "project": {"key": proj},
+            "issuetype": {"name": issue_type.value.capitalize()},
+            "priority": {"name": priority.value.capitalize()},
+        }
+        if due_date:
+            fields["duedate"] = due_date
+        if assignee_account_id:
+            fields["assignee"] = {"accountId": assignee_account_id}
+
+        try:
+            res = await self._send_request("POST", "/rest/api/3/issue", json={"fields": fields})
+            self._handle_response_errors(res)
+            created_data = res.json()
+            issue_key = created_data.get("key")
+            if not issue_key:
+                raise JiraAPIError("Jira response missing issue key", status_code=500)
+        except httpx.RequestError as exc:
+            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+
+        if status_name or (status_category and status_category != StatusCategory.TODO):
+            try:
+                await self.transition_issue(
+                    issue_key, target_category=status_category, target_status=status_name
+                )
+            except Exception as exc:
+                logger.warning("Issue %s created but transition failed: %s", issue_key, exc)
+
+        created_issue = await self.get_issue(issue_key)
+        if not created_issue:
+            raise JiraAPIError(f"Issue {issue_key} not found after creation", status_code=404)
+        return created_issue
+
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
         """Parse incoming Jira Cloud webhook payload."""
         webhook_event = payload.get("webhookEvent")

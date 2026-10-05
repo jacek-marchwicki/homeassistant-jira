@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from jira_dashboard.adapters.jira_client import FakeJiraClient, JiraAPIError
-from jira_dashboard.domain import Priority, StatusCategory
+from jira_dashboard.domain import IssueType, Priority, StatusCategory
 
 
 def test_fake_jira_client_fetches_seed_issues() -> None:
@@ -183,5 +183,35 @@ def test_fake_jira_client_processes_new_issue_webhook() -> None:
         # Confirm issue now exists in board issues
         issues = await client.get_board_issues("board-1")
         assert any(i.key == "PROJ-205" for i in issues)
+
+    asyncio.run(_test())
+
+
+def test_fake_jira_client_create_issue() -> None:
+    """Verify create_issue creates a new issue and stores it."""
+
+    async def _test() -> None:
+        client = FakeJiraClient()
+        new_issue = await client.create_issue(
+            summary="New custom issue",
+            issue_type=IssueType.BUG,
+            priority=Priority.HIGHEST,
+            assignee_name="Alice Smith",
+            story_points=5.0,
+            due_date="2026-11-01",
+        )
+        assert new_issue.key.startswith("PROJ-")
+        assert new_issue.summary == "New custom issue"
+        assert new_issue.issue_type == IssueType.BUG
+        assert new_issue.priority == Priority.HIGHEST
+        assert new_issue.assignee is not None
+        assert new_issue.assignee.display_name == "Alice Smith"
+        assert new_issue.story_points == 5.0
+        assert new_issue.due_date == "2026-11-01"
+
+        # Verify it can be retrieved
+        fetched = await client.get_issue(new_issue.key)
+        assert fetched is not None
+        assert fetched.summary == "New custom issue"
 
     asyncio.run(_test())

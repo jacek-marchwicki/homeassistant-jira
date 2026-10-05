@@ -10,7 +10,7 @@ import pytest
 from jira_dashboard.adapters.jira_client import JiraAPIError
 from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
 from jira_dashboard.config import JiraDashboardSettings
-from jira_dashboard.domain import Priority, StatusCategory
+from jira_dashboard.domain import IssueType, Priority, StatusCategory
 
 
 def create_mock_client(handler) -> JiraCloudClient:
@@ -356,6 +356,60 @@ def test_update_issue_success() -> None:
         assert updated.key == "DEV-1001"
         assert updated.summary == "Updated Jira Summary"
         assert updated.priority == Priority.HIGHEST
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_create_issue_success() -> None:
+    """Verify JiraCloudClient create_issue posts to /rest/api/3/issue."""
+
+    async def _test() -> None:
+        created_payload = None
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal created_payload
+            if request.method == "POST" and "/rest/api/3/issue" in str(request.url):
+                import json
+
+                created_payload = json.loads(request.content)
+                return httpx.Response(201, json={"id": "2001", "key": "DEV-2001"})
+            if request.method == "GET" and "/rest/api/3/issue/DEV-2001" in str(request.url):
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "2001",
+                        "key": "DEV-2001",
+                        "fields": {
+                            "summary": "Brand new issue created via Cloud API",
+                            "priority": {"name": "High"},
+                            "issuetype": {"name": "Task"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {
+                                    "id": 1,
+                                    "key": "new",
+                                    "name": "To Do",
+                                },
+                            },
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        created = await client.create_issue(
+            summary="Brand new issue created via Cloud API",
+            issue_type=IssueType.TASK,
+            priority=Priority.HIGH,
+            board_id="DEV",
+        )
+        assert created.key == "DEV-2001"
+        assert created.summary == "Brand new issue created via Cloud API"
+        assert created_payload is not None
+        assert created_payload["fields"]["project"]["key"] == "DEV"
+        assert created_payload["fields"]["summary"] == "Brand new issue created via Cloud API"
         await client.close()
 
     asyncio.run(_test())

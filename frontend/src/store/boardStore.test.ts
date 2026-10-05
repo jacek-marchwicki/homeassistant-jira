@@ -284,5 +284,80 @@ describe('Zustand BoardStore', () => {
     expect(issue?.summary).toBe('Updated over WS');
     expect(issue?.priority).toBe('lowest');
   });
+
+  it('createIssueOptimistic prepends issue optimistically and syncs with backend', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: '201',
+        key: 'PROJ-201',
+        summary: 'Brand New Task',
+        issue_type: 'task',
+        priority: 'high',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        updated_at: '2026-10-05T00:00:00Z',
+      }),
+    });
+
+    const startTime = performance.now();
+    const promise = useBoardStore.getState().createIssueOptimistic({
+      summary: 'Brand New Task',
+      priority: 'high',
+      issue_type: 'task',
+    });
+
+    // Synchronously added within 50ms
+    expect(performance.now() - startTime).toBeLessThan(50);
+    const issues = useBoardStore.getState().issues;
+    expect(issues[0].summary).toBe('Brand New Task');
+    expect(issues[0]._optimisticState).toBe('pending');
+
+    await promise;
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/issues'),
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
+
+    const synced = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-201');
+    expect(synced).toBeDefined();
+    expect(synced?._optimisticState).toBe('synced');
+  });
+
+  it('createIssueOptimistic rolls back on failure', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    });
+
+    await useBoardStore.getState().createIssueOptimistic({
+      summary: 'Will Fail Issue',
+    });
+
+    const issues = useBoardStore.getState().issues;
+    expect(issues.some((i) => i.summary === 'Will Fail Issue')).toBe(false);
+    expect(useBoardStore.getState().errorMessage).toContain('Failed to create issue');
+  });
+
+  it('handles WebSocket issue_created event', () => {
+    useBoardStore.getState().handleWsMessage({
+      event: 'issue_created',
+      issue: {
+        id: '301',
+        key: 'PROJ-301',
+        summary: 'Created over WS',
+        issue_type: 'bug',
+        priority: 'highest',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      },
+    });
+
+    const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-301');
+    expect(issue).toBeDefined();
+    expect(issue?.summary).toBe('Created over WS');
+  });
 });
+
 

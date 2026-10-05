@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import { BoardColumn, IssueUpdatePayload, JiraIssue, JiraStatusCategory } from '../types/jira.ts';
+import {
+  BoardColumn,
+  IssueCreatePayload,
+  IssueUpdatePayload,
+  JiraIssue,
+  JiraStatusCategory,
+} from '../types/jira.ts';
 import { applyTheme, getInitialTheme, ThemeMode } from '../tokens/themeBridge.ts';
 import { getApiUrl } from '../utils/paths.ts';
 
@@ -36,6 +42,7 @@ export interface BoardStoreState {
   currentView: DashboardView;
   isBacklogExpandedOnBoard: boolean;
   editingIssue: JiraIssue | null;
+  isCreateModalOpen: boolean;
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
@@ -48,6 +55,7 @@ export interface BoardStoreState {
   setCurrentView: (view: DashboardView) => void;
   toggleBacklogExpandedOnBoard: () => void;
   setEditingIssue: (issue: JiraIssue | null) => void;
+  setCreateModalOpen: (open: boolean) => void;
   moveToBacklog: (issueKey: string) => Promise<void>;
   moveToBoard: (issueKey: string) => Promise<void>;
   loadBoard: () => Promise<void>;
@@ -57,6 +65,7 @@ export interface BoardStoreState {
     targetStatus?: string
   ) => Promise<void>;
   updateIssueOptimistic: (issueKey: string, updates: IssueUpdatePayload) => Promise<void>;
+  createIssueOptimistic: (payload: IssueCreatePayload) => Promise<JiraIssue | null>;
   handleWsMessage: (data: unknown) => void;
 }
 
@@ -76,9 +85,14 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   currentView: 'board',
   isBacklogExpandedOnBoard: false,
   editingIssue: null,
+  isCreateModalOpen: false,
 
   setEditingIssue: (issue: JiraIssue | null) => {
     set({ editingIssue: issue });
+  },
+
+  setCreateModalOpen: (open: boolean) => {
+    set({ isCreateModalOpen: open });
   },
 
   setCurrentView: (view: DashboardView) => {
@@ -356,11 +370,109 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 
+  createIssueOptimistic: async (payload: IssueCreatePayload) => {
+    // 1. Instant Optimistic State Mutation (< 50ms)
+    const tempKey = `TEMP-${Date.now()}`;
+    const targetCategory = payload.status_category || 'todo';
+    const targetStatusName = payload.status_name || CATEGORY_TITLES[targetCategory] || 'To Do';
+    const tempIssue: JiraIssue = {
+      id: tempKey,
+      key: tempKey,
+      summary: payload.summary,
+      issue_type: payload.issue_type || 'task',
+      priority: payload.priority || 'medium',
+      status: {
+        id: `col-${targetCategory}`,
+        name: targetStatusName,
+        category: targetCategory,
+      },
+      assignee: payload.assignee_name?.trim()
+        ? { accountId: 'usr-1', displayName: payload.assignee_name.trim() }
+        : null,
+      story_points: payload.story_points,
+      due_date: payload.due_date,
+      start_date: payload.start_date,
+      _optimisticState: 'pending',
+    };
+
+    set((state) => ({
+      issues: [tempIssue, ...state.issues],
+      isCreateModalOpen: false,
+    }));
+
+    // 2. Background Asynchronous Sync to Backend
+    try {
+      const res = await fetch(getApiUrl('/api/issues'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}`);
+      }
+
+      const created: JiraIssue = await res.json();
+      set((state) => {
+        const withoutTemp = state.issues.filter((item) => item.key !== tempKey);
+        const alreadyHasCreated = withoutTemp.some((item) => item.key === created.key);
+        if (alreadyHasCreated) {
+          return {
+            issues: withoutTemp.map((item) =>
+              item.key === created.key ? { ...created, _optimisticState: 'synced' } : item
+            ),
+          };
+        }
+        return {
+          issues: state.issues.map((item) =>
+            item.key === tempKey ? { ...created, _optimisticState: 'synced' } : item
+          ),
+        };
+      });
+      return created;
+    } catch {
+      // 3. Graceful Rollback on Sync Rejection
+      set((state) => ({
+        issues: state.issues.filter((item) => item.key !== tempKey),
+        errorMessage: 'Failed to create issue. Please check connection.',
+      }));
+
+      setTimeout(() => {
+        if (get().errorMessage?.includes('Failed to create issue')) {
+          set({ errorMessage: null });
+        }
+      }, 5000);
+      return null;
+    }
+  },
+
   handleWsMessage: (data: unknown) => {
     if (!data || typeof data !== 'object') return;
     const msg = data as Record<string, unknown>;
 
-    if ((msg.event === 'issue_transitioned' || msg.event === 'issue_updated') && msg.issue) {
+    if (msg.event === 'issue_created' && msg.issue) {
+      const incomingIssue = msg.issue as JiraIssue;
+      set((state) => {
+        const exists = state.issues.some((i) => i.key === incomingIssue.key);
+        if (exists) {
+          return {
+            issues: state.issues.map((item) =>
+              item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
+            ),
+          };
+        }
+        // If an optimistic temp issue with matching summary exists, replace it
+        const tempIndex = state.issues.findIndex(
+          (i) => i.key.startsWith('TEMP-') && i.summary === incomingIssue.summary
+        );
+        if (tempIndex !== -1) {
+          const updatedList = [...state.issues];
+          updatedList[tempIndex] = { ...incomingIssue, _optimisticState: 'synced' };
+          return { issues: updatedList };
+        }
+        return { issues: [incomingIssue, ...state.issues] };
+      });
+    } else if ((msg.event === 'issue_transitioned' || msg.event === 'issue_updated') && msg.issue) {
       const incomingIssue = msg.issue as JiraIssue;
       set((state) => ({
         issues: state.issues.map((item) =>

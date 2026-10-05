@@ -178,6 +178,24 @@ class JiraClientProtocol(Protocol):
         """Update fields on an existing issue."""
         ...
 
+    async def create_issue(
+        self,
+        summary: str,
+        issue_type: IssueType = IssueType.TASK,
+        priority: Priority = Priority.MEDIUM,
+        status_category: StatusCategory = StatusCategory.TODO,
+        status_name: str | None = None,
+        assignee_name: str | None = None,
+        assignee_account_id: str | None = None,
+        story_points: float | None = None,
+        due_date: str | None = None,
+        start_date: str | None = None,
+        board_id: str | None = None,
+        project_key: str | None = None,
+    ) -> JiraIssue:
+        """Create a new Jira issue."""
+        ...
+
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
         """Parse and apply an incoming Jira webhook payload."""
         ...
@@ -366,6 +384,80 @@ class FakeJiraClient:
         )
         self._issues[issue_key] = updated_issue
         return updated_issue
+
+    async def create_issue(
+        self,
+        summary: str,
+        issue_type: IssueType = IssueType.TASK,
+        priority: Priority = Priority.MEDIUM,
+        status_category: StatusCategory = StatusCategory.TODO,
+        status_name: str | None = None,
+        assignee_name: str | None = None,
+        assignee_account_id: str | None = None,
+        story_points: float | None = None,
+        due_date: str | None = None,
+        start_date: str | None = None,
+        board_id: str | None = None,
+        project_key: str | None = None,
+    ) -> JiraIssue:
+        """Create a new issue in memory."""
+        if self.simulate_transition_failure or self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+
+        # Determine project prefix
+        proj_prefix = project_key
+        if not proj_prefix and board_id and not board_id.isdigit():
+            proj_prefix = board_id.split("-")[0].upper()
+        if not proj_prefix:
+            proj_prefix = "PROJ"
+            for k in self._issues:
+                parts = k.split("-")
+                if len(parts) == 2:
+                    proj_prefix = parts[0]
+                    break
+
+        # Generate next key
+        max_id = 100
+        for k in self._issues:
+            parts = k.split("-")
+            if len(parts) == 2 and parts[1].isdigit():
+                max_id = max(max_id, int(parts[1]))
+        next_num = max_id + 1
+        new_key = f"{proj_prefix}-{next_num}"
+
+        matched_cat = status_category
+        matched_name = status_name or "To Do"
+        if status_name and not status_category:
+            clean = status_name.strip().lower()
+            for c, s in STATUS_MAP.items():
+                if s.name.lower() == clean:
+                    matched_cat = c
+                    break
+
+        status = JiraStatus(id=f"col-{matched_cat.value}", name=matched_name, category=matched_cat)
+
+        assignee = None
+        if assignee_name and assignee_name.strip():
+            assignee = JiraUser(
+                account_id=assignee_account_id or "usr-1",
+                display_name=assignee_name.strip(),
+            )
+
+        new_issue = JiraIssue(
+            id=str(next_num),
+            key=new_key,
+            summary=summary,
+            issue_type=issue_type,
+            priority=priority,
+            status=status,
+            assignee=assignee,
+            story_points=story_points,
+            due_date=due_date,
+            start_date=start_date,
+            updated_at="2026-10-05T00:00:00Z",
+        )
+        self._issues[new_key] = new_issue
+        return new_issue
 
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
         """Parse incoming Jira Cloud webhook and update internal state.

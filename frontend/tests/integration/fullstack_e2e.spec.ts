@@ -348,5 +348,43 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
       )
     ).toBeVisible();
   });
+
+  test('11. Issue Creation: opens create modal from header, creates issue, and displays on board', async ({
+    page,
+  }) => {
+    // Click the Create button in the Header
+    const createBtn = page.getByRole('button', { name: 'Create Issue' });
+    await expect(createBtn).toBeVisible();
+    await createBtn.click();
+
+    // Verify modal dialog appears
+    const dialog = page.getByRole('dialog', { name: 'Create Issue' });
+    await expect(dialog).toBeVisible();
+
+    const summaryInput = dialog.locator('#create-summary');
+    await expect(summaryInput).toBeVisible();
+
+    // Intercept POST request
+    const postPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues') && res.request().method() === 'POST' && res.status() === 201
+    );
+
+    // Fill in summary
+    await summaryInput.fill('Automated E2E Created Issue');
+
+    // Submit form
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+
+    // Verify modal closes
+    await expect(dialog).not.toBeVisible();
+
+    // Verify backend received POST and returned 201
+    const postRes = await postPromise;
+    expect(postRes.ok()).toBeTruthy();
+
+    // Verify newly created issue appears on board
+    await expect(page.locator('article', { hasText: 'Automated E2E Created Issue' })).toBeVisible();
+  });
 });
+
 

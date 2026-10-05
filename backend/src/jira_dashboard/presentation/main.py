@@ -173,6 +173,23 @@ class IssueUpdateRequest(BaseModel):
     start_date: str | None = None
 
 
+class IssueCreateRequest(BaseModel):
+    """Payload to create a new issue."""
+
+    summary: str
+    issue_type: IssueType = IssueType.TASK
+    priority: Priority = Priority.MEDIUM
+    status_category: StatusCategory = StatusCategory.TODO
+    status_name: str | None = None
+    assignee_name: str | None = None
+    assignee_account_id: str | None = None
+    story_points: float | None = None
+    due_date: str | None = None
+    start_date: str | None = None
+    board_id: str | None = None
+    project_key: str | None = None
+
+
 class BoardResponse(BaseModel):
     """Response containing board metadata, workflow columns, and issues."""
 
@@ -359,6 +376,46 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
     await ws_hub.broadcast(
         {
             "event": "issue_updated",
+            "issue_key": issue.key,
+            "status_category": issue.status.category.value,
+            "status_name": issue.status.name,
+            "issue": issue.model_dump(),
+        }
+    )
+
+    return issue
+
+
+@app.post("/api/issues", response_model=JiraIssue, status_code=201)
+async def create_issue(request: IssueCreateRequest) -> JiraIssue:
+    """Create a new Jira issue and broadcast delta to connected WebSocket clients."""
+    try:
+        issue = await jira_client.create_issue(
+            summary=request.summary,
+            issue_type=request.issue_type,
+            priority=request.priority,
+            status_category=request.status_category,
+            status_name=request.status_name,
+            assignee_name=request.assignee_name,
+            assignee_account_id=request.assignee_account_id,
+            story_points=request.story_points,
+            due_date=request.due_date,
+            start_date=request.start_date,
+            board_id=request.board_id,
+            project_key=request.project_key,
+        )
+    except JiraAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    # Update cache signature
+    _cached_issue_state[issue.key] = (
+        f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+    )
+
+    # Broadcast real-time delta via WebSockets
+    await ws_hub.broadcast(
+        {
+            "event": "issue_created",
             "issue_key": issue.key,
             "status_category": issue.status.category.value,
             "status_name": issue.status.name,

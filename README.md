@@ -329,7 +329,7 @@ This file defines coding standards, testing requirements, architectural boundari
 - [ ] **Phase 3.5: User Experience Polish & Issue Management**
   - [x] **Initial Board Loading State**: Display a dedicated, accessible progress indicator while sprint data is loading, preventing the flash of placeholder text ("Engineering Sprint Board", "Active Sprint 42") and sample columns
   - [x] **Issue Editing**: Full-stack capability to edit issue details (summary, issue type, priority, workflow status, assignee, story points, due date, start date) with sub-50ms optimistic UI updates, background Jira synchronization, WebSocket broadcast, and automatic rollback on failure
-  - [ ] Implement ability to create issues.
+  - [x] **Issue Creation**: Direct issue creation modal accessible from the top navigation bar with optimistic UI state mutation (<50ms), field validation (summary, issue type, priority, destination status, assignee, story points, due/start dates), REST API endpoint (`POST /api/issues`), real-time WebSocket broadcast (`issue_created`), and duplicate resolution
   - [ ] Could you change "DONE" to display only issues that where updated no longer then a 2 days ago?
 - [ ] **Phase 4: Home Assistant Integration & Packaging**
   - [ ] Home Assistant Add-on container configuration (`config.yaml`, `build.yaml`, Ingress)

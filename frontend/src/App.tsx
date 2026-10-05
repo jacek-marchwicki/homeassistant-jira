@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { BacklogView } from './components/BacklogView.tsx';
+import { CreateIssueModal } from './components/CreateIssueModal.tsx';
 import { EditIssueModal } from './components/EditIssueModal.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { Header } from './components/Header.tsx';
@@ -23,6 +24,8 @@ export default function App() {
     issues,
     editingIssue,
     setEditingIssue,
+    isCreateModalOpen,
+    setCreateModalOpen,
   } = useBoardStore();
   const {
     canInstall,
@@ -164,6 +167,12 @@ export default function App() {
         issue={editingIssue}
         isOpen={Boolean(editingIssue)}
         onClose={() => setEditingIssue(null)}
+      />
+
+      {/* Create Issue Modal */}
+      <CreateIssueModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setCreateModalOpen(false)}
       />
     </div>
   );

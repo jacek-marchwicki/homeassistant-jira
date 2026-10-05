@@ -1,4 +1,4 @@
-import { Download, LayoutGrid, Layers, ListTodo, Moon, Sun, Tv, Wifi, WifiOff } from 'lucide-react';
+import { Download, LayoutGrid, Layers, ListTodo, Moon, Plus, Sun, Tv, Wifi, WifiOff } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { splitIssuesByBacklog } from '../utils/boardUtils.ts';
 
@@ -18,6 +18,7 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
     setCurrentView,
     issues,
     columns,
+    setCreateModalOpen,
   } = useBoardStore();
 
   const { boardIssues, backlogIssues } = splitIssuesByBacklog(issues, columns);
@@ -85,6 +86,17 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
           </span>
         </button>
       </div>
+
+      {/* Create Issue Button */}
+      <button
+        onClick={() => setCreateModalOpen(true)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--jira-primary)] text-white hover:bg-[var(--jira-primary-hover)] transition-colors text-xs font-semibold shadow-xs cursor-pointer min-h-[36px]"
+        title="Create Issue"
+        aria-label="Create Issue"
+      >
+        <Plus className="w-3.5 h-3.5" />
+        <span>Create</span>
+      </button>
 
       {/* Live WebSocket Status & Themes */}
       <div className="flex items-center gap-2 sm:gap-3">

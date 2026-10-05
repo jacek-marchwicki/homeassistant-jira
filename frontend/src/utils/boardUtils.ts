@@ -56,3 +56,41 @@ export function getColumnForIssue(
   // 4. Default to first column if no other match
   return columns[0];
 }
+
+/**
+ * Resolves the target BoardColumn from a dnd-kit `over` target.
+ * Supports droppable Column containers, Sortable Issue items, and ID fallbacks.
+ */
+export function getColumnFromOver(
+  over: { id: string | number; data?: { current?: Record<string, unknown> } } | null | undefined,
+  columns: BoardColumn[],
+  issues: JiraIssue[]
+): BoardColumn | undefined {
+  if (!over || !columns || columns.length === 0) return undefined;
+  const overData = over.data?.current;
+
+  // 1. Direct Column droppable
+  if (overData?.type === 'Column' && typeof overData.columnId === 'string') {
+    const found = columns.find((c) => c.id === overData.columnId);
+    if (found) return found;
+  }
+
+  // 2. Issue sortable item
+  if (overData?.type === 'Issue' && overData.issue) {
+    const found = getColumnForIssue(overData.issue as JiraIssue, columns);
+    if (found) return found;
+  }
+
+  // 3. Fallback: match by column ID
+  const colById = columns.find((c) => c.id === String(over.id));
+  if (colById) return colById;
+
+  // 4. Fallback: match by issue key
+  const issueById = issues.find((i) => i.key === String(over.id));
+  if (issueById) {
+    return getColumnForIssue(issueById, columns);
+  }
+
+  return undefined;
+}
+

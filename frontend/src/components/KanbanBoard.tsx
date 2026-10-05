@@ -1,26 +1,34 @@
 import { useState } from 'react';
 import {
+  CollisionDetection,
   DndContext,
   DragEndEvent,
+  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
   closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useBoardStore } from '../store/boardStore.ts';
-import { BoardColumn, JiraIssue } from '../types/jira.ts';
+import { JiraIssue } from '../types/jira.ts';
 import { IssueCard } from './IssueCard.tsx';
 import { KanbanColumn } from './KanbanColumn.tsx';
-import { getCategoryColorVar, getColumnForIssue } from '../utils/boardUtils.ts';
+import {
+  getCategoryColorVar,
+  getColumnForIssue,
+  getColumnFromOver,
+} from '../utils/boardUtils.ts';
 
 export function KanbanBoard() {
   const { issues, columns, activeFilter, searchQuery, transitionIssueOptimistic } = useBoardStore();
   const [activeIssue, setActiveIssue] = useState<JiraIssue | null>(null);
+  const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
   // Configure drag sensors with distance/delay constraints to distinguish click/touch-scroll from drag
   const sensors = useSensors(
@@ -61,17 +69,40 @@ export function KanbanBoard() {
     return true;
   });
 
+  // Collision detection: Prioritize pointer collisions to accurately target columns/cards under the cursor,
+  // falling back to closestCorners for edge cases and keyboard dragging.
+  const collisionDetectionStrategy: CollisionDetection = (args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+    return closestCorners(args);
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const issue = issues.find((i) => i.key === active.id);
     if (issue) {
       setActiveIssue(issue);
+      const initialCol = getColumnForIssue(issue, columns);
+      setOverColumnId(initialCol?.id ?? null);
     }
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) {
+      setOverColumnId(null);
+      return;
+    }
+    const targetCol = getColumnFromOver(over, columns, issues);
+    setOverColumnId(targetCol?.id ?? null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveIssue(null);
+    setOverColumnId(null);
 
     if (!over) return;
 
@@ -80,31 +111,26 @@ export function KanbanBoard() {
     if (!activeItem) return;
 
     const currentColumn = getColumnForIssue(activeItem, columns);
-
-    // Detect target column from dropped column or dropped issue
-    let targetCol: BoardColumn | undefined = undefined;
-    const overData = over.data.current;
-
-    if (overData?.type === 'Column' && overData.columnId) {
-      targetCol = columns.find((c) => c.id === overData.columnId);
-    } else if (overData?.type === 'Issue' && overData.issue) {
-      targetCol = getColumnForIssue(overData.issue, columns);
-    } else {
-      // Fallback: match by column ID
-      targetCol = columns.find((c) => c.id === over.id);
-    }
+    const targetCol = getColumnFromOver(over, columns, issues);
 
     if (targetCol && currentColumn?.id !== targetCol.id) {
       transitionIssueOptimistic(activeKey, targetCol.category, targetCol.name);
     }
   };
 
+  const handleDragCancel = () => {
+    setActiveIssue(null);
+    setOverColumnId(null);
+  };
+
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={collisionDetectionStrategy}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <main className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-4 overflow-y-auto overflow-x-auto min-w-0">
         {columns.map((col) => {
@@ -120,6 +146,7 @@ export function KanbanBoard() {
               title={col.name}
               colorVar={colorVar}
               issues={colIssues}
+              isHighlighted={overColumnId === col.id}
             />
           );
         })}

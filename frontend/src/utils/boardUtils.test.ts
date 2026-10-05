@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getColumnForIssue, getCategoryColorVar } from './boardUtils.ts';
+import { getColumnForIssue, getCategoryColorVar, getColumnFromOver } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
 const homeColumns: BoardColumn[] = [
@@ -60,5 +60,73 @@ describe('boardUtils', () => {
     expect(getCategoryColorVar('inreview')).toBe('var(--jira-status-inreview)');
     expect(getCategoryColorVar('done')).toBe('var(--jira-status-done)');
     expect(getCategoryColorVar('blocked')).toBe('var(--jira-status-blocked)');
+  });
+
+  describe('getColumnFromOver', () => {
+    it('returns undefined when over is null or undefined', () => {
+      expect(getColumnFromOver(null, homeColumns, [mockBaseIssue])).toBeUndefined();
+      expect(getColumnFromOver(undefined, homeColumns, [mockBaseIssue])).toBeUndefined();
+    });
+
+    it('returns undefined when columns array is empty', () => {
+      expect(
+        getColumnFromOver({ id: 'col-ready' }, [], [mockBaseIssue])
+      ).toBeUndefined();
+    });
+
+    it('resolves target column from a Column droppable', () => {
+      const over = {
+        id: 'col-in-progress',
+        data: {
+          current: {
+            type: 'Column',
+            columnId: 'col-in-progress',
+          },
+        },
+      };
+      expect(getColumnFromOver(over, homeColumns, [mockBaseIssue])?.id).toBe(
+        'col-in-progress'
+      );
+    });
+
+    it('resolves target column from an Issue sortable item', () => {
+      const over = {
+        id: 'HOME-1',
+        data: {
+          current: {
+            type: 'Issue',
+            issue: mockBaseIssue, // Backlog (col-backlog)
+          },
+        },
+      };
+      expect(getColumnFromOver(over, homeColumns, [mockBaseIssue])?.id).toBe(
+        'col-backlog'
+      );
+    });
+
+    it('resolves target column by column ID fallback', () => {
+      const over = {
+        id: 'col-done',
+      };
+      expect(getColumnFromOver(over, homeColumns, [mockBaseIssue])?.id).toBe(
+        'col-done'
+      );
+    });
+
+    it('resolves target column by issue key fallback', () => {
+      const over = {
+        id: 'HOME-1',
+      };
+      expect(getColumnFromOver(over, homeColumns, [mockBaseIssue])?.id).toBe(
+        'col-backlog'
+      );
+    });
+
+    it('returns undefined when over does not match any column or issue', () => {
+      const over = {
+        id: 'non-existent-id',
+      };
+      expect(getColumnFromOver(over, homeColumns, [mockBaseIssue])).toBeUndefined();
+    });
   });
 });

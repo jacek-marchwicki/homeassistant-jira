@@ -35,6 +35,8 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
     assert config["slug"] == "jira_dashboard"
     assert "description" in config and len(config["description"]) > 10
     assert config["url"] == "https://github.com/jacek-marchwicki/homeassistant-jira"
+    assert config["image"] == "ghcr.io/jacek-marchwicki/homeassistant-jira-{arch}"
+    assert "{arch}" in config["image"]
 
     # Multi-architecture support
     assert isinstance(config["arch"], list)
@@ -79,7 +81,7 @@ def test_addon_build_yaml_is_valid() -> None:
 
 
 def test_addon_dockerfile_contents() -> None:
-    """Validate addon/Dockerfile multi-stage structure and Ingress port exposure."""
+    """Validate addon/Dockerfile multi-stage structure, local copying, and Ingress port exposure."""
     dockerfile_path = PROJECT_ROOT / "addon" / "Dockerfile"
     assert dockerfile_path.is_file(), "addon/Dockerfile must exist"
 
@@ -92,6 +94,11 @@ def test_addon_dockerfile_contents() -> None:
     assert "HEALTHCHECK" in content
     assert "jira_dashboard.presentation.main:app" in content
 
+    # Verify building from local source files without git repository dependency
+    assert "COPY frontend/package.json" in content
+    assert "COPY backend/ ./backend/" in content
+    assert "git clone" not in content
+
     # Verify ARG BUILD_FROM appears before any FROM instruction for BuildKit compliance
     build_from_pos = content.find("ARG BUILD_FROM")
     first_from_pos = content.find("FROM ")
@@ -102,7 +109,7 @@ def test_addon_dockerfile_contents() -> None:
 
 
 def test_root_dockerfile_contents() -> None:
-    """Validate root Dockerfile multi-stage structure, non-root user, and healthcheck."""
+    """Validate root Dockerfile multi-stage structure, copying, non-root user, and healthcheck."""
     dockerfile_path = PROJECT_ROOT / "Dockerfile"
     assert dockerfile_path.is_file(), "Root Dockerfile must exist"
 
@@ -110,6 +117,8 @@ def test_root_dockerfile_contents() -> None:
     assert "FROM node:22-alpine AS frontend-builder" in content
     assert "pnpm build" in content
     assert "FROM python:3.11-alpine AS runner" in content
+    assert "COPY backend/ ./backend/" in content
+    assert "git clone" not in content
     assert "adduser" in content and "appuser" in content
     assert "USER appuser" in content
     assert "EXPOSE 8000" in content
@@ -306,3 +315,28 @@ def test_addon_documentation_and_assets() -> None:
     logo_file = addon_dir / "logo.png"
     assert logo_file.is_file(), "addon/logo.png must exist for Add-on store banner/logo"
     assert logo_file.stat().st_size > 0
+
+
+def test_publish_images_workflow_is_valid() -> None:
+    """Validate .github/workflows/publish-images.yml structure and multi-arch packaging targets."""
+    workflow_path = PROJECT_ROOT / ".github" / "workflows" / "publish-images.yml"
+    assert workflow_path.is_file(), "publish-images.yml workflow must exist"
+
+    with open(workflow_path, encoding="utf-8") as f:
+        workflow = yaml.safe_load(f)
+
+    assert "jobs" in workflow
+    jobs = workflow["jobs"]
+    assert "build-addon-images" in jobs
+    assert "build-standalone-image" in jobs
+
+    # Validate add-on matrix architectures cover all supported platforms
+    addon_job = jobs["build-addon-images"]
+    matrix = addon_job["strategy"]["matrix"]["include"]
+    matrix_archs = [entry["arch"] for entry in matrix]
+    for required_arch in ["aarch64", "amd64", "armhf", "armv7", "i386"]:
+        assert required_arch in matrix_archs
+
+    # Verify GHCR registry references and permissions
+    assert addon_job["permissions"]["packages"] == "write"
+    assert jobs["build-standalone-image"]["permissions"]["packages"] == "write"

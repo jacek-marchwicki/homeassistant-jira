@@ -3,6 +3,7 @@ version: "0.1.0"
 slug: "jira_dashboard"
 description: "Real-time, responsive Jira Dashboard with Optimistic UI and Home Assistant Ingress support"
 url: "https://github.com/jacek-marchwicki/homeassistant-jira"
+image: "ghcr.io/jacek-marchwicki/homeassistant-jira-{arch}"
 arch:
   - aarch64
   - amd64

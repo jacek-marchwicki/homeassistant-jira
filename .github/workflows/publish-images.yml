@@ -1,0 +1,127 @@
+name: Publish Container Images
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: "Push images to GHCR"
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  build-addon-images:
+    name: Build Add-on (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            platform: linux/arm64
+            base: ghcr.io/home-assistant/aarch64-base-python:3.11-alpine
+          - arch: amd64
+            platform: linux/amd64
+            base: ghcr.io/home-assistant/amd64-base-python:3.11-alpine
+          - arch: armv7
+            platform: linux/arm/v7
+            base: ghcr.io/home-assistant/armv7-base-python:3.11-alpine
+          - arch: armhf
+            platform: linux/arm/v6
+            base: ghcr.io/home-assistant/armhf-base-python:3.11-alpine
+          - arch: i386
+            platform: linux/386
+            base: ghcr.io/home-assistant/i386-base-python:3.11-alpine
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Add-on Version
+        id: version
+        run: |
+          VERSION=$(grep '^version:' addon/config.yaml | awk '{print $2}' | tr -d '"')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Add-on Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: addon/Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_FROM=${{ matrix.base }}
+            BUILD_ARCH=${{ matrix.arch }}
+            BUILD_VERSION=${{ steps.version.outputs.version }}
+          push: ${{ github.event_name != 'workflow_dispatch' || inputs.push_images }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/homeassistant-jira-${{ matrix.arch }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/homeassistant-jira-${{ matrix.arch }}:latest
+          labels: |
+            io.hass.name=Jira Dashboard
+            io.hass.description=Real-time, responsive Jira Dashboard with Optimistic UI and Home Assistant Ingress support
+            io.hass.arch=${{ matrix.arch }}
+            io.hass.type=addon
+            io.hass.version=${{ steps.version.outputs.version }}
+
+  build-standalone-image:
+    name: Build Standalone Image (Multi-Arch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Version
+        id: version
+        run: |
+          VERSION=$(grep '^version:' addon/config.yaml | awk '{print $2}' | tr -d '"')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Standalone Multi-Arch Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'workflow_dispatch' || inputs.push_images }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/homeassistant-jira:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/homeassistant-jira:latest

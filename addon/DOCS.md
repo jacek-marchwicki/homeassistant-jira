@@ -10,6 +10,7 @@ A real-time, responsive Jira Dashboard with Optimistic UI (<50ms mutations), bid
 - **Real-Time Synchronization**: Instant state synchronization across desktop, wallboard displays, and mobile devices.
 - **Wallboard Kiosk Mode**: Ambient fullscreen display mode for high-visibility office or wall screens.
 - **Jira Cloud & Data Center Support**: Authenticate using Jira Cloud API Tokens or Jira Data Center Personal Access Tokens (PAT).
+- **Pre-Built Multi-Architecture Images**: Automatically downloads pre-compiled images from GHCR without on-device build delays.
 
 ---
 

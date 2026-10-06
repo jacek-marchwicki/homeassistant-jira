@@ -23,9 +23,6 @@ class JiraDashboardSettings(BaseModel):
     jira_api_token: str | None = Field(
         default=None, description="Jira Cloud API token for basic auth"
     )
-    jira_personal_access_token: str | None = Field(
-        default=None, description="Personal Access Token (PAT) for Jira Data Center / Server"
-    )
     jira_board_id: str = Field(default="engineering-1", description="Default Jira Board ID to view")
     webhook_secret: str | None = Field(
         default=None, description="Shared secret for verifying Jira webhooks"
@@ -33,7 +30,6 @@ class JiraDashboardSettings(BaseModel):
     polling_interval_seconds: int = Field(
         default=60, description="Interval in seconds for fallback polling (0 disables polling)"
     )
-    jira_jql: str | None = Field(default=None, description="Custom JQL filter for board issues")
 
     @property
     def has_jira_credentials(self) -> bool:
@@ -41,8 +37,6 @@ class JiraDashboardSettings(BaseModel):
         if not self.jira_url:
             return False
         if self.jira_email and self.jira_api_token:
-            return True
-        if self.jira_personal_access_token:
             return True
         return False
 
@@ -62,11 +56,6 @@ class JiraDashboardSettings(BaseModel):
                 with open(path, encoding="utf-8") as f:
                     file_options = json.load(f)
                 if isinstance(file_options, dict):
-                    if (
-                        "jira_pat" in file_options
-                        and "jira_personal_access_token" not in file_options
-                    ):
-                        file_options["jira_personal_access_token"] = file_options["jira_pat"]
                     config_data.update(file_options)
             except Exception:
                 pass
@@ -76,9 +65,7 @@ class JiraDashboardSettings(BaseModel):
             "jira_url": "JIRA_URL",
             "jira_email": "JIRA_EMAIL",
             "jira_api_token": "JIRA_API_TOKEN",
-            "jira_personal_access_token": "JIRA_PAT",
             "jira_board_id": "JIRA_BOARD_ID",
-            "jira_jql": "JIRA_JQL",
             "webhook_secret": "JIRA_WEBHOOK_SECRET",
             "polling_interval_seconds": "POLLING_INTERVAL_SECONDS",
         }

@@ -28,26 +28,15 @@ jira_board_id: "42"
 polling_interval_seconds: 60
 ```
 
-### Example Configuration (Jira Data Center / Server)
-
-```yaml
-jira_url: "https://jira.internal.mycompany.com"
-jira_pat: "Nzg4NjM4MDQ1MzU4..."
-jira_board_id: "10"
-polling_interval_seconds: 60
-```
-
 ### Configuration Options
 
 | Option | Type | Required | Description |
 |---|---|---|---|
-| `jira_url` | URL | Yes | Base URL of your Jira instance (e.g. `https://mycompany.atlassian.net`). |
-| `jira_email` | String | Jira Cloud | Your Atlassian account email address for basic authentication. |
-| `jira_api_token` | Password | Jira Cloud | Jira Cloud API Token ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens)). |
-| `jira_pat` | Password | Jira DC | Personal Access Token for Jira Data Center / Server instances. |
+| `jira_url` | URL | Yes | Base URL of your Jira Cloud instance (e.g. `https://mycompany.atlassian.net`). |
+| `jira_email` | String | Yes | Your Atlassian account email address for basic authentication. |
+| `jira_api_token` | Password | Yes | Jira Cloud API Token ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens)). |
 | `jira_board_id` | String | No | Target Jira Agile Board ID (defaults to primary board if empty). |
 | `polling_interval_seconds` | Integer | No | Fallback polling interval in seconds (default: `60`). Set `0` to disable. |
-| `jira_jql` | String | No | Custom JQL query to filter board issues. |
 
 ---
 

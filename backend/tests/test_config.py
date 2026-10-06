@@ -13,7 +13,6 @@ def test_default_config_empty(monkeypatch) -> None:
     monkeypatch.delenv("JIRA_URL", raising=False)
     monkeypatch.delenv("JIRA_EMAIL", raising=False)
     monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
-    monkeypatch.delenv("JIRA_PAT", raising=False)
     monkeypatch.delenv("JIRA_BOARD_ID", raising=False)
     monkeypatch.delenv("JIRA_WEBHOOK_SECRET", raising=False)
     monkeypatch.delenv("POLLING_INTERVAL_SECONDS", raising=False)
@@ -42,7 +41,6 @@ def test_load_from_options_file(tmp_path: Path, monkeypatch) -> None:
         "JIRA_URL",
         "JIRA_EMAIL",
         "JIRA_API_TOKEN",
-        "JIRA_PAT",
         "JIRA_BOARD_ID",
         "JIRA_WEBHOOK_SECRET",
         "POLLING_INTERVAL_SECONDS",
@@ -61,7 +59,8 @@ def test_load_from_options_file(tmp_path: Path, monkeypatch) -> None:
 def test_env_var_overlay(monkeypatch) -> None:
     """Verify environment variables take precedence over defaults."""
     monkeypatch.setenv("JIRA_URL", "https://env.atlassian.net")
-    monkeypatch.setenv("JIRA_PAT", "pat-bearer-token")
+    monkeypatch.setenv("JIRA_EMAIL", "env-user@example.com")
+    monkeypatch.setenv("JIRA_API_TOKEN", "env-api-token")
     monkeypatch.setenv("JIRA_BOARD_ID", "sprint-board-99")
     monkeypatch.setenv("JIRA_WEBHOOK_SECRET", "super-secret-wh")
     monkeypatch.setenv("POLLING_INTERVAL_SECONDS", "30")
@@ -69,7 +68,8 @@ def test_env_var_overlay(monkeypatch) -> None:
 
     settings = JiraDashboardSettings.load()
     assert settings.jira_url == "https://env.atlassian.net"
-    assert settings.jira_personal_access_token == "pat-bearer-token"
+    assert settings.jira_email == "env-user@example.com"
+    assert settings.jira_api_token == "env-api-token"
     assert settings.jira_board_id == "sprint-board-99"
     assert settings.webhook_secret == "super-secret-wh"
     assert settings.polling_interval_seconds == 30

@@ -12,9 +12,7 @@ services:
       - JIRA_URL=${JIRA_URL:-}
       - JIRA_EMAIL=${JIRA_EMAIL:-}
       - JIRA_API_TOKEN=${JIRA_API_TOKEN:-}
-      - JIRA_PAT=${JIRA_PAT:-}
       - JIRA_BOARD_ID=${JIRA_BOARD_ID:-engineering-1}
-      - JIRA_JQL=${JIRA_JQL:-}
       - POLLING_INTERVAL_SECONDS=${POLLING_INTERVAL_SECONDS:-60}
       - JIRA_WEBHOOK_SECRET=${JIRA_WEBHOOK_SECRET:-}
     healthcheck:

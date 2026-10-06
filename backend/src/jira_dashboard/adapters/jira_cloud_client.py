@@ -142,8 +142,6 @@ class JiraCloudClient(JiraClientProtocol):
 
         if settings.jira_email and settings.jira_api_token:
             auth = httpx.BasicAuth(settings.jira_email, settings.jira_api_token)
-        elif settings.jira_personal_access_token:
-            headers["Authorization"] = f"Bearer {settings.jira_personal_access_token}"
 
         self._client = (
             http_client
@@ -181,12 +179,8 @@ class JiraCloudClient(JiraClientProtocol):
             and not getattr(self, "_gateway_resolved", False)
             and ".atlassian.net" in str(self._client.base_url)
             and "api.atlassian.com" not in str(self._client.base_url)
-            and (
-                (self.settings.jira_api_token and self.settings.jira_api_token.startswith("ATATT"))
-                or (
-                    self.settings.jira_personal_access_token
-                    and self.settings.jira_personal_access_token.startswith("ATATT")
-                )
+            and bool(
+                self.settings.jira_api_token and self.settings.jira_api_token.startswith("ATATT")
             )
         ):
             self._gateway_resolved = True
@@ -485,13 +479,10 @@ class JiraCloudClient(JiraClientProtocol):
             # 2. Modern JQL search endpoint fallback (/rest/api/3/search/jql or /rest/api/3/search)
             # Query active issues (non-Done issues or issues updated within the last 14 days)
             # to avoid transferring thousands of historical closed tickets.
-            if self.settings.jira_jql:
-                jql = self.settings.jira_jql
-            else:
-                jql = (
-                    f"project = '{board_id}' AND "
-                    "(statusCategory != Done OR updated >= -14d) ORDER BY updated DESC"
-                )
+            jql = (
+                f"project = '{board_id}' AND "
+                "(statusCategory != Done OR updated >= -14d) ORDER BY updated DESC"
+            )
 
             search_endpoint = "/rest/api/3/search/jql"
             search_params: dict[str, Any] = {

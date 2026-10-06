@@ -66,9 +66,9 @@ export function FilterBar() {
         <button
           type="button"
           onClick={() => setActiveFilter('all')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+          className={`h-8 px-3 rounded-full text-xs font-medium inline-flex items-center justify-center transition-colors cursor-pointer ${
             isAll
-              ? 'bg-[var(--jira-primary)] text-white shadow-sm font-semibold'
+              ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
               : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
           }`}
         >
@@ -76,20 +76,20 @@ export function FilterBar() {
         </button>
 
         {/* Assigned to Me Filter with "Who is Me" Picker */}
-        <div className="relative inline-flex items-center rounded-full" ref={pickerRef}>
+        <div className="relative inline-flex items-center rounded-full h-8 shadow-xs" ref={pickerRef}>
           <button
             type="button"
             onClick={() => toggleFilter('my')}
-            className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-l-full text-xs font-medium transition-colors cursor-pointer ${
+            className={`h-8 inline-flex items-center gap-1.5 pl-3 pr-2 rounded-l-full text-xs font-medium transition-colors cursor-pointer ${
               isMy
-                ? 'bg-[var(--jira-primary)] text-white shadow-sm font-semibold'
-                : 'bg-[var(--jira-surface-elevated)] border-y border-l border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
+                ? 'bg-[var(--jira-primary)] text-white font-semibold'
+                : 'bg-[var(--jira-surface-elevated)] border-y border-l border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)]'
             }`}
             title={`Toggle filter for Assigned to Me (${currentUser})`}
           >
             <span>Assigned to Me</span>
             <span
-              className={`text-2xs px-1.5 py-0.5 rounded-full font-bold truncate max-w-[100px] ${
+              className={`text-2xs px-1.5 py-0.5 rounded-full font-bold truncate max-w-[100px] leading-none inline-flex items-center ${
                 isMy ? 'bg-white/20 text-white' : 'bg-[var(--jira-canvas)] text-[var(--jira-text-secondary)]'
               }`}
             >
@@ -99,7 +99,7 @@ export function FilterBar() {
           <button
             type="button"
             onClick={() => setIsPickerOpen((prev) => !prev)}
-            className={`flex items-center px-2 py-1.5 rounded-r-full text-xs font-medium transition-colors cursor-pointer border-l ${
+            className={`h-8 w-7 inline-flex items-center justify-center rounded-r-full text-xs font-medium transition-colors cursor-pointer border-l ${
               isMy
                 ? 'bg-[var(--jira-primary)] text-white border-white/25 hover:bg-[var(--jira-primary-hover)]'
                 : 'bg-[var(--jira-surface-elevated)] border-y border-r border-l border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)]'
@@ -167,9 +167,9 @@ export function FilterBar() {
         <button
           type="button"
           onClick={() => toggleFilter('active')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+          className={`h-8 px-3 rounded-full text-xs font-medium inline-flex items-center justify-center transition-colors cursor-pointer ${
             isActive
-              ? 'bg-[var(--jira-primary)] text-white shadow-sm font-semibold'
+              ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
               : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
           }`}
         >
@@ -178,7 +178,7 @@ export function FilterBar() {
       </div>
 
       {/* Quick Search Input */}
-      <div className="relative flex items-center min-w-[200px] max-w-xs">
+      <div className="relative flex items-center min-w-[200px] max-w-xs h-8">
         <Search className="w-3.5 h-3.5 absolute left-2.5 text-[var(--jira-text-muted)] pointer-events-none" />
         <input
           type="text"
@@ -186,7 +186,7 @@ export function FilterBar() {
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search key, summary, description..."
           aria-label="Search issues by key, summary, or description"
-          className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] placeholder-[var(--jira-text-muted)] focus:outline-none focus:border-[var(--jira-primary)]"
+          className="w-full h-8 text-xs pl-8 pr-3 rounded-lg bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] placeholder-[var(--jira-text-muted)] focus:outline-none focus:border-[var(--jira-primary)]"
         />
       </div>
     </section>

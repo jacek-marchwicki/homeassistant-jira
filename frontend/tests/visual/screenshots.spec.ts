@@ -210,6 +210,18 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       path: './tests/screenshots/component-modal-create.png',
       animations: 'disabled',
     });
+
+    // 3. Switch to Preview in RichTextEditor and capture rich text preview snapshot
+    const descTextarea = page.locator('#create-description');
+    await descTextarea.fill('### Rich Text Formatting\n\n- Feature item 1\n- **Bold point**\n- `inline code`\n\n> Important quote');
+    const previewBtn = page.getByRole('button', { name: 'Preview tab' });
+    await previewBtn.click();
+    const previewArea = page.getByTestId('rich-text-preview');
+    await expect(previewArea).toBeVisible();
+    await previewArea.screenshot({
+      path: './tests/screenshots/component-rich-text-preview.png',
+      animations: 'disabled',
+    });
   });
 
   test('Capture Edit Issue Modal Snapshot', async ({ page }) => {

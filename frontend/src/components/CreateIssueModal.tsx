@@ -8,6 +8,7 @@ import { AssigneeSelect } from './AssigneeSelect.tsx';
 import { IssueTypeSelect } from './IssueTypeSelect.tsx';
 import { PrioritySelect } from './PrioritySelect.tsx';
 import { StatusSelect } from './StatusSelect.tsx';
+import { RichTextEditor } from './RichTextEditor.tsx';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -159,7 +160,7 @@ export function CreateIssueModal({
             />
           </div>
 
-          {/* Description Input */}
+          {/* Description Input (Rich Text / Markdown) */}
           <div>
             <label
               htmlFor="create-description"
@@ -167,13 +168,12 @@ export function CreateIssueModal({
             >
               Description
             </label>
-            <textarea
+            <RichTextEditor
               id="create-description"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
+              placeholder="Add more details, rich text formatting, or markdown..."
               rows={3}
-              className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)] resize-y"
-              placeholder="Add more details about this issue..."
             />
           </div>
 

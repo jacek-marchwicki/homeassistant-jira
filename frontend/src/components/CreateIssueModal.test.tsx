@@ -143,7 +143,9 @@ describe('CreateIssueModal component', () => {
       root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
     });
 
-    const cancelBtn = container.querySelector('button[type="button"]') as HTMLButtonElement;
+    const cancelBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Cancel'
+    ) as HTMLButtonElement;
     await act(async () => {
       cancelBtn.click();
     });

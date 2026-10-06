@@ -246,7 +246,13 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
 
-    // 3. Verify and capture Created & Updated dates badge
+    // 3. Verify Jira browse link format
+    const modalJiraLink = modal.locator('a[aria-label="Open PROJ-101 in Jira"]');
+    await expect(modalJiraLink).toBeVisible();
+    await expect(modalJiraLink).toHaveAttribute('target', '_blank');
+    await expect(modalJiraLink).toHaveAttribute('href', /browse\/PROJ-101/);
+
+    // 4. Verify and capture Created & Updated dates badge
     const datesBar = modal.getByTestId('edit-issue-dates');
     await expect(datesBar).toBeVisible();
     await expect(datesBar).toContainText('Created:');
@@ -405,6 +411,28 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await issueCard.screenshot({
       path: './tests/screenshots/component-card-jira-link-hover.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Edit Issue Modal Jira Link Hover Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
+    await editButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    const modalJiraLink = modal.locator('a[aria-label="Open PROJ-101 in Jira"]');
+    await expect(modalJiraLink).toBeVisible();
+    await expect(modalJiraLink).toHaveAttribute('href', /browse\/PROJ-101/);
+
+    await modalJiraLink.hover();
+    await page.waitForTimeout(100);
+
+    const header = modal.locator('div.flex.items-center.justify-between').first();
+    await header.screenshot({
+      path: './tests/screenshots/component-modal-edit-jira-link-hover.png',
       animations: 'disabled',
     });
   });

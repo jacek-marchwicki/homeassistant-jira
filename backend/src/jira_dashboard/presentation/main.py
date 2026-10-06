@@ -320,7 +320,9 @@ async def get_board() -> BoardResponse:
             "Active Issues" if board_id and board_id != "engineering-1" else "Active Sprint 42"
         )
 
-    jira_base_url = (settings.jira_url or "https://jira.example.com").rstrip("/")
+    jira_base_url = (settings.jira_url or "https://jira.example.com").strip().rstrip("/")
+    if jira_base_url.endswith("/browse"):
+        jira_base_url = jira_base_url[:-7].rstrip("/")
 
     return BoardResponse(
         board_id=board_id,

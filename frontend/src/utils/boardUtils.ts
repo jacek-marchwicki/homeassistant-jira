@@ -452,14 +452,40 @@ export function filterIssues(
 
 /**
  * Constructs the canonical Jira issue URL to open in Jira.
- * Uses issue.url if provided, otherwise constructs ${jiraBaseUrl}/browse/${issue.key}.
+ * Guarantees a browser-friendly URL in the format https://<domain>/browse/<KEY>
+ * (e.g. https://marchwicki.atlassian.net/browse/HOME-15103).
+ * Sanitizes against Atlassian API Gateway base URLs (api.atlassian.com) or duplicate /browse paths.
  */
 export function getJiraIssueUrl(issue: JiraIssue, jiraBaseUrl?: string): string {
-  if (issue.url && issue.url.trim()) {
-    return issue.url.trim();
+  const isBrowseUrl = (url?: string | null): boolean => {
+    if (!url || !url.trim()) return false;
+    const trimmed = url.trim();
+    if (trimmed.includes('api.atlassian.com')) return false;
+    if (trimmed.includes('/rest/api/')) return false;
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  };
+
+  const cleanBase = (jiraBaseUrl || '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/browse\/?$/, '');
+
+  // If a valid custom Jira base URL is configured, prioritize canonical /browse/<KEY>
+  if (
+    cleanBase &&
+    !cleanBase.includes('api.atlassian.com') &&
+    cleanBase !== 'https://jira.example.com'
+  ) {
+    return `${cleanBase}/browse/${issue.key}`;
   }
-  const base = (jiraBaseUrl || 'https://jira.example.com').trim().replace(/\/+$/, '');
-  return `${base}/browse/${issue.key}`;
+
+  // Fallback to issue.url if it is an existing valid browse link
+  if (isBrowseUrl(issue.url)) {
+    return issue.url!.trim();
+  }
+
+  const fallback = cleanBase || 'https://jira.example.com';
+  return `${fallback}/browse/${issue.key}`;
 }
 
 

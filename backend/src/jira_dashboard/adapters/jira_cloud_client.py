@@ -94,8 +94,12 @@ class JiraCloudClient(JiraClientProtocol):
     ) -> None:
         self.settings = settings
         self._custom_client = http_client is not None
-        base_url = (settings.jira_url or "https://jira.example.com").rstrip("/")
-        self.base_url = base_url
+        raw_url = (settings.jira_url or "https://jira.example.com").strip()
+        clean_url = raw_url.rstrip("/")
+        if clean_url.endswith("/browse"):
+            clean_url = clean_url[:-7].rstrip("/")
+        self.jira_browse_url = clean_url or "https://jira.example.com"
+        self.base_url = self.jira_browse_url
 
         headers = {
             "Accept": "application/json",
@@ -332,13 +336,14 @@ class JiraCloudClient(JiraClientProtocol):
                 description = None
 
         created_at = fields.get("created") or fields.get("created_at")
+        url = self._determine_browse_url(data, key)
 
         return JiraIssue(
             id=issue_id,
             key=key,
             summary=summary,
             description=description,
-            url=f"{self.base_url}/browse/{key}",
+            url=url,
             issue_type=issue_type,
             priority=priority,
             status=status,
@@ -349,6 +354,36 @@ class JiraCloudClient(JiraClientProtocol):
             created_at=created_at,
             updated_at=updated_at,
         )
+
+    def _determine_browse_url(self, issue_data: dict[str, Any], key: str) -> str:
+        """Determine human-browsable Jira web URL for an issue.
+
+        Guarantees format: https://<domain>/browse/<KEY> (e.g. https://marchwicki.atlassian.net/browse/HOME-15103).
+        Avoids Atlassian API Gateway base URLs (api.atlassian.com) which cannot be browsed directly.
+        """
+        # 1. Configured jira_browse_url if not gateway and not example
+        if (
+            self.jira_browse_url
+            and "api.atlassian.com" not in self.jira_browse_url
+            and self.jira_browse_url != "https://jira.example.com"
+        ):
+            return f"{self.jira_browse_url}/browse/{key}"
+
+        # 2. Extract domain from issue 'self' link if it contains direct site domain
+        self_url = str(issue_data.get("self") or "")
+        if self_url.startswith("http") and "api.atlassian.com" not in self_url:
+            parts = self_url.split("/rest/")
+            if len(parts) > 1:
+                site_base = parts[0].rstrip("/")
+                return f"{site_base}/browse/{key}"
+
+        # 3. Fallback
+        base = self.jira_browse_url or "https://jira.example.com"
+        if "api.atlassian.com" in base and self.settings.jira_url:
+            base = self.settings.jira_url.rstrip("/")
+        if base.endswith("/browse"):
+            base = base[:-7].rstrip("/")
+        return f"{base}/browse/{key}"
 
     async def get_board_issues(self, board_id: str) -> list[JiraIssue]:
         """Fetch all issues for a given board ID or project key."""

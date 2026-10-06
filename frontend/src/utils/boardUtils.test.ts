@@ -755,22 +755,52 @@ describe('boardUtils', () => {
     it('constructs url from jiraBaseUrl when issue.url is not set', () => {
       const issueWithoutUrl: JiraIssue = {
         ...mockBaseIssue,
-        key: 'PROJ-200',
+        key: 'HOME-15103',
         url: undefined,
       };
-      expect(getJiraIssueUrl(issueWithoutUrl, 'https://mycompany.atlassian.net')).toBe(
-        'https://mycompany.atlassian.net/browse/PROJ-200'
+      expect(getJiraIssueUrl(issueWithoutUrl, 'https://marchwicki.atlassian.net')).toBe(
+        'https://marchwicki.atlassian.net/browse/HOME-15103'
+      );
+    });
+
+    it('overrides api.atlassian.com in issue.url with canonical browse URL using jiraBaseUrl', () => {
+      const issueWithApiUrl: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'HOME-15103',
+        url: 'https://api.atlassian.com/ex/jira/12345/browse/HOME-15103',
+      };
+      expect(getJiraIssueUrl(issueWithApiUrl, 'https://marchwicki.atlassian.net')).toBe(
+        'https://marchwicki.atlassian.net/browse/HOME-15103'
       );
     });
 
     it('handles trailing slash on jiraBaseUrl correctly', () => {
       const issue: JiraIssue = {
         ...mockBaseIssue,
-        key: 'PROJ-300',
+        key: 'HOME-15103',
       };
-      expect(getJiraIssueUrl(issue, 'https://mycompany.atlassian.net///')).toBe(
-        'https://mycompany.atlassian.net/browse/PROJ-300'
+      expect(getJiraIssueUrl(issue, 'https://marchwicki.atlassian.net///')).toBe(
+        'https://marchwicki.atlassian.net/browse/HOME-15103'
       );
+    });
+
+    it('strips accidental trailing /browse or /browse/ on jiraBaseUrl', () => {
+      const issue: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'HOME-15103',
+      };
+      expect(getJiraIssueUrl(issue, 'https://marchwicki.atlassian.net/browse/')).toBe(
+        'https://marchwicki.atlassian.net/browse/HOME-15103'
+      );
+    });
+
+    it('rejects api.atlassian.com and falls back when no custom base url is provided', () => {
+      const issue: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'HOME-15103',
+        url: 'https://api.atlassian.com/ex/jira/cloud-id/browse/HOME-15103',
+      };
+      expect(getJiraIssueUrl(issue)).toBe('https://jira.example.com/browse/HOME-15103');
     });
 
     it('defaults to https://jira.example.com when no base url or issue url is present', () => {

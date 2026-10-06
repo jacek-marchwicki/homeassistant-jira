@@ -80,6 +80,7 @@ def test_get_board_issues_success() -> None:
         assert issue.assignee is not None
         assert issue.assignee.display_name == "Jacek M"
         assert issue.story_points == 5.0
+        assert issue.url == "https://test-jira.atlassian.net/browse/DEV-1001"
         assert issue.due_date == "2026-10-15"
         assert issue.start_date == "2026-10-10"
         await client.close()
@@ -410,6 +411,44 @@ def test_create_issue_success() -> None:
         assert created_payload is not None
         assert created_payload["fields"]["project"]["key"] == "DEV"
         assert created_payload["fields"]["summary"] == "Brand new issue created via Cloud API"
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_jira_browse_url_preserves_custom_domain_even_after_gateway_switch() -> None:
+    """Verify issue url uses browse URL even when base_url is api.atlassian.com."""
+
+    async def _test() -> None:
+        settings = JiraDashboardSettings(
+            jira_url="https://marchwicki.atlassian.net",
+            jira_email="dev@example.com",
+            jira_api_token="ATATT-12345",
+        )
+        transport = httpx.MockTransport(lambda req: httpx.Response(200, json={}))
+        mock_http = httpx.AsyncClient(
+            transport=transport,
+            base_url="https://marchwicki.atlassian.net",
+        )
+        client = JiraCloudClient(settings, http_client=mock_http)
+        # Simulate gateway switch
+        client.base_url = "https://api.atlassian.com/ex/jira/abc-123"
+
+        issue = client._parse_issue(
+            {
+                "id": "15103",
+                "key": "HOME-15103",
+                "fields": {
+                    "summary": "Fix Jira Issue Link Format",
+                    "issuetype": {"name": "Bug"},
+                    "priority": {"name": "High"},
+                    "status": {"name": "In Progress", "statusCategory": {"key": "indeterminate"}},
+                    "updated": "2026-10-06T00:00:00Z",
+                },
+            }
+        )
+
+        assert issue.url == "https://marchwicki.atlassian.net/browse/HOME-15103"
         await client.close()
 
     asyncio.run(_test())

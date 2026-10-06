@@ -77,7 +77,7 @@ def test_addon_build_yaml_is_valid() -> None:
     expected_archs = ["aarch64", "amd64", "armhf", "armv7", "i386"]
     for arch in expected_archs:
         assert arch in build_from
-        assert "base-python" in build_from[arch]
+        assert build_from[arch] == "python:3.11-alpine"
 
 
 def test_addon_dockerfile_contents() -> None:
@@ -340,3 +340,52 @@ def test_publish_images_workflow_is_valid() -> None:
     # Verify GHCR registry references and permissions
     assert addon_job["permissions"]["packages"] == "write"
     assert jobs["build-standalone-image"]["permissions"]["packages"] == "write"
+
+
+def test_docker_base_images_exist_and_are_resolvable() -> None:
+    """Ensure all base images in build.yaml and publish-images.yml exist and resolve."""
+    import shutil
+    import subprocess
+
+    build_path = PROJECT_ROOT / "addon" / "build.yaml"
+    with open(build_path, encoding="utf-8") as f:
+        build_cfg = yaml.safe_load(f)
+
+    build_from_images = list(build_cfg.get("build_from", {}).values())
+
+    workflow_path = PROJECT_ROOT / ".github" / "workflows" / "publish-images.yml"
+    with open(workflow_path, encoding="utf-8") as f:
+        workflow = yaml.safe_load(f)
+
+    matrix = (
+        workflow.get("jobs", {})
+        .get("build-addon-images", {})
+        .get("strategy", {})
+        .get("matrix", {})
+        .get("include", [])
+    )
+    workflow_base_images = [entry.get("base") for entry in matrix if "base" in entry]
+
+    all_base_images = set(build_from_images + workflow_base_images)
+
+    # Base images must not use deprecated, removed ghcr.io/home-assistant/*-base-python images
+    for image in all_base_images:
+        assert "ghcr.io/home-assistant/" not in image or "base-python:" not in image, (
+            f"Image '{image}' uses deprecated or non-existent Home Assistant base-python image. "
+            "Use official multi-arch python:3.11-alpine instead."
+        )
+
+    # If docker is available, verify every base image manifest resolves on the registry
+    docker_bin = shutil.which("docker")
+    if docker_bin:
+        for image in all_base_images:
+            res = subprocess.run(
+                [docker_bin, "manifest", "inspect", image],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert res.returncode == 0, (
+                f"Docker failed to resolve base image metadata for '{image}':\n"
+                f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+            )

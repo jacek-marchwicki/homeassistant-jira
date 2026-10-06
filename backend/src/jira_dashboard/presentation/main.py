@@ -363,6 +363,7 @@ app.add_middleware(
 
 
 @app.get("/health")
+@app.get("/api/health")
 def health() -> dict[str, str]:
     """Health check endpoint for container orchestrators and Home Assistant supervision."""
     return {"status": "ok", "app": "homeassistant-jira", "version": "0.1.0"}

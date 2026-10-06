@@ -258,6 +258,27 @@ Simulates the exact GitHub Actions environment inside Docker Ubuntu containers m
 
 3. Open **`http://localhost:3000`** in your browser.
 
+### Running with Docker & Docker Compose (Standalone)
+
+You can deploy the complete dashboard as an independent, containerized web service using Docker and Docker Compose:
+
+1. **Configure Environment Variables**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Jira instance URL, credentials, and board ID
+   ```
+
+2. **Start the Production Service**:
+   ```bash
+   docker compose up -d
+   ```
+   *The production application starts at `http://localhost:8000` with non-root security, automated health checks, and embedded React frontend.*
+
+3. **Start Development Container with Hot-Reload**:
+   ```bash
+   docker compose -f docker-compose.dev.yml up
+   ```
+
 ---
 
 ## 🏠 Installation in Home Assistant
@@ -265,7 +286,7 @@ Simulates the exact GitHub Actions environment inside Docker Ubuntu containers m
 The application is packaged as a **Home Assistant Add-on** with native **Ingress** support, meaning it integrates securely into the Home Assistant interface and Companion mobile apps without exposing external ports.
 
 ### Add-on Manifest & Packaging
-The Add-on manifest is located at [`addon/config.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/config.yaml) and uses the multi-stage [`addon/Dockerfile`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/Dockerfile).
+The Add-on manifest is located at [`addon/config.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/config.yaml), multi-arch builder configuration at [`addon/build.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/build.yaml), and container build definition at [`addon/Dockerfile`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/Dockerfile).
 
 ### Method 1: Installing via Home Assistant Add-on Store (Repository)
 1. In Home Assistant, navigate to **Settings** > **Add-ons** > **Add-on Store**.
@@ -330,7 +351,7 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] **Initial Board Loading State**: Display a dedicated, accessible progress indicator while sprint data is loading, preventing the flash of placeholder text ("Engineering Sprint Board", "Active Sprint 42") and sample columns
   - [x] **Issue Editing**: Full-stack capability to edit issue details (summary, issue type, priority, workflow status, assignee, story points, due date, start date) with sub-50ms optimistic UI updates, background Jira synchronization, WebSocket broadcast, and automatic rollback on failure
   - [x] **Issue Creation**: Direct issue creation modal accessible from the top navigation bar with optimistic UI state mutation (<50ms), field validation (summary, issue type, priority, destination status, assignee, story points, due/start dates), REST API endpoint (`POST /api/issues`), real-time WebSocket broadcast (`issue_created`), and duplicate resolution
-  - [x] **Recent Done Column Filtering**: Limit issues displayed in the "DONE" status column to those updated within the last 2 days (<=48 hours or calendar day threshold), keeping active boards focused on recent accomplishments while retaining older completed issues in the backlog and history
+  - [x] **Recent Done Column Filtering**: Refined the 'Done' column to display exclusively issues completed or updated within the last 2 days (<=48 hours or calendar threshold), preserving team focus on recent progress and preventing board clutter while retaining full historical issues in the backlog
   - [x] **Visual Screenshot Testing for Issue Dialogs**: Automated Playwright visual regression testing suite capturing full-viewport and isolated component snapshots for both Create Issue and Edit Issue modal dialogs across UI themes
   - [x] **Interactive Assignee Selector with Suggestions & Search**: Dedicated touch-friendly assignee picker for issue creation and editing with avatar previews, quick suggestion list populated from active board assignees, unassigned quick-toggle, instant search filtering, and custom assignee entry
   - [x] **'Recreate After' Interval Support**: Support for recurring task recreation intervals (e.g. '7d', '2 weeks', '1 month') across domain models, REST API (`PUT`/`POST`), WebSocket broadcasts, issue creation/editing dialogs, and issue card indicators
@@ -342,8 +363,8 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] **Issue Comments Management (View, Add, Edit, Delete)**: Full-lifecycle comment management enabling users to view issue discussions, post new comments with active user attribution, perform inline edits, and delete comments with confirmation. Supported across backend REST APIs (`GET`/`POST`/`PUT`/`DELETE /api/issues/{key}/comments`), domain models (`JiraComment`), Jira Cloud ADF parsing, real-time WebSocket broadcast events (`comment_created`, `comment_updated`, `comment_deleted`), and automated Playwright visual screenshot regression testing
   - [x] **Issue Lifecycle Timestamps in Details Screen**: Dedicated metadata display of Created and Updated dates in the Edit Issue details dialog with calendar and clock indicators, formatted locale timestamps, domain model integration (`created_at` field on `JiraIssue`), Jira Cloud API parsing, and automated visual screenshot regression verification
   - [x] **Rich Text & Markdown Formatting in Issue Creation and Details**: Rich text markdown editor with formatting toolbar (Bold, Italic, Headings, Bullet Lists, Numbered Lists, Code Snippets, Blockquotes, Hyperlinks), keyboard shortcuts (Ctrl/Cmd+B, Ctrl/Cmd+I), selection preservation, dual 'Write' and 'Preview' tabs, and custom safe markdown parsing without heavy external dependencies across Create Issue and Edit Issue modals, backed by comprehensive unit tests and automated Playwright visual screenshot regression testing
-  - [x] **Dynamic Assignee Suggestions & Removal of Artificial Fallbacks**: Eliminated hardcoded placeholder entries ("Alex Lead") from assignee pickers and "Who is Me" identity selectors, dynamically synthesizing suggestions strictly from active board issues and configurable current user identity
-  - [x] **Filter Bar Button Alignment & Height Normalization**: Standardized height (`h-8` / 32px) and flex alignment across all filter bar elements ("All Issues", "Assigned to Me" split button with "Who is Me" dropdown chevron, "Active", and search input), eliminating vertical misalignment and pill height discrepancies
+  - [x] **Context-Aware Assignee Discovery & Clean Identity Modeling**: Replaced hardcoded static user placeholders with dynamic assignee discovery synthesized directly from live board issues and configurable user preferences, ensuring clean identity modeling across pickers, filters, and cards
+  - [x] **Filter Bar Layout Alignment & Height Harmonization**: Unified vertical alignment and uniform height (`h-8` / 32px) across all filter controls—including quick-filter pills, the "Assigned to Me" identity dropdown, toggle buttons, and search inputs—ensuring visual rhythm and eliminating layout jitter
   - [x] **Create and Edit Issue Form Field Height Standardization**: Enforced consistent height (`h-10` / 40px) across all form inputs (summary, due date, start date, recreate interval) and custom semantic select triggers (Issue Type, Priority, Status, Assignee) in Create Issue and Edit Issue dialogs, eliminating vertical discrepancies
   - [x] **Estimation-Free Workflow Support (Story Points Concealment)**: Streamlined Kanban cards, Backlog rows, view headers, and Create/Edit issue dialogs by cleanly concealing story point inputs and badges, allowing teams practicing estimation-free flow to focus purely on delivery without visual distraction
   - [x] **Canonical Jira Issue Browse Link Normalization**: Ensured all issue hyperlinks across Kanban cards, Backlog rows, and Edit Issue headers reliably format as human-browsable links (`https://<domain>/browse/<KEY>`, e.g. `https://marchwicki.atlassian.net/browse/HOME-15103`), eliminating Atlassian API Gateway internal URLs (`api.atlassian.com`) and sanitizing redundant path suffixes, verified with unit tests and visual screenshot regression testing
@@ -351,9 +372,9 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] **Epic Issue Type Classification & Recurrence Interval Suggestions**: Resolved issue type misclassification where Jira epics (e.g. `HOME-2200`) defaulted to tasks by introducing first-class `IssueType.EPIC` support across domain models, Jira Cloud client adapters, frontend types, purple lightning icon badges (`Zap`), and semantic type selectors. Added bidirectional parsing for recurrence intervals (`customfield_10027`) alongside one-tap suggestion chips (`1d`, `1w`, `1y`, `2y!`) and input hints matching real-world recurring Jira task schedules
   - [x] **Edit Issue Modal Layout Hierarchy & Description Preview Polish**: Reorganized issue editing modal layout by repositioning creation and update timestamps immediately above the comments stream, introducing generous vertical spacing and a distinct border divider below primary action buttons, and configuring the markdown description editor to default to 'Preview' mode when viewing existing issues while preserving 'Write' mode for new issue creation, fully backed by unit tests and automated Playwright visual screenshot regression testing
   - [x] **Merged In-Progress Tasks in Ready Column & 'Hide Epics' Filter**: Merged all uncompleted intermediate workflow issues (e.g., "In Progress", "In Review") directly into the "Ready" / "To Do" column under an organized "In Progress" sub-section positioned below "Overdue" and "Expedited" sections (strict precedence: `Overdue` > `Expedited` > `In Progress` > `Other/Ready`). Intermediate workflow columns are hidden by default to keep the board clean, dynamically reappearing as drop targets during drag-and-drop operations. Added a dedicated "Hide Epics" filter toggle pill in the top filter bar (enabled by default) to keep boards focused on actionable items while preserving instant one-tap epic visibility. Fully backed by unit tests, full-stack E2E integration tests, and automated visual regression snapshot testing
-- [ ] **Phase 4: Home Assistant Integration & Packaging**
-  - [ ] Home Assistant Add-on container configuration (`config.yaml`, `build.yaml`, Ingress)
-  - [ ] Standalone Docker packaging and docker-compose configurations
+- [x] **Phase 4: Home Assistant Integration & Packaging**
+  - [x] **Home Assistant Add-on Container Configuration (`config.yaml`, `build.yaml`, Ingress)**: Full Home Assistant Add-on specification with multi-architecture builder configuration (`aarch64`, `amd64`, `armhf`, `armv7`, `i386` in `addon/build.yaml`), complete options and validation schema matching backend settings (`addon/config.yaml`), dynamic Ingress ASGI middleware (`X-Ingress-Path` header resolution and root path rewrite), container healthcheck, and Home Assistant theme design token bridge
+  - [x] **Standalone Docker Packaging & Docker-Compose Configurations**: Production multi-stage `Dockerfile` with non-root security (`appuser` UID 10001) serving pre-built React 19 static distribution via FastAPI/Uvicorn, standalone `docker-compose.yml` with healthchecks and restart policies, live-reload development `docker-compose.dev.yml` with volume mounts, comprehensive `.env.example` template, clean `.dockerignore`, backend packaging test suite, and automated Home Assistant Ingress visual regression testing
 
 ---
 
@@ -361,4 +382,5 @@ This file defines coding standards, testing requirements, architectural boundari
 
 This project is licensed under the **Apache License, Version 2.0**.
 See the [LICENSE](LICENSE) file for the full license text and copyright notices.
+
 

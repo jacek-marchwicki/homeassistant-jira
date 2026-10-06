@@ -13,24 +13,26 @@ COPY frontend/ ./
 RUN pnpm build
 
 # Stage 2: Python Backend Runtime for Home Assistant Add-on
-FROM python:3.11-alpine AS runner
+ARG BUILD_FROM=python:3.11-alpine
+FROM ${BUILD_FROM} AS runner
 WORKDIR /app
 
 # Install system dependencies
 RUN apk add --no-cache curl bash
 
-# Install backend dependencies
-COPY backend/pyproject.toml ./backend/
-RUN pip install --no-cache-dir -e "./backend"
-
-# Copy backend source code
-COPY backend/src ./backend/src
+# Copy backend source code and dependencies
+COPY backend/ ./backend/
+RUN pip install --no-cache-dir "./backend"
 
 # Copy built frontend assets to static directory for Ingress serving
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Expose Ingress port
 EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://127.0.0.1:8000/health || exit 1
 
 # Start Uvicorn ASGI server with dynamic root_path support for Ingress
 CMD ["python", "-m", "uvicorn", "jira_dashboard.presentation.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -11,6 +11,9 @@ arch:
   - i386
 startup: "services"
 boot: "auto"
+init: false
+homeassistant: "2024.1.0"
+stage: "stable"
 ingress: true
 ingress_port: 8000
 panel_icon: "mdi:jira"
@@ -19,11 +22,13 @@ options:
   jira_url: "https://your-domain.atlassian.net"
   jira_email: "user@example.com"
   jira_api_token: ""
-  jira_board_id: ""
+  jira_board_id: "engineering-1"
   polling_interval_seconds: 60
+  jira_jql: ""
 schema:
-  jira_url: "url"
-  jira_email: "str"
-  jira_api_token: "password"
+  jira_url: "str?"
+  jira_email: "str?"
+  jira_api_token: "password?"
   jira_board_id: "str?"
   polling_interval_seconds: "int?"
+  jira_jql: "str?"

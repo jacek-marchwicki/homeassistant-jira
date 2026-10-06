@@ -607,5 +607,28 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Home Assistant Ingress Viewport & Theme Bridge Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // Inject Home Assistant design tokens to simulate Home Assistant Ingress host styling
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty('--primary-background-color', '#101724');
+      document.documentElement.style.setProperty('--card-background-color', '#1c2538');
+      document.documentElement.style.setProperty('--ha-card-background', '#232e42');
+      document.documentElement.style.setProperty('--primary-text-color', '#e1e7f0');
+      document.documentElement.style.setProperty('--secondary-text-color', '#94a3b8');
+      document.documentElement.style.setProperty('--accent-color', '#0284c7');
+      document.documentElement.style.setProperty('--divider-color', '#2d3b55');
+    });
+
+    await page.waitForTimeout(200);
+
+    await page.screenshot({
+      path: './tests/screenshots/home-assistant-ingress.png',
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
 });
 

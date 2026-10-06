@@ -207,4 +207,35 @@ describe('CreateIssueModal component', () => {
     );
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
+
+  it('applies full-screen styling on mobile viewports and dialog styling on desktop', async () => {
+    const handleClose = vi.fn();
+
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
+    });
+
+    const modalDialog = container.querySelector('div[role="dialog"]') as HTMLDivElement;
+    expect(modalDialog).not.toBeNull();
+    expect(modalDialog.className).toContain('fixed inset-0');
+    expect(modalDialog.className).toContain('sm:items-center');
+    expect(modalDialog.className).toContain('sm:justify-center');
+    expect(modalDialog.className).toContain('sm:p-4');
+
+    const dialogBox = modalDialog.querySelector(':scope > div') as HTMLDivElement;
+    expect(dialogBox).not.toBeNull();
+    expect(dialogBox.className).toContain('w-full');
+    expect(dialogBox.className).toContain('h-full');
+    expect(dialogBox.className).toContain('sm:h-auto');
+    expect(dialogBox.className).toContain('sm:max-h-[90vh]');
+    expect(dialogBox.className).toContain('sm:max-w-lg');
+    expect(dialogBox.className).toContain('rounded-none');
+    expect(dialogBox.className).toContain('sm:rounded-xl');
+    expect(dialogBox.className).toContain('border-0');
+    expect(dialogBox.className).toContain('sm:border');
+    expect(dialogBox.className).toContain('shadow-none');
+    expect(dialogBox.className).toContain('sm:shadow-2xl');
+    expect(dialogBox.className).toContain('p-4');
+    expect(dialogBox.className).toContain('sm:p-6');
+  });
 });

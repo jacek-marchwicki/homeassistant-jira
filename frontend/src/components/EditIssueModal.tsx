@@ -116,14 +116,14 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex sm:items-center sm:justify-center sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={`Edit Issue ${issue.key}`}
     >
       <div
-        className="w-full max-w-lg bg-[var(--jira-surface)] border border-[var(--jira-border)] rounded-xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto"
+        className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-[var(--jira-surface)] border-0 sm:border border-[var(--jira-border)] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl p-4 sm:p-6 pb-8 sm:pb-6 relative overflow-y-auto overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}

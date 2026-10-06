@@ -356,6 +356,29 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(previewArea).toHaveScreenshot('component-rich-text-preview.png');
   });
 
+  test('Capture Mobile Create Issue Full-Screen Modal Snapshot (375x667)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    const createButton = page.getByRole('button', { name: 'Create Issue' });
+    await createButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#create-issue-title')).toHaveText('Create Issue');
+
+    const dialogBox = modal.locator('> div');
+    const box = await dialogBox.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      // In mobile full-screen mode, the modal box spans full viewport width and height
+      expect(box.width).toBe(375);
+      expect(box.height).toBe(667);
+      expect(box.x).toBe(0);
+      expect(box.y).toBe(0);
+    }
+
+    await expect(page).toHaveScreenshot('modal-create-issue-mobile.png');
+  });
+
   test('Capture Edit Issue Modal Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
@@ -394,6 +417,29 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(datesBar).toContainText('Created:');
     await expect(datesBar).toContainText('Updated:');
     await expect(datesBar).toHaveScreenshot('component-edit-dates.png');
+  });
+
+  test('Capture Mobile Edit Issue Full-Screen Modal Snapshot (375x667)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
+    await editButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#edit-issue-title')).toContainText('Edit Issue');
+
+    const dialogBox = modal.locator('> div');
+    const box = await dialogBox.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      // In mobile full-screen mode, the modal box spans full viewport width and height
+      expect(box.width).toBe(375);
+      expect(box.height).toBe(667);
+      expect(box.x).toBe(0);
+      expect(box.y).toBe(0);
+    }
+
+    await expect(page).toHaveScreenshot('modal-edit-issue-mobile.png');
   });
 
   test('Capture Edit Issue Modal with Comments Snapshot', async ({ page }) => {

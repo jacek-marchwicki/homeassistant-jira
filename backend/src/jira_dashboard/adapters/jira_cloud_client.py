@@ -65,6 +65,8 @@ def map_issue_type(name: str) -> IssueType:
         return IssueType.BUG
     if "story" in lowered:
         return IssueType.STORY
+    if "epic" in lowered:
+        return IssueType.EPIC
     if "subtask" in lowered or "sub-task" in lowered:
         return IssueType.SUBTASK
     return IssueType.TASK
@@ -310,6 +312,14 @@ class JiraCloudClient(JiraClientProtocol):
         )
         start_date = str(raw_start_date) if raw_start_date is not None else None
 
+        # Recreate after (customfield_10027 or standard aliases)
+        raw_recreate_after = (
+            fields.get("customfield_10027")
+            or fields.get("recreate_after")
+            or fields.get("recreateAfter")
+        )
+        recreate_after = str(raw_recreate_after) if raw_recreate_after is not None else None
+
         # Description
         raw_description = fields.get("description")
         description: str | None = None
@@ -351,6 +361,7 @@ class JiraCloudClient(JiraClientProtocol):
             story_points=story_points,
             due_date=due_date,
             start_date=start_date,
+            recreate_after=recreate_after,
             created_at=created_at,
             updated_at=updated_at,
         )
@@ -691,6 +702,8 @@ class JiraCloudClient(JiraClientProtocol):
             fields["duedate"] = due_date if due_date else None
         if assignee_account_id is not None:
             fields["assignee"] = {"accountId": assignee_account_id} if assignee_account_id else None
+        if recreate_after is not None:
+            fields["customfield_10027"] = recreate_after if recreate_after else None
 
         if fields:
             try:
@@ -758,6 +771,8 @@ class JiraCloudClient(JiraClientProtocol):
             fields["duedate"] = due_date
         if assignee_account_id:
             fields["assignee"] = {"accountId": assignee_account_id}
+        if recreate_after:
+            fields["customfield_10027"] = recreate_after
 
         try:
             res = await self._send_request("POST", "/rest/api/3/issue", json={"fields": fields})

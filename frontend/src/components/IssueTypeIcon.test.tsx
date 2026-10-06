@@ -56,4 +56,21 @@ describe('IssueTypeIcon component', () => {
       root.unmount();
     });
   });
+
+  it('renders epic icon with purple styling', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<IssueTypeIcon type="epic" />);
+    });
+
+    const elem = container.querySelector('[aria-label="Epic"]');
+    expect(elem).not.toBeNull();
+    expect(elem?.className).toContain('text-purple-500');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

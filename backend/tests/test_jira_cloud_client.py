@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from jira_dashboard.adapters.jira_client import JiraAPIError
-from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
+from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient, map_issue_type
 from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import IssueType, Priority, StatusCategory
 
@@ -661,6 +661,62 @@ def test_get_comments_pagination() -> None:
         assert len(comments) == 110
         assert comments[0].id == "100"
         assert comments[109].id == "209"
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_map_issue_type() -> None:
+    """Verify map_issue_type correctly classifies all issue types including epic."""
+    assert map_issue_type("Epic") == IssueType.EPIC
+    assert map_issue_type("epic") == IssueType.EPIC
+    assert map_issue_type("EPIC") == IssueType.EPIC
+    assert map_issue_type("Story") == IssueType.STORY
+    assert map_issue_type("Bug") == IssueType.BUG
+    assert map_issue_type("Sub-task") == IssueType.SUBTASK
+    assert map_issue_type("Subtask") == IssueType.SUBTASK
+    assert map_issue_type("Task") == IssueType.TASK
+    assert map_issue_type("Unknown Custom Type") == IssueType.TASK
+    assert map_issue_type("") == IssueType.TASK
+
+
+def test_parse_issue_epic_and_recreate_after() -> None:
+    """Verify JiraCloudClient correctly parses Epic issue types and recreate_after."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert "/rest/api/3/issue/HOME-2200" in str(request.url)
+            return httpx.Response(
+                200,
+                json={
+                    "id": "12203",
+                    "key": "HOME-2200",
+                    "fields": {
+                        "summary": "Faith and Scripture Study",
+                        "issuetype": {
+                            "id": "10000",
+                            "name": "Epic",
+                            "subtask": False,
+                        },
+                        "priority": {"name": "Medium"},
+                        "status": {
+                            "id": "10003",
+                            "name": "Ready",
+                            "statusCategory": {"id": 2, "key": "new", "name": "To Do"},
+                        },
+                        "customfield_10027": "!1y",
+                        "created": "2020-06-07T18:48:16.931+0200",
+                        "updated": "2022-10-08T20:39:00.710+0200",
+                    },
+                },
+            )
+
+        client = create_mock_client(handler)
+        issue = await client.get_issue("HOME-2200")
+        assert issue is not None
+        assert issue.key == "HOME-2200"
+        assert issue.issue_type == IssueType.EPIC
+        assert issue.recreate_after == "!1y"
         await client.close()
 
     asyncio.run(_test())

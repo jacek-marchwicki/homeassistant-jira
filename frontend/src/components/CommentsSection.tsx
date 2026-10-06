@@ -7,9 +7,15 @@ import { getApiUrl } from '../utils/paths.ts';
 
 interface CommentsSectionProps {
   issueKey: string;
+  hideBorderTop?: boolean;
+  className?: string;
 }
 
-export function CommentsSection({ issueKey }: CommentsSectionProps) {
+export function CommentsSection({
+  issueKey,
+  hideBorderTop = false,
+  className = '',
+}: CommentsSectionProps) {
   const { currentUser } = useBoardStore();
 
   const [comments, setComments] = useState<JiraComment[]>([]);
@@ -166,7 +172,10 @@ export function CommentsSection({ issueKey }: CommentsSectionProps) {
   };
 
   return (
-    <div className="pt-4 border-t border-[var(--jira-border)] space-y-4" data-testid="comments-section">
+    <div
+      className={`${hideBorderTop ? '' : 'pt-4 border-t border-[var(--jira-border)]'} space-y-4 ${className}`}
+      data-testid="comments-section"
+    >
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--jira-text-secondary)] flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-[var(--jira-primary)]" />

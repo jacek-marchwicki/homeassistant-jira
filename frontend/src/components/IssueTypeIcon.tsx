@@ -1,12 +1,25 @@
-import { Bookmark, CheckSquare, CircleDot, CornerDownRight } from 'lucide-react';
+import { Bookmark, CheckSquare, CircleDot, CornerDownRight, Zap } from 'lucide-react';
+import { JiraIssueType } from '../types/jira.ts';
 
 interface IssueTypeIconProps {
-  type?: 'story' | 'bug' | 'task' | 'subtask' | string;
+  type?: JiraIssueType | string;
   className?: string;
 }
 
 export function IssueTypeIcon({ type = 'task', className = 'w-4 h-4' }: IssueTypeIconProps) {
   const normalized = (type || 'task').toLowerCase();
+
+  if (normalized === 'epic') {
+    return (
+      <span
+        title="Epic"
+        aria-label="Epic"
+        className="inline-flex items-center justify-center text-purple-500"
+      >
+        <Zap className={className} />
+      </span>
+    );
+  }
 
   if (normalized === 'story') {
     return (

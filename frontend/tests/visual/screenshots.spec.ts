@@ -233,26 +233,36 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(modal).toBeVisible();
     await expect(page.locator('#edit-issue-title')).toContainText('Edit Issue');
 
-    // 1. Capture full screen modal snapshot
+    // 1. Verify description defaults to Preview style when editing
+    const previewArea = modal.getByTestId('rich-text-preview');
+    await expect(previewArea).toBeVisible();
+
+    // 2. Verify Recreate after hints are present
+    const hint1d = modal.getByRole('button', { name: '1d' });
+    const hint2y = modal.getByRole('button', { name: '2y!' });
+    await expect(hint1d).toBeVisible();
+    await expect(hint2y).toBeVisible();
+
+    // 3. Capture full screen modal snapshot
     await page.screenshot({
       path: './tests/screenshots/modal-edit-issue.png',
       animations: 'disabled',
     });
 
-    // 2. Capture isolated modal dialog container
+    // 4. Capture isolated modal dialog container
     const dialogBox = modal.locator('> div');
     await dialogBox.screenshot({
       path: './tests/screenshots/component-modal-edit.png',
       animations: 'disabled',
     });
 
-    // 3. Verify Jira browse link format
+    // 5. Verify Jira browse link format
     const modalJiraLink = modal.locator('a[aria-label="Open PROJ-101 in Jira"]');
     await expect(modalJiraLink).toBeVisible();
     await expect(modalJiraLink).toHaveAttribute('target', '_blank');
     await expect(modalJiraLink).toHaveAttribute('href', /browse\/PROJ-101/);
 
-    // 4. Verify and capture Created & Updated dates badge
+    // 6. Verify and capture Created & Updated dates badge (above comments)
     const datesBar = modal.getByTestId('edit-issue-dates');
     await expect(datesBar).toBeVisible();
     await expect(datesBar).toContainText('Created:');
@@ -489,6 +499,73 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await page.screenshot({
       path: './tests/screenshots/board-high-volume-pagination.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Create Issue Modal with Issue Type Selector Open Snapshot (with Epic)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const createButton = page.getByRole('button', { name: 'Create Issue' });
+    await createButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    const typePicker = modal.locator('[role="combobox"][aria-label="Issue Type"]');
+    await typePicker.click();
+
+    const listbox = modal.locator('[role="listbox"][aria-label="Issue Type Options"]');
+    await expect(listbox).toBeVisible();
+    const epicOption = listbox.locator('[role="option"]', { hasText: 'Epic' });
+    await expect(epicOption).toBeVisible();
+
+    await modal.locator('> div').screenshot({
+      path: './tests/screenshots/component-modal-create-type-picker.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Epic Issue Card Snapshot (HOME-2200)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.route('**/api/board', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          board_id: 'HOME',
+          board_name: 'Home Sprint Board',
+          sprint_name: 'Current Sprint',
+          columns: [
+            { id: 'col-todo', name: 'To Do', category: 'todo', status_ids: ['10003'] },
+            { id: 'col-inprogress', name: 'In Progress', category: 'inprogress', status_ids: ['2'] },
+            { id: 'col-done', name: 'Done', category: 'done', status_ids: ['4'] },
+          ],
+          issues: [
+            {
+              id: '12203',
+              key: 'HOME-2200',
+              summary: 'Wiara, spowiedź i Pismo Święte',
+              issue_type: 'epic',
+              priority: 'medium',
+              status: { id: '10003', name: 'Ready', category: 'todo' },
+              recreate_after: '!1y',
+              updated_at: '2026-10-06T00:00:00Z',
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto('/');
+
+    const epicCard = page.locator('article', { hasText: 'HOME-2200' });
+    await expect(epicCard).toBeVisible();
+    const epicIcon = epicCard.locator('[aria-label="Epic"]');
+    await expect(epicIcon).toBeVisible();
+
+    await epicCard.screenshot({
+      path: './tests/screenshots/component-card-epic.png',
       animations: 'disabled',
     });
   });

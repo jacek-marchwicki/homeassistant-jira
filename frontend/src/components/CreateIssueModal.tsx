@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Plus, AlertCircle } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
-import { JiraPriority, JiraStatusCategory } from '../types/jira.ts';
+import { JiraIssueType, JiraPriority, JiraStatusCategory } from '../types/jira.ts';
 import { getAvailableStatuses } from '../utils/boardUtils.ts';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 import { AssigneeSelect } from './AssigneeSelect.tsx';
@@ -27,7 +27,7 @@ export function CreateIssueModal({
 
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
-  const [issueType, setIssueType] = useState<'story' | 'bug' | 'task' | 'subtask'>('task');
+  const [issueType, setIssueType] = useState<JiraIssueType>('task');
   const [priority, setPriority] = useState<JiraPriority>('medium');
   const [statusName, setStatusName] = useState('');
   const [assigneeName, setAssigneeName] = useState('');
@@ -287,9 +287,23 @@ export function CreateIssueModal({
               type="text"
               value={recreateAfter}
               onChange={(e) => setRecreateAfter(e.target.value)}
-              placeholder="e.g. 7d, 2 weeks, 1 month"
+              placeholder="e.g. 1d, 1w, 1y, 2y!"
               className="w-full h-10 px-3 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
             />
+            <div className="mt-1 flex items-center flex-wrap gap-1.5 text-2xs text-[var(--jira-text-muted)]">
+              <span>Hint: e.g.</span>
+              {(['1d', '1w', '1y', '2y!'] as const).map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setRecreateAfter(val)}
+                  className="px-1.5 py-0.5 rounded bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] hover:border-[var(--jira-primary)]/50 transition-colors font-mono cursor-pointer"
+                  title={`Set recreate after to ${val}`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Action Buttons */}

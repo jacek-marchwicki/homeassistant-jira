@@ -34,6 +34,7 @@ class IssueType(str, Enum):
     BUG = "bug"
     TASK = "task"
     SUBTASK = "subtask"
+    EPIC = "epic"
 
 
 class JiraUser(BaseModel):

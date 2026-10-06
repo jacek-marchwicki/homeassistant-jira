@@ -2,7 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 
-export type IssueTypeValue = 'story' | 'bug' | 'task' | 'subtask';
+import { JiraIssueType } from '../types/jira.ts';
+
+export type IssueTypeValue = JiraIssueType;
 
 export interface IssueTypeSelectProps {
   id?: string;
@@ -16,6 +18,7 @@ const ISSUE_TYPE_OPTIONS: { value: IssueTypeValue; label: string }[] = [
   { value: 'story', label: 'Story' },
   { value: 'task', label: 'Task' },
   { value: 'bug', label: 'Bug' },
+  { value: 'epic', label: 'Epic' },
   { value: 'subtask', label: 'Subtask' },
 ];
 

@@ -6,6 +6,8 @@ export type JiraStatusCategory = 'todo' | 'inprogress' | 'inreview' | 'done' | '
 
 export type JiraPriority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
 
+export type JiraIssueType = 'story' | 'bug' | 'task' | 'subtask' | 'epic';
+
 export interface JiraUser {
   accountId?: string;
   account_id?: string;
@@ -43,8 +45,8 @@ export interface JiraIssue {
   summary: string;
   description?: string | null;
   url?: string | null;
-  issueType?: 'story' | 'bug' | 'task' | 'subtask';
-  issue_type?: 'story' | 'bug' | 'task' | 'subtask';
+  issueType?: JiraIssueType;
+  issue_type?: JiraIssueType;
   priority: JiraPriority;
   status: JiraStatus;
   assignee?: JiraUser | null;
@@ -95,7 +97,7 @@ export type ConnectionState = 'connected' | 'connecting' | 'disconnected' | 'err
 export interface IssueUpdatePayload {
   summary?: string;
   description?: string | null;
-  issue_type?: 'story' | 'bug' | 'task' | 'subtask';
+  issue_type?: JiraIssueType;
   priority?: JiraPriority;
   status_category?: JiraStatusCategory;
   status_name?: string;
@@ -109,7 +111,7 @@ export interface IssueUpdatePayload {
 export interface IssueCreatePayload {
   summary: string;
   description?: string | null;
-  issue_type?: 'story' | 'bug' | 'task' | 'subtask';
+  issue_type?: JiraIssueType;
   priority?: JiraPriority;
   status_category?: JiraStatusCategory;
   status_name?: string;

@@ -20,6 +20,7 @@ interface RichTextEditorProps {
   rows?: number;
   disabled?: boolean;
   className?: string;
+  defaultTab?: 'write' | 'preview';
 }
 
 /**
@@ -264,8 +265,9 @@ export function RichTextEditor({
   rows = 3,
   disabled = false,
   className = '',
+  defaultTab = 'write',
 }: RichTextEditorProps) {
-  const [activeTab, setActiveTab] = useState<'write' | 'preview'>('write');
+  const [activeTab, setActiveTab] = useState<'write' | 'preview'>(defaultTab);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const applyFormatting = useCallback(

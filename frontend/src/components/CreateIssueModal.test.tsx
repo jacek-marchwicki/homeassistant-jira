@@ -159,4 +159,52 @@ describe('CreateIssueModal component', () => {
     });
     expect(handleClose).toHaveBeenCalledTimes(2);
   });
+
+  it('allows clicking recreate after hint buttons to populate input', async () => {
+    const handleClose = vi.fn();
+
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
+    });
+
+    const recreateAfterInput = container.querySelector('#create-recreate-after') as HTMLInputElement;
+    const hint1wBtn = container.querySelector('button[title="Set recreate after to 1w"]') as HTMLButtonElement;
+    expect(hint1wBtn).not.toBeNull();
+
+    await act(async () => {
+      hint1wBtn.click();
+    });
+
+    expect(recreateAfterInput.value).toBe('1w');
+  });
+
+  it('submits issue with epic issue type', async () => {
+    const handleClose = vi.fn();
+    const createSpy = vi.spyOn(useBoardStore.getState(), 'createIssueOptimistic');
+
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
+    });
+
+    const summaryInput = container.querySelector('#create-summary') as HTMLInputElement;
+    const typeSelect = container.querySelector('#create-type') as HTMLSelectElement;
+    const form = container.querySelector('form') as HTMLFormElement;
+
+    await act(async () => {
+      setInputValue(summaryInput, 'Brand new epic');
+      setInputValue(typeSelect, 'epic');
+    });
+
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: 'Brand new epic',
+        issue_type: 'epic',
+      })
+    );
+    expect(handleClose).toHaveBeenCalledTimes(1);
+  });
 });

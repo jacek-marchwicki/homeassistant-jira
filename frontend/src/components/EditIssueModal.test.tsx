@@ -60,6 +60,18 @@ describe('EditIssueModal component', () => {
     expect(summaryInput).not.toBeNull();
     expect(summaryInput.value).toBe('Original Summary');
 
+    // Description defaults to Preview mode
+    const previewArea = container.querySelector('[data-testid="rich-text-preview"]');
+    expect(previewArea).not.toBeNull();
+    expect(previewArea?.textContent).toContain('Original detailed description');
+
+    // Switching to Write tab exposes textarea
+    const writeTabBtn = container.querySelector('button[aria-label="Write tab"]') as HTMLButtonElement;
+    expect(writeTabBtn).not.toBeNull();
+    await act(async () => {
+      writeTabBtn.click();
+    });
+
     const descriptionInput = container.querySelector('#edit-description') as HTMLTextAreaElement;
     expect(descriptionInput).not.toBeNull();
     expect(descriptionInput.value).toBe('Original detailed description');
@@ -90,6 +102,10 @@ describe('EditIssueModal component', () => {
     expect(datesContainer).not.toBeNull();
     expect(datesContainer?.textContent).toContain('Created:');
     expect(datesContainer?.textContent).toContain('Updated:');
+
+    // Dates must appear above comments
+    const commentsSection = container.querySelector('[data-testid="comments-section"]');
+    expect(commentsSection).not.toBeNull();
   });
 
 function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
@@ -140,10 +156,16 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     });
 
     const summaryInput = container.querySelector('#edit-summary') as HTMLInputElement;
-    const descriptionInput = container.querySelector('#edit-description') as HTMLTextAreaElement;
     const prioritySelect = container.querySelector('#edit-priority') as HTMLSelectElement;
     const recreateAfterInput = container.querySelector('#edit-recreate-after') as HTMLInputElement;
     const form = container.querySelector('form') as HTMLFormElement;
+
+    // Switch to write tab to edit description
+    const writeTabBtn = container.querySelector('button[aria-label="Write tab"]') as HTMLButtonElement;
+    await act(async () => {
+      writeTabBtn.click();
+    });
+    const descriptionInput = container.querySelector('#edit-description') as HTMLTextAreaElement;
 
     await act(async () => {
       setInputValue(summaryInput, 'Updated Summary via Modal');
@@ -166,6 +188,24 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
       })
     );
     expect(handleClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows clicking recreate after hint buttons to populate input', async () => {
+    const handleClose = vi.fn();
+
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={handleClose} />);
+    });
+
+    const recreateAfterInput = container.querySelector('#edit-recreate-after') as HTMLInputElement;
+    const hint2yBtn = container.querySelector('button[title="Set recreate after to 2y!"]') as HTMLButtonElement;
+    expect(hint2yBtn).not.toBeNull();
+
+    await act(async () => {
+      hint2yBtn.click();
+    });
+
+    expect(recreateAfterInput.value).toBe('2y!');
   });
 
   it('closes on Cancel button click and Escape key', async () => {

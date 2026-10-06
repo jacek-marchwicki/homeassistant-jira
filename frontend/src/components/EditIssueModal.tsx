@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, AlertCircle, ExternalLink, Calendar, Clock } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
-import { JiraIssue, JiraPriority } from '../types/jira.ts';
+import { JiraIssue, JiraIssueType, JiraPriority } from '../types/jira.ts';
 import { getAvailableStatuses, getJiraIssueUrl } from '../utils/boardUtils.ts';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 import { AssigneeSelect } from './AssigneeSelect.tsx';
@@ -39,7 +39,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
-  const [issueType, setIssueType] = useState<'story' | 'bug' | 'task' | 'subtask'>('task');
+  const [issueType, setIssueType] = useState<JiraIssueType>('task');
   const [priority, setPriority] = useState<JiraPriority>('medium');
   const [statusName, setStatusName] = useState('');
   const [assigneeName, setAssigneeName] = useState('');
@@ -154,31 +154,6 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
           </button>
         </div>
 
-        {/* Issue Metadata Dates (Created & Updated) */}
-        {(createdFormatted || updatedFormatted) && (
-          <div
-            className="flex flex-wrap items-center gap-4 py-2 px-3 mt-3 rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-2xs text-[var(--jira-text-muted)]"
-            data-testid="edit-issue-dates"
-          >
-            {createdFormatted && (
-              <div className="flex items-center gap-1.5" title={`Created: ${createdDate}`}>
-                <Calendar className="w-3.5 h-3.5 text-[var(--jira-text-muted)] shrink-0" />
-                <span>
-                  Created: <strong className="text-[var(--jira-text-secondary)] font-medium">{createdFormatted}</strong>
-                </span>
-              </div>
-            )}
-            {updatedFormatted && (
-              <div className="flex items-center gap-1.5" title={`Updated: ${updatedDate}`}>
-                <Clock className="w-3.5 h-3.5 text-[var(--jira-text-muted)] shrink-0" />
-                <span>
-                  Updated: <strong className="text-[var(--jira-text-secondary)] font-medium">{updatedFormatted}</strong>
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Validation Error Banner */}
         {validationError && (
           <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 text-xs flex items-center gap-2">
@@ -217,11 +192,13 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               Description
             </label>
             <RichTextEditor
+              key={issue.key}
               id="edit-description"
               value={description}
               onChange={setDescription}
               placeholder="Add more details about this issue, rich text formatting, or markdown..."
               rows={3}
+              defaultTab="preview"
             />
           </div>
 
@@ -338,9 +315,23 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               type="text"
               value={recreateAfter}
               onChange={(e) => setRecreateAfter(e.target.value)}
-              placeholder="e.g. 7d, 2 weeks, 1 month"
+              placeholder="e.g. 1d, 1w, 1y, 2y!"
               className="w-full h-10 px-3 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
             />
+            <div className="mt-1 flex items-center flex-wrap gap-1.5 text-2xs text-[var(--jira-text-muted)]">
+              <span>Hint: e.g.</span>
+              {(['1d', '1w', '1y', '2y!'] as const).map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setRecreateAfter(val)}
+                  className="px-1.5 py-0.5 rounded bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] hover:border-[var(--jira-primary)]/50 transition-colors font-mono cursor-pointer"
+                  title={`Set recreate after to ${val}`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -362,8 +353,36 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
           </div>
         </form>
 
-        {/* Discussion / Comments Section */}
-        <CommentsSection issueKey={issue.key} />
+        {/* Divider below Save and Cancel with vertical spacing */}
+        <div className="mt-6 pt-5 border-t border-[var(--jira-border)] space-y-4">
+          {/* Issue Metadata Dates (Created & Updated) */}
+          {(createdFormatted || updatedFormatted) && (
+            <div
+              className="flex flex-wrap items-center gap-4 py-2 px-3 rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-2xs text-[var(--jira-text-muted)]"
+              data-testid="edit-issue-dates"
+            >
+              {createdFormatted && (
+                <div className="flex items-center gap-1.5" title={`Created: ${createdDate}`}>
+                  <Calendar className="w-3.5 h-3.5 text-[var(--jira-text-muted)] shrink-0" />
+                  <span>
+                    Created: <strong className="text-[var(--jira-text-secondary)] font-medium">{createdFormatted}</strong>
+                  </span>
+                </div>
+              )}
+              {updatedFormatted && (
+                <div className="flex items-center gap-1.5" title={`Updated: ${updatedDate}`}>
+                  <Clock className="w-3.5 h-3.5 text-[var(--jira-text-muted)] shrink-0" />
+                  <span>
+                    Updated: <strong className="text-[var(--jira-text-secondary)] font-medium">{updatedFormatted}</strong>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Discussion / Comments Section */}
+          <CommentsSection issueKey={issue.key} hideBorderTop={true} />
+        </div>
       </div>
     </div>
   );

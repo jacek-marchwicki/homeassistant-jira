@@ -96,6 +96,7 @@ class JiraIssue(BaseModel):
     due_date: str | None = None
     start_date: str | None = None
     recreate_after: str | None = None
+    created_at: str | None = None
     updated_at: str
 
     def is_done(self) -> bool:

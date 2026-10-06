@@ -56,6 +56,8 @@ export interface JiraIssue {
   start_date?: string | null;
   recreateAfter?: string | null;
   recreate_after?: string | null;
+  createdAt?: string;
+  created_at?: string;
   updatedAt?: string;
   updated_at?: string;
   // Optimistic tracking state

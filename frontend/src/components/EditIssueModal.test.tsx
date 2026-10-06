@@ -20,6 +20,7 @@ const testIssue: JiraIssue = {
   due_date: '2026-11-01',
   start_date: '2026-10-01',
   recreate_after: '14 days',
+  created_at: '2026-10-01T10:00:00Z',
   updated_at: '2026-10-05T00:00:00Z',
 };
 
@@ -84,6 +85,11 @@ describe('EditIssueModal component', () => {
     expect(jiraLink.getAttribute('target')).toBe('_blank');
     expect(jiraLink.getAttribute('rel')).toBe('noopener noreferrer');
     expect(jiraLink.getAttribute('href')).toBe('https://jira.example.com/browse/PROJ-101');
+
+    const datesContainer = container.querySelector('[data-testid="edit-issue-dates"]');
+    expect(datesContainer).not.toBeNull();
+    expect(datesContainer?.textContent).toContain('Created:');
+    expect(datesContainer?.textContent).toContain('Updated:');
   });
 
 function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {

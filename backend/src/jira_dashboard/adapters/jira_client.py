@@ -67,6 +67,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
             avatar_url=None,
         ),
         story_points=5.0,
+        created_at="2026-10-01T09:00:00Z",
         updated_at="2026-10-04T22:30:00Z",
     ),
     JiraIssue(
@@ -83,6 +84,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
             avatar_url=None,
         ),
         story_points=5.0,
+        created_at="2026-10-01T09:30:00Z",
         updated_at="2026-10-04T22:40:00Z",
     ),
     JiraIssue(
@@ -95,6 +97,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         status=STATUS_MAP[StatusCategory.IN_REVIEW],
         assignee=None,
         story_points=8.0,
+        created_at="2026-10-01T10:00:00Z",
         updated_at="2026-10-04T22:45:00Z",
     ),
     JiraIssue(
@@ -111,6 +114,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
             avatar_url=None,
         ),
         story_points=2.0,
+        created_at="2026-10-01T08:00:00Z",
         updated_at="2026-10-04T22:50:00Z",
     ),
     JiraIssue(
@@ -123,6 +127,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         status=STATUS_BACKLOG,
         assignee=None,
         story_points=3.0,
+        created_at="2026-10-02T11:00:00Z",
         updated_at="2026-10-04T22:35:00Z",
     ),
     JiraIssue(
@@ -139,6 +144,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
             avatar_url=None,
         ),
         story_points=3.0,
+        created_at="2026-10-02T11:30:00Z",
         updated_at="2026-10-04T22:55:00Z",
     ),
 ]
@@ -527,6 +533,7 @@ class FakeJiraClient:
             due_date=due_date,
             start_date=start_date,
             recreate_after=recreate_after,
+            created_at="2026-10-05T00:00:00Z",
             updated_at="2026-10-05T00:00:00Z",
         )
         self._issues[new_key] = new_issue
@@ -573,7 +580,9 @@ class FakeJiraClient:
         raw_start_date = (
             fields.get("customfield_10015") or fields.get("startDate") or fields.get("start_date")
         )
+        raw_created_at = fields.get("created") or fields.get("created_at")
         raw_updated_at = fields.get("updated") or fields.get("updated_at")
+        created_at = str(raw_created_at) if raw_created_at is not None else "2026-10-05T00:00:00Z"
         updated_at = str(raw_updated_at) if raw_updated_at is not None else "2026-10-05T00:00:00Z"
 
         # If issue already exists, update its status & summary
@@ -608,6 +617,7 @@ class FakeJiraClient:
             story_points=None,
             due_date=due_date,
             start_date=start_date,
+            created_at=created_at,
             updated_at=updated_at,
         )
         self._issues[issue_key] = new_issue

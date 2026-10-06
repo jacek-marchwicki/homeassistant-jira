@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle, ExternalLink } from 'lucide-react';
+import { X, Save, AlertCircle, ExternalLink, Calendar, Clock } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue, JiraPriority } from '../types/jira.ts';
 import { getAvailableStatuses, getJiraIssueUrl } from '../utils/boardUtils.ts';
@@ -9,6 +9,23 @@ import { IssueTypeSelect } from './IssueTypeSelect.tsx';
 import { PrioritySelect } from './PrioritySelect.tsx';
 import { StatusSelect } from './StatusSelect.tsx';
 import { CommentsSection } from './CommentsSection.tsx';
+
+function formatDateTime(isoString?: string | null): string | null {
+  if (!isoString) return null;
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return isoString;
+  }
+}
 
 interface EditIssueModalProps {
   issue: JiraIssue | null;
@@ -33,6 +50,11 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
   const statusOptions = getAvailableStatuses(columns);
   const issueUrl = issue ? getJiraIssueUrl(issue, jiraUrl) : '#';
+
+  const createdDate = issue?.created_at ?? issue?.createdAt;
+  const updatedDate = issue?.updated_at ?? issue?.updatedAt;
+  const createdFormatted = formatDateTime(createdDate);
+  const updatedFormatted = formatDateTime(updatedDate);
 
   useEffect(() => {
     if (issue) {
@@ -133,6 +155,31 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Issue Metadata Dates (Created & Updated) */}
+        {(createdFormatted || updatedFormatted) && (
+          <div
+            className="flex flex-wrap items-center gap-4 py-2 px-3 mt-3 rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-2xs text-[var(--jira-text-muted)]"
+            data-testid="edit-issue-dates"
+          >
+            {createdFormatted && (
+              <div className="flex items-center gap-1.5" title={`Created: ${createdDate}`}>
+                <Calendar className="w-3.5 h-3.5 text-[var(--jira-text-muted)] shrink-0" />
+                <span>
+                  Created: <strong className="text-[var(--jira-text-secondary)] font-medium">{createdFormatted}</strong>
+                </span>
+              </div>
+            )}
+            {updatedFormatted && (
+              <div className="flex items-center gap-1.5" title={`Updated: ${updatedDate}`}>
+                <Clock className="w-3.5 h-3.5 text-[var(--jira-text-muted)] shrink-0" />
+                <span>
+                  Updated: <strong className="text-[var(--jira-text-secondary)] font-medium">{updatedFormatted}</strong>
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Validation Error Banner */}
         {validationError && (

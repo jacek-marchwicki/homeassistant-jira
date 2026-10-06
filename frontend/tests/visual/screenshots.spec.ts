@@ -233,6 +233,16 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       path: './tests/screenshots/component-modal-edit.png',
       animations: 'disabled',
     });
+
+    // 3. Verify and capture Created & Updated dates badge
+    const datesBar = modal.getByTestId('edit-issue-dates');
+    await expect(datesBar).toBeVisible();
+    await expect(datesBar).toContainText('Created:');
+    await expect(datesBar).toContainText('Updated:');
+    await datesBar.screenshot({
+      path: './tests/screenshots/component-edit-dates.png',
+      animations: 'disabled',
+    });
   });
 
   test('Capture Edit Issue Modal with Comments Snapshot', async ({ page }) => {

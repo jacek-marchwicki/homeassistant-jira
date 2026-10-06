@@ -331,6 +331,8 @@ class JiraCloudClient(JiraClientProtocol):
             except Exception:
                 description = None
 
+        created_at = fields.get("created") or fields.get("created_at")
+
         return JiraIssue(
             id=issue_id,
             key=key,
@@ -344,6 +346,7 @@ class JiraCloudClient(JiraClientProtocol):
             story_points=story_points,
             due_date=due_date,
             start_date=start_date,
+            created_at=created_at,
             updated_at=updated_at,
         )
 

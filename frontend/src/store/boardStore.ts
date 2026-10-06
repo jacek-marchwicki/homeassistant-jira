@@ -121,8 +121,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   sprintName: initialCache?.sprintName || '',
   jiraUrl: initialCache?.jiraUrl || 'https://jira.example.com',
   wsConnected: false,
-  activeFilters: ['my', 'active'],
-  activeFilter: 'my,active',
+  activeFilters: ['my', 'active', 'hide_epics'],
+  activeFilter: 'my,active,hide_epics',
   searchQuery: '',
   currentUser: (() => {
     if (typeof window !== 'undefined' && window.localStorage) {

@@ -120,7 +120,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-labelledby="edit-issue-title"
+      aria-label={`Edit Issue ${issue.key}`}
     >
       <div
         className="w-full max-w-lg bg-[var(--jira-surface)] border border-[var(--jira-border)] rounded-xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto"

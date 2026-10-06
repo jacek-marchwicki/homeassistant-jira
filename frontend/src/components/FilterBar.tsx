@@ -21,6 +21,7 @@ export function FilterBar() {
   const isAll = activeFilters.length === 0;
   const isMy = activeFilters.includes('my');
   const isActive = activeFilters.includes('active');
+  const isHideEpics = activeFilters.includes('hide_epics');
 
   // Aggregate available assignees from board issues
   const assignees = useMemo(() => {
@@ -174,6 +175,19 @@ export function FilterBar() {
           }`}
         >
           Active
+        </button>
+
+        <button
+          type="button"
+          onClick={() => toggleFilter('hide_epics')}
+          className={`h-8 px-3 rounded-full text-xs font-medium inline-flex items-center justify-center transition-colors cursor-pointer ${
+            isHideEpics
+              ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
+              : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
+          }`}
+          title="Toggle filter to hide Epics"
+        >
+          Hide Epics
         </button>
       </div>
 

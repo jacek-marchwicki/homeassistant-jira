@@ -29,6 +29,7 @@ import {
   getColumnForIssue,
   getColumnFromOver,
   isBacklogIssue,
+  isIntermediateColumn,
   splitIssuesByBacklog,
 } from '../utils/boardUtils.ts';
 
@@ -72,6 +73,16 @@ export function KanbanBoard() {
 
   // Active columns (excluding Backlog so it is never rendered as a Kanban column)
   const activeColumns = getActiveBoardColumns(columns);
+
+  // When not dragging, hide intermediate workflow columns (In Progress, In Review, etc.) since tasks are merged into Ready.
+  // During drag (activeIssue !== null), reveal all active columns so user can drop onto any workflow column.
+  const displayedColumns = useMemo(() => {
+    if (activeIssue) {
+      return activeColumns;
+    }
+    return activeColumns.filter((col) => !isIntermediateColumn(col));
+  }, [activeColumns, activeIssue]);
+
   // Separate Backlog issues from Active Board issues
   const { boardIssues, backlogIssues } = splitIssuesByBacklog(filteredIssues, columns);
 
@@ -166,7 +177,7 @@ export function KanbanBoard() {
       <main className="flex-1 p-4 flex flex-col overflow-y-auto">
         {/* Kanban Board Active Workflow Columns */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-4 overflow-x-auto min-w-0">
-          {activeColumns.map((col) => {
+          {displayedColumns.map((col) => {
             const colIssues = filterIssuesForColumn(boardIssues, col, activeColumns);
             const colorVar = getCategoryColorVar(col.category);
             return (

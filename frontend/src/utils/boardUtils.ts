@@ -209,8 +209,63 @@ export function splitIssuesByBacklog(
 }
 
 /**
- * Filters an array of issues for a specific column, ensuring that if the column is
- * in the Done category, only issues updated within the specified days (default: 2) are included.
+ * Checks whether a board column is the Ready/To Do column.
+ */
+export function isReadyColumn(column: BoardColumn): boolean {
+  if (!column) return false;
+  const name = column.name.trim().toLowerCase();
+  const id = column.id.trim().toLowerCase();
+  return (
+    name === 'ready' ||
+    id === 'col-ready' ||
+    name === 'to do' ||
+    id === 'col-todo' ||
+    column.category === 'todo'
+  );
+}
+
+/**
+ * Checks whether a board column is the Done column.
+ */
+export function isDoneColumn(column: BoardColumn): boolean {
+  if (!column) return false;
+  const name = column.name.trim().toLowerCase();
+  const id = column.id.trim().toLowerCase();
+  return column.category === 'done' || name === 'done' || id === 'col-done';
+}
+
+/**
+ * Checks whether a board column is an intermediate/workflow column
+ * (i.e. neither Ready/To Do nor Done, such as In Progress, In Review, Testing).
+ */
+export function isIntermediateColumn(column: BoardColumn): boolean {
+  if (!column) return false;
+  return !isReadyColumn(column) && !isDoneColumn(column);
+}
+
+/**
+ * Checks whether a board column is the In Progress or intermediate column.
+ */
+export function isInProgressColumn(column: BoardColumn): boolean {
+  if (!column) return false;
+  const name = column.name.trim().toLowerCase();
+  const id = column.id.trim().toLowerCase();
+  return (
+    column.category === 'inprogress' ||
+    name === 'in progress' ||
+    name === 'in-progress' ||
+    name === 'inprogress' ||
+    id === 'col-inprogress' ||
+    id === 'col-in-progress' ||
+    isIntermediateColumn(column)
+  );
+}
+
+/**
+ * Filters an array of issues for a specific column.
+ * - Ready column receives all unfinished board issues (both Ready and merged In Progress / intermediate).
+ * - Intermediate columns act as drop targets during drag (returns empty list so issues aren't duplicated).
+ * - Done column displays issues updated within the specified days (default: 2).
  */
 export function filterIssuesForColumn(
   issues: JiraIssue[],
@@ -219,14 +274,33 @@ export function filterIssuesForColumn(
   doneMaxDays: number = 2,
   now: Date = new Date()
 ): JiraIssue[] {
-  const isDone = column.category === 'done' || column.name.trim().toLowerCase() === 'done';
+  const isDone = isDoneColumn(column);
+  const isReady = isReadyColumn(column);
+  const isIntermediate = isIntermediateColumn(column);
+
+  if (isDone) {
+    return issues.filter((issue) => {
+      const col = getColumnForIssue(issue, allColumns);
+      if (col?.id !== column.id && !(col && isDoneColumn(col))) return false;
+      return isDoneIssueWithinDays(issue, doneMaxDays, now);
+    });
+  }
+
+  if (isReady) {
+    return issues.filter((issue) => {
+      const col = getColumnForIssue(issue, allColumns);
+      const isIssueDone = (col && isDoneColumn(col)) || issue.status?.category === 'done';
+      return !isIssueDone;
+    });
+  }
+
+  if (isIntermediate) {
+    return [];
+  }
+
   return issues.filter((issue) => {
     const col = getColumnForIssue(issue, allColumns);
-    if (col?.id !== column.id) return false;
-    if (isDone && !isDoneIssueWithinDays(issue, doneMaxDays, now)) {
-      return false;
-    }
-    return true;
+    return col?.id === column.id;
   });
 }
 
@@ -315,21 +389,78 @@ export function isIssueExpedited(issue: JiraIssue, now: Date = new Date()): bool
   return matchesHighestPriority || matchesDueTodayOrEarlier;
 }
 
+/**
+ * Returns true if an issue has in-progress status category, name, or belongs to an intermediate column.
+ */
+export function isIssueInProgress(issue: JiraIssue, columns?: BoardColumn[]): boolean {
+  if (!issue) return false;
+  const category = (issue.status?.category || '').trim().toLowerCase();
+  if (
+    category === 'inprogress' ||
+    category === 'in_progress' ||
+    category === 'inreview' ||
+    category === 'in_review' ||
+    category === 'indeterminate'
+  ) {
+    return true;
+  }
+  const name = (issue.status?.name || '').trim().toLowerCase();
+  if (
+    name === 'in progress' ||
+    name === 'in-progress' ||
+    name === 'inprogress' ||
+    name === 'in review' ||
+    name === 'in-review' ||
+    name === 'under review' ||
+    name === 'code review'
+  ) {
+    return true;
+  }
+  if (columns && columns.length > 0) {
+    const col = getColumnForIssue(issue, columns);
+    if (col && isIntermediateColumn(col)) return true;
+    if (issue.status?.id) {
+      const match = columns.find(
+        (c) => isIntermediateColumn(c) && c.status_ids?.includes(String(issue.status.id))
+      );
+      if (match) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns true if an issue type is Epic.
+ */
+export function isEpicIssue(issue: JiraIssue): boolean {
+  if (!issue) return false;
+  const type = (issue.issue_type || issue.issueType || '').trim().toLowerCase();
+  return type === 'epic';
+}
+
 export interface ReadySections {
   overdue: JiraIssue[];
   expedited: JiraIssue[];
+  inProgress: JiraIssue[];
   other: JiraIssue[];
 }
 
 /**
- * Splits an array of issues into Overdue, Expedited, and Other groups.
+ * Splits an array of issues into Overdue, Expedited, In Progress, and Other groups.
+ * Precedence:
+ * 1. Overdue (due date strictly before today - takes highest priority)
+ * 2. Expedited (highest priority or due today)
+ * 3. In Progress (status is inprogress, not overdue/expedited)
+ * 4. Other (standard Ready / To Do issues)
  */
 export function splitReadyIssues(
   issues: JiraIssue[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  columns?: BoardColumn[]
 ): ReadySections {
   const overdue: JiraIssue[] = [];
   const expedited: JiraIssue[] = [];
+  const inProgress: JiraIssue[] = [];
   const other: JiraIssue[] = [];
 
   for (const issue of issues) {
@@ -337,12 +468,14 @@ export function splitReadyIssues(
       overdue.push(issue);
     } else if (isIssueExpedited(issue, now)) {
       expedited.push(issue);
+    } else if (isIssueInProgress(issue, columns)) {
+      inProgress.push(issue);
     } else {
       other.push(issue);
     }
   }
 
-  return { overdue, expedited, other };
+  return { overdue, expedited, inProgress, other };
 }
 
 /**
@@ -419,7 +552,7 @@ export function filterIssues(
         .filter(Boolean)
     );
   } else {
-    filters = new Set(['my', 'active']);
+    filters = new Set(['my', 'active', 'hide_epics']);
   }
 
   return issues.filter((issue) => {
@@ -442,6 +575,13 @@ export function filterIssues(
     // 3. Active Filter (Start date not in future: empty or <= now)
     if (filters.has('active')) {
       if (!isIssueActive(issue, now)) {
+        return false;
+      }
+    }
+
+    // 4. Hide Epics Filter (excludes issues where issue_type === 'epic')
+    if (filters.has('hide_epics')) {
+      if (isEpicIssue(issue)) {
         return false;
       }
     }

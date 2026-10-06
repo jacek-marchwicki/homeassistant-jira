@@ -59,7 +59,7 @@ describe('KanbanBoard component', () => {
     });
   });
 
-  it('renders all Kanban columns with their respective issues when All Issues is selected', async () => {
+  it('renders Ready and Done columns by default while hiding In Progress column and merging its tasks into Ready', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
@@ -67,16 +67,20 @@ describe('KanbanBoard component', () => {
       root.render(<KanbanBoard />);
     });
 
-    const columns = useBoardStore.getState().columns;
-    for (const col of columns) {
-      const colElem = container.querySelector(`[data-testid="column-${col.id}"]`);
-      expect(colElem).not.toBeNull();
-    }
+    // In Progress column is hidden by default
+    expect(container.querySelector('[data-testid="column-col-inprogress"]')).toBeNull();
 
-    expect(container.textContent).toContain('Fix navigation menu');
-    expect(container.textContent).toContain('Database connection issue');
-    expect(container.textContent).toContain('Unassigned task');
-    expect(container.textContent).toContain('Future task for me');
+    // Ready/To Do column and Done column are rendered
+    const todoCol = container.querySelector('[data-testid="column-col-todo"]');
+    const doneCol = container.querySelector('[data-testid="column-col-done"]');
+    expect(todoCol).not.toBeNull();
+    expect(doneCol).not.toBeNull();
+
+    // All unfinished issues, including the In Progress task, are rendered inside the Ready column
+    expect(todoCol?.textContent).toContain('Database connection issue');
+    expect(todoCol?.textContent).toContain('Fix navigation menu');
+    expect(todoCol?.textContent).toContain('Unassigned task');
+    expect(todoCol?.textContent).toContain('Future task for me');
 
     await act(async () => {
       root.unmount();

@@ -1,8 +1,9 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { AlertCircle, CircleDot, Zap } from 'lucide-react';
+import { AlertCircle, CircleDot, PlayCircle, Zap } from 'lucide-react';
 import { JiraIssue, JiraStatusCategory } from '../types/jira.ts';
 import { splitReadyIssues } from '../utils/boardUtils.ts';
+import { useBoardStore } from '../store/boardStore.ts';
 import { IssueCard } from './IssueCard.tsx';
 
 interface KanbanColumnProps {
@@ -22,6 +23,7 @@ export function KanbanColumn({
   issues,
   isHighlighted = false,
 }: KanbanColumnProps) {
+  const columns = useBoardStore((s) => s.columns);
   const { setNodeRef, isOver: isDroppableOver } = useDroppable({
     id,
     data: {
@@ -34,15 +36,20 @@ export function KanbanColumn({
 
   const isOver = Boolean(isHighlighted || isDroppableOver);
   const issueIds = issues.map((i) => i.key);
-  const isReadyColumn = title.trim().toLowerCase() === 'ready' || id === 'col-ready';
+  const isReadyColumn =
+    title.trim().toLowerCase() === 'ready' ||
+    id === 'col-ready' ||
+    title.trim().toLowerCase() === 'to do' ||
+    id === 'col-todo';
 
-  const { overdue, expedited, other } = isReadyColumn
-    ? splitReadyIssues(issues)
-    : { overdue: [], expedited: [], other: [] };
+  const { overdue, expedited, inProgress, other } = isReadyColumn
+    ? splitReadyIssues(issues, new Date(), columns)
+    : { overdue: [], expedited: [], inProgress: [], other: [] };
 
   const hasOverdue = overdue.length > 0;
   const hasExpedited = expedited.length > 0;
-  const hasSpecialSections = isReadyColumn && (hasOverdue || hasExpedited);
+  const hasInProgress = inProgress.length > 0;
+  const hasSpecialSections = isReadyColumn && (hasOverdue || hasExpedited || hasInProgress);
 
   return (
     <div
@@ -125,7 +132,27 @@ export function KanbanColumn({
                 </div>
               )}
 
-              {/* 3. Other Sub-section (displayed with header when special sections exist) */}
+              {/* 3. In Progress Sub-section (only if not empty) */}
+              {hasInProgress && (
+                <div data-testid="ready-section-inprogress" className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/25">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400">
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      <span>In Progress</span>
+                    </div>
+                    <span className="px-1.5 py-0.5 rounded-full text-2xs font-bold bg-blue-500/20 text-blue-300">
+                      {inProgress.length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {inProgress.map((issue) => (
+                      <IssueCard key={issue.key} issue={issue} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. Other Sub-section (displayed with header when special sections exist) */}
               {other.length > 0 && (
                 <div data-testid="ready-section-other" className="flex flex-col gap-2">
                   <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[var(--jira-surface-elevated)] border border-[var(--jira-border-subtle)]">

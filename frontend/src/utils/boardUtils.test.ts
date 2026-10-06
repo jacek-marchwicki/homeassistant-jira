@@ -10,6 +10,10 @@ import {
   parseDate,
   isIssueOverdue,
   isIssueExpedited,
+  isIssueInProgress,
+  isEpicIssue,
+  isReadyColumn,
+  isInProgressColumn,
   splitReadyIssues,
   isAssignedToMeOrUnassigned,
   isIssueActive,
@@ -371,6 +375,59 @@ describe('boardUtils', () => {
         'TASK-OTHER-NO-DATES',
       ]);
     });
+
+    it('handles In Progress tasks with correct precedence (Overdue > Expedited > In Progress > Other)', () => {
+      const issues: JiraIssue[] = [
+        // 1. In Progress and Overdue -> lands in Overdue
+        {
+          ...mockBaseIssue,
+          key: 'PROG-OVERDUE',
+          summary: 'In Progress but Overdue',
+          priority: 'medium',
+          status: { id: '3', name: 'In Progress', category: 'inprogress' },
+          due_date: '2026-09-30',
+        },
+        // 2. In Progress and Expedited -> lands in Expedited
+        {
+          ...mockBaseIssue,
+          key: 'PROG-EXPEDITED',
+          summary: 'In Progress and Highest Priority',
+          priority: 'highest',
+          status: { id: '3', name: 'In Progress', category: 'inprogress' },
+          start_date: null,
+          due_date: '2026-10-20',
+        },
+        // 3. In Progress (normal) -> lands in inProgress
+        {
+          ...mockBaseIssue,
+          key: 'PROG-NORMAL',
+          summary: 'In Progress regular task',
+          priority: 'medium',
+          status: { id: '3', name: 'In Progress', category: 'inprogress' },
+          due_date: '2026-10-20',
+        },
+        // 4. Ready / To Do task -> lands in other
+        {
+          ...mockBaseIssue,
+          key: 'READY-NORMAL',
+          summary: 'Ready regular task',
+          priority: 'medium',
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+          due_date: '2026-10-20',
+        },
+      ];
+
+      const { overdue, expedited, inProgress, other } = splitReadyIssues(
+        issues,
+        fixedNow,
+        homeColumns
+      );
+
+      expect(overdue.map((i) => i.key)).toEqual(['PROG-OVERDUE']);
+      expect(expedited.map((i) => i.key)).toEqual(['PROG-EXPEDITED']);
+      expect(inProgress.map((i) => i.key)).toEqual(['PROG-NORMAL']);
+      expect(other.map((i) => i.key)).toEqual(['READY-NORMAL']);
+    });
   });
 
   describe('isAssignedToMeOrUnassigned', () => {
@@ -561,6 +618,37 @@ describe('boardUtils', () => {
       ]);
     });
 
+    it('filters out Epics when "hide_epics" filter is active, and includes them when inactive', () => {
+      const issuesWithEpic: JiraIssue[] = [
+        {
+          ...mockBaseIssue,
+          key: 'TASK-1',
+          summary: 'Normal task',
+          issue_type: 'task',
+        },
+        {
+          ...mockBaseIssue,
+          key: 'EPIC-1',
+          summary: 'Epic initiative',
+          issue_type: 'epic',
+        },
+      ];
+
+      // When hide_epics is active, EPIC-1 is excluded
+      const withFilter = filterIssues(issuesWithEpic, {
+        activeFilters: ['hide_epics'],
+        now: fixedNow,
+      });
+      expect(withFilter.map((i) => i.key)).toEqual(['TASK-1']);
+
+      // When hide_epics is not active, EPIC-1 is included
+      const withoutFilter = filterIssues(issuesWithEpic, {
+        activeFilters: [],
+        now: fixedNow,
+      });
+      expect(withoutFilter.map((i) => i.key)).toEqual(['TASK-1', 'EPIC-1']);
+    });
+
     it('combines text search with quick filters', () => {
       const result = filterIssues(issuesList, {
         activeFilters: ['my', 'active'],
@@ -737,6 +825,81 @@ describe('boardUtils', () => {
       const doneCol = homeColumns.find((c) => c.category === 'done')!;
       const filtered = filterIssuesForColumn(issues, doneCol, homeColumns, 2, fixedNow);
       expect(filtered.map((i) => i.key)).toEqual(['DONE-1']);
+    });
+
+    it('merges unfinished issues (both Ready and In Progress) into the Ready column', () => {
+      const issues: JiraIssue[] = [
+        {
+          ...mockBaseIssue,
+          key: 'READY-1',
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+        },
+        {
+          ...mockBaseIssue,
+          key: 'INPROG-1',
+          status: { id: '3', name: 'In Progress', category: 'inprogress' },
+        },
+        {
+          ...mockBaseIssue,
+          key: 'DONE-1',
+          status: { id: '10001', name: 'Done', category: 'done' },
+        },
+      ];
+
+      const readyCol = homeColumns.find((c) => c.id === 'col-ready')!;
+      const filtered = filterIssuesForColumn(issues, readyCol, homeColumns, 2, fixedNow);
+      expect(filtered.map((i) => i.key)).toEqual(['READY-1', 'INPROG-1']);
+    });
+
+    it('returns an empty array for In Progress column so it acts strictly as a drop target', () => {
+      const issues: JiraIssue[] = [
+        {
+          ...mockBaseIssue,
+          key: 'INPROG-1',
+          status: { id: '3', name: 'In Progress', category: 'inprogress' },
+        },
+      ];
+
+      const inProgressCol = homeColumns.find((c) => c.category === 'inprogress')!;
+      const filtered = filterIssuesForColumn(issues, inProgressCol, homeColumns, 2, fixedNow);
+      expect(filtered).toEqual([]);
+    });
+  });
+
+  describe('Classification helpers', () => {
+    it('correctly identifies Epic issues via isEpicIssue', () => {
+      expect(isEpicIssue({ ...mockBaseIssue, issue_type: 'epic' })).toBe(true);
+      expect(isEpicIssue({ ...mockBaseIssue, issueType: 'epic' })).toBe(true);
+      expect(isEpicIssue({ ...mockBaseIssue, issue_type: 'story' })).toBe(false);
+      expect(isEpicIssue({ ...mockBaseIssue, issue_type: 'task' })).toBe(false);
+    });
+
+    it('correctly identifies In Progress issues via isIssueInProgress', () => {
+      expect(
+        isIssueInProgress({
+          ...mockBaseIssue,
+          status: { id: '3', name: 'In Progress', category: 'inprogress' },
+        })
+      ).toBe(true);
+      expect(
+        isIssueInProgress({
+          ...mockBaseIssue,
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+        })
+      ).toBe(false);
+    });
+
+    it('identifies Ready and In Progress columns correctly', () => {
+      expect(isReadyColumn({ id: 'col-ready', name: 'Ready', category: 'todo' })).toBe(true);
+      expect(isReadyColumn({ id: 'col-todo', name: 'To Do', category: 'todo' })).toBe(true);
+      expect(isReadyColumn({ id: 'col-done', name: 'Done', category: 'done' })).toBe(false);
+
+      expect(
+        isInProgressColumn({ id: 'col-inprogress', name: 'In Progress', category: 'inprogress' })
+      ).toBe(true);
+      expect(
+        isInProgressColumn({ id: 'col-ready', name: 'Ready', category: 'todo' })
+      ).toBe(false);
     });
   });
 

@@ -127,28 +127,33 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     });
   });
 
-  test('5. Dynamic Workflow Columns: renders workflow columns from backend and distributes cards', async ({
+  test('5. Dynamic Workflow Columns: merges unfinished workflow cards into To Do and displays Done column', async ({
     page,
   }) => {
     // Show all issues to inspect cards across all dynamic columns
     await page.getByRole('button', { name: /All Issues/ }).click();
 
-    // 1. Verify all 4 column headings are rendered with proper uppercase titles
+    // 1. Verify visible columns: To Do and Done are rendered; intermediate columns (In Progress, In Review) are merged into To Do and hidden by default
     await expect(page.locator('h2', { hasText: 'To Do' })).toBeVisible();
-    await expect(page.locator('h2', { hasText: 'In Progress' })).toBeVisible();
-    await expect(page.locator('h2', { hasText: 'In Review' })).toBeVisible();
     await expect(page.locator('h2', { hasText: 'Done' })).toBeVisible();
+    await expect(page.locator('h2', { hasText: 'In Progress' })).not.toBeVisible();
+    await expect(page.locator('h2', { hasText: 'In Review' })).not.toBeVisible();
 
-    // 2. Verify that cards appear within their respective column containers
+    // 2. Verify that unfinished cards appear within the To Do column container
     const todoColumn = page.getByTestId('column-col-todo');
     await expect(todoColumn.locator('article', { hasText: 'PROJ-101' })).toBeVisible();
+    await expect(todoColumn.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
+    await expect(todoColumn.locator('article', { hasText: 'PROJ-85' })).toBeVisible();
 
-    const inProgressColumn = page.getByTestId('column-col-inprogress');
-    await expect(inProgressColumn.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
+    // Verify In Progress sub-section inside To Do column renders in-progress issues (PROJ-85)
+    const inProgressSection = page.getByTestId('ready-section-inprogress');
+    await expect(inProgressSection.locator('article', { hasText: 'PROJ-85' })).toBeVisible();
 
-    const inReviewColumn = page.getByTestId('column-col-inreview');
-    await expect(inReviewColumn.locator('article', { hasText: 'PROJ-85' })).toBeVisible();
+    // Verify Expedited sub-section inside To Do column renders expedited issues (highest priority PROJ-98)
+    const expeditedSection = page.getByTestId('ready-section-expedited');
+    await expect(expeditedSection.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
 
+    // Verify completed cards appear in Done column
     const doneColumn = page.getByTestId('column-col-done');
     await expect(doneColumn.locator('article', { hasText: 'PROJ-72' })).toBeVisible();
   });
@@ -159,7 +164,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
     await expect(proj101Article).toBeVisible();
 
-    const statusSelect = proj101Article.getByLabel('Change status for PROJ-101');
+    const statusSelect = proj101Article.locator('select#status-select');
     await expect(statusSelect).toHaveValue('To Do');
 
     // Intercept transition request
@@ -184,7 +189,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // Show all issues before testing text search query
     await page.getByRole('button', { name: /All Issues/ }).click();
 
-    const searchInput = page.getByPlaceholder('Filter issues...');
+    const searchInput = page.getByPlaceholder('Search key, summary, description...');
     await expect(searchInput).toBeVisible();
 
     // Filter by specific keyword
@@ -200,16 +205,18 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
   });
 
-  test('8. Quick Filters: "Assigned to Me" and "Active" toggle correctly and filter issues', async ({
+  test('8. Quick Filters: "Assigned to Me", "Active", and "Hide Epics" toggle correctly and filter issues', async ({
     page,
   }) => {
-    // By default: "Assigned to Me" and "Active" are selected
+    // By default: "Assigned to Me", "Active", and "Hide Epics" are selected
     const myBtn = page.getByRole('button', { name: 'Assigned to Me' });
     const activeBtn = page.getByRole('button', { name: 'Active' });
+    const hideEpicsBtn = page.getByRole('button', { name: 'Hide Epics' });
     const allBtn = page.getByRole('button', { name: /All Issues/ });
 
     await expect(myBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(activeBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(hideEpicsBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(allBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
 
     // PROJ-101 (Jacek) and PROJ-85 (unassigned) are visible; PROJ-98 (Alex) is hidden
@@ -232,6 +239,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(allBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(myBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(activeBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(hideEpicsBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
   });
 

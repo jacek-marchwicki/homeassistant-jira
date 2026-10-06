@@ -201,6 +201,78 @@ describe('KanbanColumn component', () => {
     });
   });
 
+  it('splits Ready column into Overdue, Expedited, In Progress, and Other sub-sections in correct order', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    const issues: JiraIssue[] = [
+      {
+        id: '1',
+        key: 'TEST-OVERDUE',
+        summary: 'Fix overdue leak',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        due_date: '2020-01-01',
+      },
+      {
+        id: '2',
+        key: 'TEST-EXPEDITED',
+        summary: 'Immediate urgent fix',
+        priority: 'highest',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        start_date: null,
+      },
+      {
+        id: '3',
+        key: 'TEST-INPROGRESS',
+        summary: 'Currently working on this',
+        priority: 'medium',
+        status: { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
+      },
+      {
+        id: '4',
+        key: 'TEST-OTHER',
+        summary: 'Regular task for next month',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        due_date: '2099-12-31',
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-ready"
+            category="todo"
+            title="Ready"
+            colorVar="var(--jira-status-todo)"
+            issues={issues}
+            isHighlighted={false}
+          />
+        </DndContext>
+      );
+    });
+
+    const overdueSection = container.querySelector('[data-testid="ready-section-overdue"]');
+    const expeditedSection = container.querySelector('[data-testid="ready-section-expedited"]');
+    const inProgressSection = container.querySelector('[data-testid="ready-section-inprogress"]');
+    const otherSection = container.querySelector('[data-testid="ready-section-other"]');
+
+    expect(overdueSection).not.toBeNull();
+    expect(expeditedSection).not.toBeNull();
+    expect(inProgressSection).not.toBeNull();
+    expect(otherSection).not.toBeNull();
+
+    expect(inProgressSection?.textContent).toContain('In Progress');
+    expect(inProgressSection?.textContent).toContain('1');
+    expect(inProgressSection?.textContent).toContain('TEST-INPROGRESS');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('hides Expedited section when empty, keeping Overdue and Other with header', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);

@@ -103,10 +103,10 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     });
   });
 
-  test('Capture Ready Column Sub-Sections (Overdue and Expedited) Snapshot', async ({ page }) => {
+  test('Capture Ready Column Sub-Sections (Overdue, Expedited, and In Progress) Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    // Mock /api/board with Ready column containing Overdue, Expedited, and Other issues
+    // Mock /api/board with Ready column containing Overdue, Expedited, In Progress, and Other issues
     await page.route('**/api/board', async (route) => {
       await route.fulfill({
         status: 200,
@@ -143,6 +143,16 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
               updated_at: '2026-10-05T00:00:00Z',
             },
             {
+              id: '104',
+              key: 'PROJ-104',
+              summary: 'Real-time telemetry WebSocket streaming',
+              issue_type: 'task',
+              priority: 'high',
+              status: { id: '2', name: 'In Progress', category: 'inprogress' },
+              due_date: '2028-06-01',
+              updated_at: '2026-10-05T00:00:00Z',
+            },
+            {
               id: '103',
               key: 'PROJ-103',
               summary: 'Quarterly roadmap documentation cleanup',
@@ -164,10 +174,12 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     const overdueSection = page.getByTestId('ready-section-overdue');
     const expeditedSection = page.getByTestId('ready-section-expedited');
+    const inProgressSection = page.getByTestId('ready-section-inprogress');
     const otherSection = page.getByTestId('ready-section-other');
 
     await expect(overdueSection).toBeVisible();
     await expect(expeditedSection).toBeVisible();
+    await expect(inProgressSection).toBeVisible();
     await expect(otherSection).toBeVisible();
 
     // 1. Capture Overdue section snapshot
@@ -182,7 +194,13 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
 
-    // 3. Capture full Ready column snapshot with all sub-sections
+    // 3. Capture In Progress section snapshot
+    await inProgressSection.screenshot({
+      path: './tests/screenshots/ready-section-inprogress.png',
+      animations: 'disabled',
+    });
+
+    // 4. Capture full Ready column snapshot with all sub-sections
     await readyColumn.screenshot({
       path: './tests/screenshots/ready-column-sections.png',
       animations: 'disabled',
@@ -559,6 +577,11 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await page.goto('/');
 
+    // Toggle off "Hide Epics" to reveal the epic card on the board
+    const hideEpicsBtn = page.getByRole('button', { name: 'Hide Epics' });
+    await expect(hideEpicsBtn).toBeVisible();
+    await hideEpicsBtn.click();
+
     const epicCard = page.locator('article', { hasText: 'HOME-2200' });
     await expect(epicCard).toBeVisible();
     const epicIcon = epicCard.locator('[aria-label="Epic"]');
@@ -566,6 +589,21 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await epicCard.screenshot({
       path: './tests/screenshots/component-card-epic.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Filter Bar with "Hide Epics" Toggle Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const filterBar = page.locator('section').filter({ hasText: 'All Issues' });
+    await expect(filterBar).toBeVisible();
+
+    const hideEpicsBtn = filterBar.getByRole('button', { name: 'Hide Epics' });
+    await expect(hideEpicsBtn).toBeVisible();
+
+    await filterBar.screenshot({
+      path: './tests/screenshots/component-filterbar-hide-epics.png',
       animations: 'disabled',
     });
   });

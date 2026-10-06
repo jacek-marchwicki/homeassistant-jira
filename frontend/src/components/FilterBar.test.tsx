@@ -34,13 +34,13 @@ describe('FilterBar component', () => {
       useBoardStore.setState({
         issues: testIssues,
         searchQuery: '',
-        activeFilters: ['my', 'active'],
-        activeFilter: 'my,active',
+        activeFilters: ['my', 'active', 'hide_epics'],
+        activeFilter: 'my,active,hide_epics',
       });
     });
   });
 
-  it('renders All Issues, Assigned to Me, and Active buttons, but not Blockers', async () => {
+  it('renders All Issues, Assigned to Me, Active, and Hide Epics buttons, but not Blockers', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
@@ -51,6 +51,7 @@ describe('FilterBar component', () => {
     expect(container.textContent).toContain('All Issues (2)');
     expect(container.textContent).toContain('Assigned to Me');
     expect(container.textContent).toContain('Active');
+    expect(container.textContent).toContain('Hide Epics');
     expect(container.textContent).not.toContain('Blockers');
 
     await act(async () => {
@@ -58,7 +59,7 @@ describe('FilterBar component', () => {
     });
   });
 
-  it('selects "Assigned to Me" and "Active" by default, while "All Issues" is inactive', async () => {
+  it('selects "Assigned to Me", "Active", and "Hide Epics" by default, while "All Issues" is inactive', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
@@ -70,17 +71,19 @@ describe('FilterBar component', () => {
     const allBtn = Array.from(buttons).find((b) => b.textContent?.includes('All Issues'));
     const myBtn = Array.from(buttons).find((b) => b.textContent?.includes('Assigned to Me'));
     const activeBtn = Array.from(buttons).find((b) => b.textContent?.includes('Active'));
+    const hideEpicsBtn = Array.from(buttons).find((b) => b.textContent?.includes('Hide Epics'));
 
     expect(allBtn?.className).not.toContain('bg-[var(--jira-primary)]');
     expect(myBtn?.className).toContain('bg-[var(--jira-primary)]');
     expect(activeBtn?.className).toContain('bg-[var(--jira-primary)]');
+    expect(hideEpicsBtn?.className).toContain('bg-[var(--jira-primary)]');
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it('toggles "Assigned to Me" and "Active" filters when clicked', async () => {
+  it('toggles "Assigned to Me", "Active", and "Hide Epics" filters when clicked', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
@@ -91,20 +94,33 @@ describe('FilterBar component', () => {
     const buttons = container.querySelectorAll('button');
     const myBtn = Array.from(buttons).find((b) => b.textContent?.includes('Assigned to Me'));
     const activeBtn = Array.from(buttons).find((b) => b.textContent?.includes('Active'));
+    const hideEpicsBtn = Array.from(buttons).find((b) => b.textContent?.includes('Hide Epics'));
     const allBtn = Array.from(buttons).find((b) => b.textContent?.includes('All Issues'));
 
     // Toggle off "Assigned to Me"
     await act(async () => {
       myBtn?.click();
     });
-    expect(useBoardStore.getState().activeFilters).toEqual(['active']);
+    expect(useBoardStore.getState().activeFilters).toEqual(['active', 'hide_epics']);
 
     // Toggle off "Active"
     await act(async () => {
       activeBtn?.click();
     });
+    expect(useBoardStore.getState().activeFilters).toEqual(['hide_epics']);
+
+    // Toggle off "Hide Epics"
+    await act(async () => {
+      hideEpicsBtn?.click();
+    });
     expect(useBoardStore.getState().activeFilters).toEqual([]);
     expect(allBtn?.className).toContain('bg-[var(--jira-primary)]');
+
+    // Toggle "Hide Epics" back on
+    await act(async () => {
+      hideEpicsBtn?.click();
+    });
+    expect(useBoardStore.getState().activeFilters).toEqual(['hide_epics']);
 
     // Click "All Issues" button clears/keeps empty
     await act(async () => {

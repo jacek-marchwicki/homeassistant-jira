@@ -99,7 +99,7 @@ export function PrioritySelect({
         onClick={() => {
           if (!disabled) setIsOpen((prev) => !prev);
         }}
-        className={`w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] hover:border-[var(--jira-primary)]/50 focus:outline-none focus:border-[var(--jira-primary)] transition-all cursor-pointer min-h-[42px] select-none ${
+        className={`w-full h-10 flex items-center justify-between gap-3 px-3 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] hover:border-[var(--jira-primary)]/50 focus:outline-none focus:border-[var(--jira-primary)] transition-all cursor-pointer select-none ${
           disabled ? 'opacity-60 cursor-not-allowed' : ''
         }`}
       >

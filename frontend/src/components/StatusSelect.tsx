@@ -123,7 +123,7 @@ export function StatusSelect({
         className={`flex items-center justify-between text-[var(--jira-text-primary)] bg-[var(--jira-canvas)] border border-[var(--jira-border)] hover:border-[var(--jira-primary)]/50 focus:outline-none focus:border-[var(--jira-primary)] transition-all cursor-pointer select-none ${
           isSmall
             ? 'gap-1.5 px-2.5 py-1 text-xs rounded-md min-h-[32px]'
-            : 'w-full gap-3 px-3.5 py-2.5 text-sm rounded-lg min-h-[42px]'
+            : 'w-full h-10 gap-3 px-3 text-sm rounded-lg'
         } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
       >
         <div className="flex items-center gap-2 truncate">

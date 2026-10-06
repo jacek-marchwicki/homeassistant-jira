@@ -1,6 +1,6 @@
 [project]
 name = "jira-dashboard-backend"
-version = "0.1.0"
+version = "0.1.1"
 description = "Real-time backend service for the Home Assistant Jira Dashboard"
 readme = "README.md"
 requires-python = ">=3.10"

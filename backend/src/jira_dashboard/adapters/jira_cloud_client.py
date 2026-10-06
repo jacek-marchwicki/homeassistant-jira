@@ -136,7 +136,7 @@ class JiraCloudClient(JiraClientProtocol):
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "HomeAssistant-JiraDashboard/0.1.0",
+            "User-Agent": "HomeAssistant-JiraDashboard/0.1.1",
         }
         auth: httpx.Auth | None = None
 

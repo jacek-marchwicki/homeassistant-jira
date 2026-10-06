@@ -28,6 +28,7 @@ from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import (
     BoardColumn,
     IssueType,
+    JiraComment,
     JiraIssue,
     Priority,
     StatusCategory,
@@ -203,6 +204,19 @@ class BoardResponse(BaseModel):
     jira_url: str | None = None
     columns: list[BoardColumn] = []
     issues: list[JiraIssue]
+
+
+class CommentCreateRequest(BaseModel):
+    """Payload to create a new comment on an issue."""
+
+    body: str
+    author_name: str | None = None
+
+
+class CommentUpdateRequest(BaseModel):
+    """Payload to update an existing comment on an issue."""
+
+    body: str
 
 
 class SimulateErrorRequest(BaseModel):
@@ -436,6 +450,83 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     )
 
     return issue
+
+
+@app.get("/api/issues/{key}/comments", response_model=list[JiraComment])
+async def get_issue_comments(key: str) -> list[JiraComment]:
+    """Retrieve all comments for a specific issue."""
+    try:
+        return await jira_client.get_comments(key)
+    except JiraAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@app.post("/api/issues/{key}/comments", response_model=JiraComment, status_code=201)
+async def add_issue_comment(key: str, request: CommentCreateRequest) -> JiraComment:
+    """Add a new comment to an issue."""
+    if not request.body.strip():
+        raise HTTPException(status_code=400, detail="Comment body cannot be empty.")
+    try:
+        comment = await jira_client.add_comment(
+            key, body=request.body, author_name=request.author_name
+        )
+    except JiraAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    # Broadcast real-time delta via WebSockets
+    await ws_hub.broadcast(
+        {
+            "event": "comment_created",
+            "issue_key": key,
+            "comment": comment.model_dump(),
+        }
+    )
+
+    return comment
+
+
+@app.put("/api/issues/{key}/comments/{comment_id}", response_model=JiraComment)
+async def update_issue_comment(
+    key: str, comment_id: str, request: CommentUpdateRequest
+) -> JiraComment:
+    """Update an existing comment on an issue."""
+    if not request.body.strip():
+        raise HTTPException(status_code=400, detail="Comment body cannot be empty.")
+    try:
+        comment = await jira_client.update_comment(key, comment_id=comment_id, body=request.body)
+    except JiraAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    # Broadcast real-time delta via WebSockets
+    await ws_hub.broadcast(
+        {
+            "event": "comment_updated",
+            "issue_key": key,
+            "comment": comment.model_dump(),
+        }
+    )
+
+    return comment
+
+
+@app.delete("/api/issues/{key}/comments/{comment_id}")
+async def delete_issue_comment(key: str, comment_id: str) -> dict[str, Any]:
+    """Delete a comment from an issue."""
+    try:
+        await jira_client.delete_comment(key, comment_id=comment_id)
+    except JiraAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    # Broadcast real-time delta via WebSockets
+    await ws_hub.broadcast(
+        {
+            "event": "comment_deleted",
+            "issue_key": key,
+            "comment_id": comment_id,
+        }
+    )
+
+    return {"status": "deleted", "comment_id": comment_id}
 
 
 @app.post("/api/webhooks/jira")

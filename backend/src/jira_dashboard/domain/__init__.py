@@ -3,6 +3,7 @@
 from jira_dashboard.domain.models import (
     BoardColumn,
     IssueType,
+    JiraComment,
     JiraIssue,
     JiraStatus,
     JiraTransition,
@@ -14,6 +15,7 @@ from jira_dashboard.domain.models import (
 __all__ = [
     "BoardColumn",
     "IssueType",
+    "JiraComment",
     "JiraIssue",
     "JiraStatus",
     "JiraTransition",

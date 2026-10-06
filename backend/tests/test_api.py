@@ -107,6 +107,62 @@ class TestPresentationApi(unittest.TestCase):
         self.assertEqual(data["story_points"], 3.0)
         self.assertEqual(data["recreate_after"], "1 month")
 
+    def test_comments_crud_lifecycle(self) -> None:
+        """Verify viewing, adding, updating, and deleting comments on an issue."""
+        # 1. View comments
+        get_res = self.client.get("/api/issues/PROJ-101/comments")
+        self.assertEqual(get_res.status_code, 200)
+        comments = get_res.json()
+        self.assertIsInstance(comments, list)
+        self.assertGreaterEqual(len(comments), 1)
+        initial_count = len(comments)
+
+        # 2. Add comment
+        post_res = self.client.post(
+            "/api/issues/PROJ-101/comments",
+            json={
+                "body": "New test comment added by automation.",
+                "author_name": "Test Runner",
+            },
+        )
+        self.assertEqual(post_res.status_code, 201)
+        new_comment = post_res.json()
+        comment_id = new_comment["id"]
+        self.assertEqual(new_comment["body"], "New test comment added by automation.")
+        self.assertEqual(new_comment["author"]["display_name"], "Test Runner")
+
+        # Verify comment list increased
+        get_res2 = self.client.get("/api/issues/PROJ-101/comments")
+        self.assertEqual(len(get_res2.json()), initial_count + 1)
+
+        # 3. Update comment
+        put_res = self.client.put(
+            f"/api/issues/PROJ-101/comments/{comment_id}",
+            json={"body": "Edited test comment body."},
+        )
+        self.assertEqual(put_res.status_code, 200)
+        updated_comment = put_res.json()
+        self.assertEqual(updated_comment["id"], comment_id)
+        self.assertEqual(updated_comment["body"], "Edited test comment body.")
+        self.assertIsNotNone(updated_comment["updated"])
+
+        # 4. Delete comment
+        del_res = self.client.delete(f"/api/issues/PROJ-101/comments/{comment_id}")
+        self.assertEqual(del_res.status_code, 200)
+        self.assertEqual(del_res.json()["status"], "deleted")
+
+        # Verify comment list returned to initial count
+        get_res3 = self.client.get("/api/issues/PROJ-101/comments")
+        self.assertEqual(len(get_res3.json()), initial_count)
+
+    def test_comments_empty_body_rejected(self) -> None:
+        """Verify empty comment body is rejected with 400 Bad Request."""
+        res = self.client.post(
+            "/api/issues/PROJ-101/comments",
+            json={"body": "   "},
+        )
+        self.assertEqual(res.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

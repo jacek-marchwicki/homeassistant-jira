@@ -22,6 +22,15 @@ export interface JiraStatus {
   color?: string;
 }
 
+export interface JiraComment {
+  id: string;
+  author?: JiraUser | null;
+  body: string;
+  created: string;
+  updated?: string | null;
+}
+
+
 export interface JiraTransition {
   id: string;
   name: string;

@@ -8,6 +8,7 @@ import { AssigneeSelect } from './AssigneeSelect.tsx';
 import { IssueTypeSelect } from './IssueTypeSelect.tsx';
 import { PrioritySelect } from './PrioritySelect.tsx';
 import { StatusSelect } from './StatusSelect.tsx';
+import { CommentsSection } from './CommentsSection.tsx';
 
 interface EditIssueModalProps {
   issue: JiraIssue | null;
@@ -333,6 +334,9 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
             </button>
           </div>
         </form>
+
+        {/* Discussion / Comments Section */}
+        <CommentsSection issueKey={issue.key} />
       </div>
     </div>
   );

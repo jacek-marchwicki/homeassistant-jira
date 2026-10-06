@@ -139,7 +139,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
               priority: 'highest',
               status: { id: '10003', name: 'Ready', category: 'todo' },
               start_date: null,
-              due_date: '2026-10-05',
+              due_date: null,
               updated_at: '2026-10-05T00:00:00Z',
             },
             {
@@ -231,6 +231,26 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const dialogBox = modal.locator('> div');
     await dialogBox.screenshot({
       path: './tests/screenshots/component-modal-edit.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Edit Issue Modal with Comments Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
+    await editButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#edit-issue-title')).toContainText('Edit Issue');
+
+    const commentsSection = modal.getByTestId('comments-section');
+    await expect(commentsSection).toBeVisible();
+    await expect(commentsSection.getByText(/Comments/)).toBeVisible();
+
+    // Capture isolated comments section snapshot
+    await commentsSection.screenshot({
+      path: './tests/screenshots/component-comments-section.png',
       animations: 'disabled',
     });
   });

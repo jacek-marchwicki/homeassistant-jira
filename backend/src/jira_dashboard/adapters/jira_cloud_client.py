@@ -22,6 +22,7 @@ from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import (
     BoardColumn,
     IssueType,
+    JiraComment,
     JiraIssue,
     JiraStatus,
     JiraUser,
@@ -679,3 +680,124 @@ class JiraCloudClient(JiraClientProtocol):
             return None
 
         return self._parse_issue(issue_data)
+
+    def _parse_comment(self, data: dict[str, Any]) -> JiraComment:
+        """Parse Jira comment JSON into domain JiraComment."""
+        cid = str(data.get("id", ""))
+        raw_body = data.get("body")
+        body_text = ""
+        if isinstance(raw_body, str):
+            body_text = raw_body
+        elif isinstance(raw_body, dict):
+
+            def _extract_adf(node: Any) -> list[str]:
+                texts = []
+                if isinstance(node, dict):
+                    if node.get("type") == "text" and "text" in node:
+                        texts.append(str(node["text"]))
+                    for v in node.values():
+                        texts.extend(_extract_adf(v))
+                elif isinstance(node, list):
+                    for item in node:
+                        texts.extend(_extract_adf(item))
+                return texts
+
+            body_text = "\n".join(_extract_adf(raw_body)).strip()
+
+        author: JiraUser | None = None
+        author_data = data.get("author")
+        if author_data and isinstance(author_data, dict):
+            account_id = author_data.get("accountId") or author_data.get("name", "")
+            display_name = author_data.get("displayName", "Unknown")
+            avatar_urls = author_data.get("avatarUrls", {})
+            avatar_url = (
+                avatar_urls.get("48x48")
+                or avatar_urls.get("32x32")
+                or avatar_urls.get("24x24")
+                or avatar_urls.get("16x16")
+            )
+            author = JiraUser(
+                account_id=account_id,
+                display_name=display_name,
+                avatar_url=avatar_url,
+            )
+
+        return JiraComment(
+            id=cid,
+            author=author,
+            body=body_text,
+            created=data.get("created", ""),
+            updated=data.get("updated"),
+        )
+
+    async def get_comments(self, issue_key: str) -> list[JiraComment]:
+        """Fetch comments for a given issue."""
+        try:
+            res = await self._send_request("GET", f"/rest/api/3/issue/{issue_key}/comment")
+            self._handle_response_errors(res)
+            data = res.json()
+            comments_raw = data.get("comments", [])
+            return [self._parse_comment(c) for c in comments_raw]
+        except httpx.RequestError as exc:
+            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+
+    async def add_comment(
+        self, issue_key: str, body: str, author_name: str | None = None
+    ) -> JiraComment:
+        """Add a comment to an issue via Jira Cloud REST API."""
+        payload = {
+            "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": body}],
+                    }
+                ],
+            }
+        }
+        try:
+            res = await self._send_request(
+                "POST", f"/rest/api/3/issue/{issue_key}/comment", json=payload
+            )
+            self._handle_response_errors(res)
+            return self._parse_comment(res.json())
+        except httpx.RequestError as exc:
+            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+
+    async def update_comment(self, issue_key: str, comment_id: str, body: str) -> JiraComment:
+        """Update an existing comment via Jira Cloud REST API."""
+        payload = {
+            "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": body}],
+                    }
+                ],
+            }
+        }
+        try:
+            res = await self._send_request(
+                "PUT", f"/rest/api/3/issue/{issue_key}/comment/{comment_id}", json=payload
+            )
+            self._handle_response_errors(res)
+            return self._parse_comment(res.json())
+        except httpx.RequestError as exc:
+            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+
+    async def delete_comment(self, issue_key: str, comment_id: str) -> bool:
+        """Delete an existing comment via Jira Cloud REST API."""
+        try:
+            res = await self._send_request(
+                "DELETE", f"/rest/api/3/issue/{issue_key}/comment/{comment_id}"
+            )
+            if res.status_code == 204 or res.is_success:
+                return True
+            self._handle_response_errors(res)
+            return True
+        except httpx.RequestError as exc:
+            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc

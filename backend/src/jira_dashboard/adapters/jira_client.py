@@ -12,6 +12,7 @@ from typing import Any, Protocol
 from jira_dashboard.domain import (
     BoardColumn,
     IssueType,
+    JiraComment,
     JiraIssue,
     JiraStatus,
     JiraUser,
@@ -142,6 +143,33 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
     ),
 ]
 
+DEFAULT_SEED_COMMENTS: dict[str, list[JiraComment]] = {
+    "PROJ-101": [
+        JiraComment(
+            id="c-1",
+            author=JiraUser(
+                account_id="usr-1",
+                display_name="Jacek Marchwicki",
+                avatar_url=None,
+            ),
+            body="Verified Ingress headers and root_path behavior on Home Assistant 2026.10.",
+            created="2026-10-04T22:35:00Z",
+            updated=None,
+        ),
+        JiraComment(
+            id="c-2",
+            author=JiraUser(
+                account_id="usr-2",
+                display_name="Alex Lead",
+                avatar_url=None,
+            ),
+            body="Ensure reverse proxy query parameters and WebSockets upgrade cleanly.",
+            created="2026-10-04T22:45:00Z",
+            updated=None,
+        ),
+    ]
+}
+
 
 class JiraClientProtocol(Protocol):
     """Protocol defining the operations supported by Jira API clients."""
@@ -206,6 +234,24 @@ class JiraClientProtocol(Protocol):
         """Create a new Jira issue."""
         ...
 
+    async def get_comments(self, issue_key: str) -> list[JiraComment]:
+        """Fetch comments for a given issue."""
+        ...
+
+    async def add_comment(
+        self, issue_key: str, body: str, author_name: str | None = None
+    ) -> JiraComment:
+        """Add a comment to an issue."""
+        ...
+
+    async def update_comment(self, issue_key: str, comment_id: str, body: str) -> JiraComment:
+        """Update a comment on an issue."""
+        ...
+
+    async def delete_comment(self, issue_key: str, comment_id: str) -> bool:
+        """Delete a comment on an issue."""
+        ...
+
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
         """Parse and apply an incoming Jira webhook payload."""
         ...
@@ -231,6 +277,9 @@ class FakeJiraClient:
         self._issues: dict[str, JiraIssue] = {
             issue.key: issue.model_copy(deep=True) for issue in seed
         }
+        self._comments: dict[str, list[JiraComment]] = {
+            k: [c.model_copy(deep=True) for c in v] for k, v in DEFAULT_SEED_COMMENTS.items()
+        }
         self.simulate_failure: bool = False
         self.simulate_transition_failure: bool = False
         self.simulate_board_failure: bool = False
@@ -240,6 +289,9 @@ class FakeJiraClient:
     def reset(self) -> None:
         """Reset in-memory issues and simulated failure flags to initial seed state."""
         self._issues = {issue.key: issue.model_copy(deep=True) for issue in DEFAULT_SEED_ISSUES}
+        self._comments = {
+            k: [c.model_copy(deep=True) for c in v] for k, v in DEFAULT_SEED_COMMENTS.items()
+        }
         self.simulate_failure = False
         self.simulate_transition_failure = False
         self.simulate_board_failure = False
@@ -560,3 +612,76 @@ class FakeJiraClient:
         )
         self._issues[issue_key] = new_issue
         return new_issue
+
+    async def get_comments(self, issue_key: str) -> list[JiraComment]:
+        """Fetch comments for a given issue."""
+        if self.simulate_board_failure or self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        if issue_key not in self._issues:
+            raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
+        return [c.model_copy(deep=True) for c in self._comments.get(issue_key, [])]
+
+    async def add_comment(
+        self, issue_key: str, body: str, author_name: str | None = None
+    ) -> JiraComment:
+        """Add a comment to an issue in memory."""
+        if self.simulate_transition_failure or self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        if issue_key not in self._issues:
+            raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
+
+        if not body.strip():
+            raise JiraAPIError("Comment body cannot be empty", status_code=400)
+
+        existing = self._comments.setdefault(issue_key, [])
+        new_id = f"c-{len(existing) + 1}-{int(len(existing) * 17) + 1}"
+        display = author_name.strip() if author_name and author_name.strip() else "Jacek Marchwicki"
+        new_comment = JiraComment(
+            id=new_id,
+            author=JiraUser(
+                account_id="usr-1",
+                display_name=display,
+                avatar_url=None,
+            ),
+            body=body.strip(),
+            created="2026-10-05T00:00:00Z",
+            updated=None,
+        )
+        existing.append(new_comment)
+        return new_comment
+
+    async def update_comment(self, issue_key: str, comment_id: str, body: str) -> JiraComment:
+        """Update an existing comment."""
+        if self.simulate_transition_failure or self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        if issue_key not in self._issues:
+            raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
+
+        if not body.strip():
+            raise JiraAPIError("Comment body cannot be empty", status_code=400)
+
+        comments = self._comments.get(issue_key, [])
+        for idx, c in enumerate(comments):
+            if c.id == comment_id:
+                updated = c.model_copy(
+                    update={"body": body.strip(), "updated": "2026-10-05T00:01:00Z"}
+                )
+                comments[idx] = updated
+                return updated
+
+        raise JiraAPIError(f"Comment {comment_id} not found on issue {issue_key}", status_code=404)
+
+    async def delete_comment(self, issue_key: str, comment_id: str) -> bool:
+        """Delete an existing comment."""
+        if self.simulate_transition_failure or self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        if issue_key not in self._issues:
+            raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
+
+        comments = self._comments.get(issue_key, [])
+        for idx, c in enumerate(comments):
+            if c.id == comment_id:
+                comments.pop(idx)
+                return True
+
+        raise JiraAPIError(f"Comment {comment_id} not found on issue {issue_key}", status_code=404)

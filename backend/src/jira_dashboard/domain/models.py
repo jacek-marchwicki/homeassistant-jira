@@ -44,6 +44,16 @@ class JiraUser(BaseModel):
     avatar_url: str | None = None
 
 
+class JiraComment(BaseModel):
+    """Represents a comment on a Jira issue."""
+
+    id: str
+    author: JiraUser | None = None
+    body: str
+    created: str
+    updated: str | None = None
+
+
 class JiraStatus(BaseModel):
     """Represents a workflow status in Jira."""
 

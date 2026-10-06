@@ -92,6 +92,14 @@ def test_addon_dockerfile_contents() -> None:
     assert "HEALTHCHECK" in content
     assert "jira_dashboard.presentation.main:app" in content
 
+    # Verify ARG BUILD_FROM appears before any FROM instruction for BuildKit compliance
+    build_from_pos = content.find("ARG BUILD_FROM")
+    first_from_pos = content.find("FROM ")
+    assert build_from_pos != -1, "ARG BUILD_FROM must be declared"
+    assert build_from_pos < first_from_pos, (
+        "ARG BUILD_FROM must precede the first FROM instruction for Docker BuildKit"
+    )
+
 
 def test_root_dockerfile_contents() -> None:
     """Validate root Dockerfile multi-stage structure, non-root user, and healthcheck."""

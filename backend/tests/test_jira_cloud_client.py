@@ -452,3 +452,215 @@ def test_jira_browse_url_preserves_custom_domain_even_after_gateway_switch() -> 
         await client.close()
 
     asyncio.run(_test())
+
+
+def test_get_board_issues_pagination_agile_api() -> None:
+    """Verify get_board_issues paginates through multiple pages beyond 100 issues."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            assert "/rest/agile/1.0/board/board-pagination/issue" in url_str
+
+            if "startAt=100" in url_str:
+                page2_issues = [
+                    {
+                        "id": str(2000 + i),
+                        "key": f"DEV-{2000 + i}",
+                        "fields": {
+                            "summary": f"Page 2 Issue #{i}",
+                            "issuetype": {"name": "Task"},
+                            "priority": {"name": "Medium"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"key": "new"},
+                            },
+                            "updated": "2026-10-06T00:00:00Z",
+                        },
+                    }
+                    for i in range(25)
+                ]
+                return httpx.Response(
+                    200,
+                    json={
+                        "startAt": 100,
+                        "maxResults": 100,
+                        "total": 125,
+                        "isLast": True,
+                        "issues": page2_issues,
+                    },
+                )
+            else:
+                page1_issues = [
+                    {
+                        "id": str(1000 + i),
+                        "key": f"DEV-{1000 + i}",
+                        "fields": {
+                            "summary": f"Page 1 Issue #{i}",
+                            "issuetype": {"name": "Task"},
+                            "priority": {"name": "Medium"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"key": "new"},
+                            },
+                            "updated": "2026-10-06T00:00:00Z",
+                        },
+                    }
+                    for i in range(100)
+                ]
+                return httpx.Response(
+                    200,
+                    json={
+                        "startAt": 0,
+                        "maxResults": 100,
+                        "total": 125,
+                        "isLast": False,
+                        "issues": page1_issues,
+                    },
+                )
+
+        client = create_mock_client(handler)
+        issues = await client.get_board_issues("board-pagination")
+        assert len(issues) == 125
+        assert issues[0].key == "DEV-1000"
+        assert issues[99].key == "DEV-1099"
+        assert issues[100].key == "DEV-2000"
+        assert issues[124].key == "DEV-2024"
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_get_board_issues_pagination_jql_fallback() -> None:
+    """Verify JQL fallback paginates beyond 100 issues."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            if "/rest/agile/1.0/board" in url_str:
+                return httpx.Response(404, json={"errorMessages": ["Board not found"]})
+
+            assert "/rest/api/3/search/jql" in url_str
+            if "startAt=100" in url_str:
+                page2 = [
+                    {
+                        "id": str(3000 + i),
+                        "key": f"JQL-{3000 + i}",
+                        "fields": {
+                            "summary": f"JQL Page 2 #{i}",
+                            "issuetype": {"name": "Task"},
+                            "priority": {"name": "Medium"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"key": "new"},
+                            },
+                            "updated": "2026-10-06T00:00:00Z",
+                        },
+                    }
+                    for i in range(15)
+                ]
+                return httpx.Response(
+                    200,
+                    json={
+                        "startAt": 100,
+                        "maxResults": 100,
+                        "total": 115,
+                        "isLast": True,
+                        "issues": page2,
+                    },
+                )
+            else:
+                page1 = [
+                    {
+                        "id": str(3000 - i),
+                        "key": f"JQL-{3000 - i}",
+                        "fields": {
+                            "summary": f"JQL Page 1 #{i}",
+                            "issuetype": {"name": "Task"},
+                            "priority": {"name": "Medium"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"key": "new"},
+                            },
+                            "updated": "2026-10-06T00:00:00Z",
+                        },
+                    }
+                    for i in range(100)
+                ]
+                return httpx.Response(
+                    200,
+                    json={
+                        "startAt": 0,
+                        "maxResults": 100,
+                        "total": 115,
+                        "isLast": False,
+                        "issues": page1,
+                    },
+                )
+
+        client = create_mock_client(handler)
+        issues = await client.get_board_issues("DEV")
+        assert len(issues) == 115
+        assert issues[0].key == "JQL-3000"
+        assert issues[100].key == "JQL-3000"
+        assert issues[114].key == "JQL-3014"
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_get_comments_pagination() -> None:
+    """Verify get_comments paginates through multiple pages beyond 100 comments."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            assert "/rest/api/3/issue/DEV-1001/comment" in url_str
+
+            if "startAt=100" in url_str:
+                return httpx.Response(
+                    200,
+                    json={
+                        "startAt": 100,
+                        "maxResults": 100,
+                        "total": 110,
+                        "comments": [
+                            {
+                                "id": str(200 + i),
+                                "body": f"Page 2 Comment {i}",
+                                "created": "2026-10-06T00:00:00Z",
+                            }
+                            for i in range(10)
+                        ],
+                    },
+                )
+            else:
+                return httpx.Response(
+                    200,
+                    json={
+                        "startAt": 0,
+                        "maxResults": 100,
+                        "total": 110,
+                        "comments": [
+                            {
+                                "id": str(100 + i),
+                                "body": f"Page 1 Comment {i}",
+                                "created": "2026-10-06T00:00:00Z",
+                            }
+                            for i in range(100)
+                        ],
+                    },
+                )
+
+        client = create_mock_client(handler)
+        comments = await client.get_comments("DEV-1001")
+        assert len(comments) == 110
+        assert comments[0].id == "100"
+        assert comments[109].id == "209"
+        await client.close()
+
+    asyncio.run(_test())

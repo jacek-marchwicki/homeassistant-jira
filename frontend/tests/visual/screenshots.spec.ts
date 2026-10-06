@@ -436,5 +436,61 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture High Volume Multi-Page Issues Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const largeIssues = Array.from({ length: 125 }, (_, i) => ({
+      id: `${1000 + i}`,
+      key: `HOME-${1000 + i}`,
+      summary: `Paginated Issue #${i + 1} - System optimization and monitoring`,
+      issue_type: i % 4 === 0 ? 'bug' : i % 3 === 0 ? 'story' : 'task',
+      priority: i % 5 === 0 ? 'highest' : i % 3 === 0 ? 'high' : 'medium',
+      status: {
+        id: i % 2 === 0 ? '1' : '2',
+        name: i % 2 === 0 ? 'To Do' : 'In Progress',
+        category: i % 2 === 0 ? 'todo' : 'inprogress',
+      },
+      assignee: {
+        account_id: 'usr-1',
+        display_name: 'Jacek Marchwicki',
+      },
+      updated_at: new Date().toISOString(),
+    }));
+
+    await page.route('**/api/board', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          board_id: 'HOME',
+          board_name: 'Engineering Sprint Board (125 Issues)',
+          sprint_name: 'Active Sprint 42',
+          jira_url: 'https://marchwicki.atlassian.net',
+          columns: [
+            { id: 'col-todo', name: 'To Do', category: 'todo', status_ids: ['1'] },
+            { id: 'col-inprogress', name: 'In Progress', category: 'inprogress', status_ids: ['2'] },
+            { id: 'col-done', name: 'Done', category: 'done', status_ids: ['4'] },
+          ],
+          issues: largeIssues,
+        }),
+      });
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Select "All Issues" filter to ensure all paginated tickets are rendered
+    const allIssuesButton = page.getByRole('button', { name: /All Issues/ });
+    await allIssuesButton.click();
+
+    const firstCard = page.locator('article', { hasText: 'HOME-1000' });
+    await expect(firstCard).toBeVisible();
+
+    await page.screenshot({
+      path: './tests/screenshots/board-high-volume-pagination.png',
+      animations: 'disabled',
+    });
+  });
 });
 

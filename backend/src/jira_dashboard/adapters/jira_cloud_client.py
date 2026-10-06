@@ -386,13 +386,14 @@ class JiraCloudClient(JiraClientProtocol):
         return f"{base}/browse/{key}"
 
     async def get_board_issues(self, board_id: str) -> list[JiraIssue]:
-        """Fetch all issues for a given board ID or project key."""
+        """Fetch all issues for a given board ID or project key across all pages."""
         try:
             # 1. First attempt Jira Agile API
+            agile_params: dict[str, Any] = {"maxResults": 100, "startAt": 0}
             res = await self._send_request(
                 "GET",
                 f"/rest/agile/1.0/board/{board_id}/issue",
-                params={"maxResults": 100},
+                params=agile_params,
             )
             # If board is 404, or 400 (e.g. project key used instead of board ID),
             # or 401 with "scope does not match" (user token missing read:jira-agile scope),
@@ -400,18 +401,92 @@ class JiraCloudClient(JiraClientProtocol):
             should_fallback_to_jql = res.status_code in (400, 404) or (
                 res.status_code == 401 and "scope does not match" in res.text.lower()
             )
-            if should_fallback_to_jql:
-                # 2. Modern JQL search endpoint /rest/api/3/search/jql
-                jql = f"project = '{board_id}' ORDER BY updated DESC"
-                res = await self._send_request(
-                    "GET",
-                    "/rest/api/3/search/jql",
-                    params={"jql": jql, "fields": "*all", "maxResults": 100},
-                )
+
+            if not should_fallback_to_jql:
+                self._handle_response_errors(res)
+                data = res.json()
+                issues_raw = list(data.get("issues", []))
+                total = data.get("total", len(issues_raw))
+                is_last = data.get("isLast", len(issues_raw) >= total)
+
+                # Page through all remaining issues
+                max_pages = 50  # Safety circuit breaker: up to 5,000 issues
+                page_count = 1
+                while not is_last and len(issues_raw) < total and page_count < max_pages:
+                    next_params: dict[str, Any] = {"maxResults": 100, "startAt": len(issues_raw)}
+                    next_res = await self._send_request(
+                        "GET",
+                        f"/rest/agile/1.0/board/{board_id}/issue",
+                        params=next_params,
+                    )
+                    self._handle_response_errors(next_res)
+                    page_data = next_res.json()
+                    page_issues = page_data.get("issues", [])
+                    if not page_issues:
+                        break
+                    issues_raw.extend(page_issues)
+                    page_count += 1
+                    is_last = page_data.get("isLast", len(issues_raw) >= total)
+                    if len(page_issues) < 100:
+                        break
+
+                return [self._parse_issue(issue) for issue in issues_raw]
+
+            # 2. Modern JQL search endpoint fallback (/rest/api/3/search/jql or /rest/api/3/search)
+            jql = f"project = '{board_id}' ORDER BY updated DESC"
+            search_endpoint = "/rest/api/3/search/jql"
+            search_params: dict[str, Any] = {
+                "jql": jql,
+                "fields": "*all",
+                "maxResults": 100,
+                "startAt": 0,
+            }
+            res = await self._send_request("GET", search_endpoint, params=search_params)
+            # If 404 on /rest/api/3/search/jql, fallback to classic /rest/api/3/search
+            if res.status_code == 404:
+                search_endpoint = "/rest/api/3/search"
+                res = await self._send_request("GET", search_endpoint, params=search_params)
 
             self._handle_response_errors(res)
             data = res.json()
-            issues_raw = data.get("issues", [])
+            issues_raw = list(data.get("issues", []))
+            total = data.get("total", len(issues_raw))
+            next_page_token = data.get("nextPageToken")
+            is_last = data.get("isLast", False) or (
+                len(issues_raw) >= total and not next_page_token
+            )
+
+            max_pages = 50
+            page_count = 1
+            while (
+                not is_last
+                and (len(issues_raw) < total or next_page_token)
+                and page_count < max_pages
+            ):
+                page_params: dict[str, Any] = {
+                    "jql": jql,
+                    "fields": "*all",
+                    "maxResults": 100,
+                    "startAt": len(issues_raw),
+                }
+                if next_page_token:
+                    page_params["nextPageToken"] = next_page_token
+
+                next_res = await self._send_request("GET", search_endpoint, params=page_params)
+                self._handle_response_errors(next_res)
+                page_data = next_res.json()
+                page_issues = page_data.get("issues", [])
+                if not page_issues:
+                    break
+                issues_raw.extend(page_issues)
+                page_count += 1
+                next_page_token = page_data.get("nextPageToken")
+                is_last = page_data.get("isLast", False) or (
+                    len(issues_raw) >= total and not next_page_token
+                )
+                if len(page_issues) < 100 and not next_page_token:
+                    break
+
             return [self._parse_issue(issue) for issue in issues_raw]
         except httpx.RequestError as exc:
             raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
@@ -769,12 +844,32 @@ class JiraCloudClient(JiraClientProtocol):
         )
 
     async def get_comments(self, issue_key: str) -> list[JiraComment]:
-        """Fetch comments for a given issue."""
+        """Fetch comments for a given issue across all pages."""
         try:
-            res = await self._send_request("GET", f"/rest/api/3/issue/{issue_key}/comment")
+            params: dict[str, Any] = {"maxResults": 100, "startAt": 0}
+            res = await self._send_request(
+                "GET", f"/rest/api/3/issue/{issue_key}/comment", params=params
+            )
             self._handle_response_errors(res)
             data = res.json()
-            comments_raw = data.get("comments", [])
+            comments_raw = list(data.get("comments", []))
+            total = data.get("total", len(comments_raw))
+            max_pages = 20
+            page_count = 1
+            while len(comments_raw) < total and page_count < max_pages:
+                page_params = {"maxResults": 100, "startAt": len(comments_raw)}
+                next_res = await self._send_request(
+                    "GET", f"/rest/api/3/issue/{issue_key}/comment", params=page_params
+                )
+                self._handle_response_errors(next_res)
+                page_data = next_res.json()
+                page_comments = page_data.get("comments", [])
+                if not page_comments:
+                    break
+                comments_raw.extend(page_comments)
+                page_count += 1
+                if len(page_comments) < 100:
+                    break
             return [self._parse_comment(c) for c in comments_raw]
         except httpx.RequestError as exc:
             raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc

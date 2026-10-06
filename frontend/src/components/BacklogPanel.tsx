@@ -12,11 +12,6 @@ export function BacklogPanel({ issues, isHighlighted = false }: BacklogPanelProp
   const { isBacklogExpandedOnBoard, toggleBacklogExpandedOnBoard, setCurrentView } =
     useBoardStore();
 
-  const totalPoints = issues.reduce(
-    (sum, i) => sum + (i.story_points ?? i.storyPoints ?? 0),
-    0
-  );
-
   return (
     <section
       data-testid="backlog-panel"
@@ -34,11 +29,6 @@ export function BacklogPanel({ issues, isHighlighted = false }: BacklogPanelProp
               <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
                 {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
               </span>
-              {totalPoints > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
-                  {totalPoints} pts
-                </span>
-              )}
             </div>
             <p className="text-2xs text-[var(--jira-text-muted)]">
               Issues awaiting sprint planning or prioritization

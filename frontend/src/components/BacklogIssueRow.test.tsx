@@ -32,7 +32,7 @@ describe('BacklogIssueRow component', () => {
     });
   });
 
-  it('renders key, summary, priority, story points, and "To Board" button for backlog issue', async () => {
+  it('renders key, summary, priority, and "To Board" button for backlog issue', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
@@ -48,7 +48,6 @@ describe('BacklogIssueRow component', () => {
 
     expect(container.textContent).toContain('PROJ-104');
     expect(container.textContent).toContain('Setup WebSocket broadcast client');
-    expect(container.textContent).toContain('3');
     expect(container.textContent).toContain('Backlog');
     expect(container.textContent).toContain('To Board');
 

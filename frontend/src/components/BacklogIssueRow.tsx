@@ -75,7 +75,6 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
     transitionIssueOptimistic(issue.key, cat, statusName);
   };
 
-  const storyPoints = issue.story_points ?? issue.storyPoints;
   const isDone = issue.status.category === 'done';
 
   return (
@@ -167,15 +166,7 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
           );
         })()}
 
-        {/* Story Points */}
-        {storyPoints !== undefined && (
-          <span
-            className="px-1.5 py-0.5 rounded text-2xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)] min-w-[24px] text-center"
-            title={`${storyPoints} Story Points`}
-          >
-            {storyPoints}
-          </span>
-        )}
+
 
         {/* Jira-style Status Lozenge */}
         <span

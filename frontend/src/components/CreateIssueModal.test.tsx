@@ -68,6 +68,9 @@ describe('CreateIssueModal component', () => {
     const assigneeInput = container.querySelector('#create-assignee') as HTMLInputElement;
     expect(assigneeInput.value).toBe('');
 
+    const pointsInput = container.querySelector('#create-points');
+    expect(pointsInput).toBeNull();
+
     const recreateAfterInput = container.querySelector('#create-recreate-after') as HTMLInputElement;
     expect(recreateAfterInput).not.toBeNull();
     expect(recreateAfterInput.value).toBe('');

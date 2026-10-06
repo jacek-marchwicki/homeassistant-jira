@@ -51,7 +51,7 @@ describe('BacklogPanel component', () => {
 
     expect(container.textContent).toContain('Backlog');
     expect(container.textContent).toContain('2 issues');
-    expect(container.textContent).toContain('8 pts');
+    expect(container.textContent).not.toContain('pts');
     expect(container.textContent).toContain('Show List (2)');
     expect(container.textContent).not.toContain('First backlog item');
 

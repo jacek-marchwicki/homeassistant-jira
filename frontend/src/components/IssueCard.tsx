@@ -179,11 +179,7 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
               <span>{dueDateStr}</span>
             </span>
           )}
-          {(issue.story_points ?? issue.storyPoints) !== undefined && (
-            <span className="px-1.5 py-0.5 rounded text-2xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
-              {issue.story_points ?? issue.storyPoints} pts
-            </span>
-          )}
+
           {(issue.recreate_after ?? issue.recreateAfter) && (
             <span
               className="flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded border bg-[var(--jira-canvas)] text-[var(--jira-text-secondary)] border-[var(--jira-border-subtle)]"

@@ -60,15 +60,6 @@ export function BacklogView() {
 
   const { boardIssues, backlogIssues } = splitIssuesByBacklog(filteredIssues, columns);
 
-  const sprintPoints = boardIssues.reduce(
-    (sum, i) => sum + (i.story_points ?? i.storyPoints ?? 0),
-    0
-  );
-  const backlogPoints = backlogIssues.reduce(
-    (sum, i) => sum + (i.story_points ?? i.storyPoints ?? 0),
-    0
-  );
-
   const collisionDetectionStrategy: CollisionDetection = (args) => {
     const pointerCollisions = pointerWithin(args);
     if (pointerCollisions.length > 0) {
@@ -196,11 +187,6 @@ export function BacklogView() {
                   <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
                     {boardIssues.length} {boardIssues.length === 1 ? 'issue' : 'issues'}
                   </span>
-                  {sprintPoints > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
-                      {sprintPoints} pts
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
@@ -246,11 +232,6 @@ export function BacklogView() {
                   <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
                     {backlogIssues.length} {backlogIssues.length === 1 ? 'issue' : 'issues'}
                   </span>
-                  {backlogPoints > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--jira-canvas)] border border-[var(--jira-border-subtle)] text-[var(--jira-text-secondary)]">
-                      {backlogPoints} pts
-                    </span>
-                  )}
                 </div>
               </div>
             </div>

@@ -31,7 +31,6 @@ export function CreateIssueModal({
   const [priority, setPriority] = useState<JiraPriority>('medium');
   const [statusName, setStatusName] = useState('');
   const [assigneeName, setAssigneeName] = useState('');
-  const [storyPoints, setStoryPoints] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [startDate, setStartDate] = useState('');
   const [recreateAfter, setRecreateAfter] = useState('');
@@ -53,7 +52,6 @@ export function CreateIssueModal({
         (statusOptions.length > 0 ? statusOptions[0].name : 'To Do');
       setStatusName(initialStatus);
       setAssigneeName('');
-      setStoryPoints('');
       setDueDate('');
       setStartDate('');
       setRecreateAfter('');
@@ -93,7 +91,6 @@ export function CreateIssueModal({
       status_name: statusName || chosenStatus?.name || 'To Do',
       status_category: chosenStatus?.category || defaultStatusCategory || 'todo',
       assignee_name: assigneeName.trim() ? assigneeName.trim() : undefined,
-      story_points: storyPoints !== '' ? parseFloat(storyPoints) : undefined,
       due_date: dueDate.trim() || null,
       start_date: startDate.trim() || null,
       recreate_after: recreateAfter.trim() || null,
@@ -241,25 +238,8 @@ export function CreateIssueModal({
             </div>
           </div>
 
-          {/* Story Points & Dates */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label
-                htmlFor="create-points"
-                className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
-              >
-                Story Points
-              </label>
-              <input
-                id="create-points"
-                type="number"
-                step="any"
-                value={storyPoints}
-                onChange={(e) => setStoryPoints(e.target.value)}
-                placeholder="e.g. 3"
-                className="w-full h-10 px-3 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
-              />
-            </div>
+          {/* Dates */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
             <div>
               <label

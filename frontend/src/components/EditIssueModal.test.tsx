@@ -73,8 +73,8 @@ describe('EditIssueModal component', () => {
     const assigneeInput = container.querySelector('#edit-assignee') as HTMLInputElement;
     expect(assigneeInput.value).toBe('Jane Doe');
 
-    const pointsInput = container.querySelector('#edit-points') as HTMLInputElement;
-    expect(pointsInput.value).toBe('3');
+    const pointsInput = container.querySelector('#edit-points');
+    expect(pointsInput).toBeNull();
 
     const recreateAfterInput = container.querySelector('#edit-recreate-after') as HTMLInputElement;
     expect(recreateAfterInput).not.toBeNull();

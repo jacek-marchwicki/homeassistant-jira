@@ -1,7 +1,8 @@
 # Home Assistant Jira Dashboard
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Status: Phase 2 Complete](https://img.shields.io/badge/Status-Phase%202%20Complete-green.svg)](#roadmap)
+[![Status: Phase 4 Complete](https://img.shields.io/badge/Status-Phase%204%20Complete-green.svg)](#roadmap)
+[![Add to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fjacek-marchwicki%2Fhomeassistant-jira)
 
 A high-performance, real-time Jira dashboard built for **Home Assistant** and **standalone web environments**. Designed from the ground up for ambient wall displays, desk workflows, and mobile devices, providing instant UI feedback and live multi-client synchronization.
 
@@ -285,10 +286,23 @@ You can deploy the complete dashboard as an independent, containerized web servi
 
 The application is packaged as a **Home Assistant Add-on** with native **Ingress** support, meaning it integrates securely into the Home Assistant interface and Companion mobile apps without exposing external ports.
 
+### ⚡ One-Click Installation (My Home Assistant)
+
+Click the button below to add this repository directly to your Home Assistant instance:
+
+[![Open your Home Assistant instance and show the add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fjacek-marchwicki%2Fhomeassistant-jira)
+
+Alternatively, jump directly to the Jira Dashboard add-on store page:
+
+[![Open your Home Assistant instance and show the dashboard of a supervisor add-on.](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=jira_dashboard&repository_url=https%3A%2F%2Fgithub.com%2Fjacek-marchwicki%2Fhomeassistant-jira)
+
+---
+
 ### Add-on Manifest & Packaging
 The repository specification is configured in [`repository.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/repository.yaml), add-on manifest at [`addon/config.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/config.yaml), multi-arch builder configuration at [`addon/build.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/build.yaml), container build definition at [`addon/Dockerfile`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/Dockerfile), and integrated documentation at [`addon/DOCS.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/DOCS.md).
 
 ### Method 1: Installing via Home Assistant Add-on Store (Repository)
+If the one-click button above is not used, add the repository manually:
 1. In Home Assistant, navigate to **Settings** > **Add-ons** > **Add-on Store**.
 2. Click the three vertical dots (top right) and select **Repositories**.
 3. Add this repository URL:

@@ -435,6 +435,11 @@ describe('KanbanColumn component', () => {
     expect(dropTarget?.textContent).toContain('In Progress');
     expect(dropTarget?.textContent).toContain('Drop target');
 
+    // Verify the drop target is integrated directly within the column header bar
+    const headerEl = container.querySelector('h2')?.closest('div.border-b');
+    expect(headerEl).not.toBeNull();
+    expect(headerEl?.contains(dropTarget)).toBe(true);
+
     await act(async () => {
       root.unmount();
     });

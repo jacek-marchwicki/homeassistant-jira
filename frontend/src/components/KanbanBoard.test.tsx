@@ -220,5 +220,25 @@ describe('KanbanBoard component', () => {
       root.unmount();
     });
   });
+
+  it('renders cards with select-none and touch-manipulation to support reliable touch gestures', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<KanbanBoard />);
+    });
+
+    const articles = container.querySelectorAll('article');
+    expect(articles.length).toBeGreaterThan(0);
+    articles.forEach((card) => {
+      expect(card.className).toContain('select-none');
+      expect(card.className).toContain('touch-manipulation');
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 

@@ -279,7 +279,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     });
   });
 
-  test('Capture In Progress Drop Target at Top of Ready List during Drag Snapshot', async ({ page }) => {
+  test('Capture Header-Integrated In Progress Drop Target during Drag Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
 
@@ -291,14 +291,14 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      // Move 25px down to activate pointer sensor
+      // Move 25px down to activate mouse sensor
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 25);
     }
 
     // Verify intermediate In Progress column is never rendered on the board
     await expect(page.getByTestId('column-col-inprogress')).not.toBeAttached();
 
-    // Verify drop target is displayed at the top of the Ready list
+    // Verify drop target is integrated into the Ready column header
     const dropTarget = page.getByTestId('ready-drop-target-inprogress');
     await expect(dropTarget).toBeVisible();
     await expect(dropTarget).toContainText('In Progress');
@@ -306,6 +306,14 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     const readyColumn = page.getByTestId('column-col-todo');
     await expect(readyColumn).toBeVisible();
+
+    const readyHeader = readyColumn.locator('div.border-b').first();
+    await expect(readyHeader.locator(dropTarget)).toBeAttached();
+
+    await readyHeader.screenshot({
+      path: './tests/screenshots/ready-header-drop-target-inprogress.png',
+      animations: 'disabled',
+    });
 
     await readyColumn.screenshot({
       path: './tests/screenshots/ready-drop-target-inprogress-column.png',
@@ -326,6 +334,58 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await dropTarget.screenshot({
       path: './tests/screenshots/ready-drop-target-inprogress-hover.png',
+      animations: 'disabled',
+    });
+
+    await page.mouse.up();
+  });
+
+  test('Capture Touch Device Viewport Drag and Zero Layout Shift Snapshot', async ({ page }) => {
+    // 375x667 mobile viewport
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const card1 = page.locator('article', { hasText: 'PROJ-85' });
+    const card2 = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(card1).toBeVisible();
+    await expect(card2).toBeVisible();
+
+    await card1.scrollIntoViewIfNeeded();
+
+    const readyColumn = page.getByTestId('column-col-todo');
+    const colBoxBefore = await readyColumn.boundingBox();
+    const initialBox2 = await card2.boundingBox();
+    expect(colBoxBefore).not.toBeNull();
+    expect(initialBox2).not.toBeNull();
+    const initialRelativeY = (initialBox2?.y ?? 0) - (colBoxBefore?.y ?? 0);
+
+    const headerBefore = await readyColumn.locator('div.border-b').first().boundingBox();
+
+    // Initiate drag on first card (move 15px horizontally to activate drag without sortable collision on card2)
+    const box1 = await card1.boundingBox();
+    expect(box1).not.toBeNull();
+    if (box1) {
+      await page.mouse.move(box1.x + box1.width / 2, box1.y + box1.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box1.x + box1.width / 2 + 15, box1.y + box1.height / 2, { steps: 5 });
+    }
+
+    // Verify drop target appears in header
+    const dropTarget = page.getByTestId('ready-drop-target-inprogress');
+    await expect(dropTarget).toBeVisible();
+
+    // Verify secondary card has not shifted relative to the column header (layout shift <= 2px)
+    const colBoxAfter = await readyColumn.boundingBox();
+    const currentBox2 = await card2.boundingBox();
+    expect(colBoxAfter).not.toBeNull();
+    expect(currentBox2).not.toBeNull();
+    const currentRelativeY = (currentBox2?.y ?? 0) - (colBoxAfter?.y ?? 0);
+
+    expect(Math.abs(currentRelativeY - initialRelativeY)).toBeLessThanOrEqual(2);
+
+    // Capture mobile screen with active drag and header drop target
+    await page.screenshot({
+      path: './tests/screenshots/mobile-touch-dnd-zero-shift.png',
       animations: 'disabled',
     });
 

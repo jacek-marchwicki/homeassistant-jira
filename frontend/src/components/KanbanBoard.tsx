@@ -8,7 +8,7 @@ import {
   DragStartEvent,
   KeyboardSensor,
   MeasuringStrategy,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   closestCorners,
   pointerWithin,
@@ -49,17 +49,20 @@ export function KanbanBoard() {
   const [activeIssue, setActiveIssue] = useState<JiraIssue | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
-  // Configure drag sensors with distance/delay constraints to distinguish click/touch-scroll from drag
+  // Configure drag sensors:
+  // - MouseSensor: Instant drag on mouse click + drag (distance: 5px) without long-press delay
+  // - TouchSensor: Long-press required on touch (delay: 250ms, tolerance: 8px) to prevent scroll interference
+  // - KeyboardSensor: Accessible keyboard navigation
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         distance: 5,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 150,
-        tolerance: 5,
+        delay: 250,
+        tolerance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -225,6 +228,13 @@ export function KanbanBoard() {
         droppable: {
           strategy: MeasuringStrategy.Always,
         },
+      }}
+      autoScroll={{
+        threshold: { x: 0.1, y: 0.15 },
+        acceleration: 10,
+        canScroll: (element) =>
+          element.scrollHeight > element.clientHeight ||
+          element.scrollWidth > element.clientWidth,
       }}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}

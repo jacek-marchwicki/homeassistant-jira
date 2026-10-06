@@ -96,6 +96,23 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     });
   });
 
+  test('Capture Mobile Theme Selector Dropdown Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    const themeDropdownTrigger = page.locator('header button[aria-label="Theme Selection"]');
+    await expect(themeDropdownTrigger).toBeVisible();
+    await themeDropdownTrigger.click();
+
+    const themeDropdown = page.locator('div[role="listbox"][aria-label="Select Theme"]');
+    await expect(themeDropdown).toBeVisible();
+    await page.waitForTimeout(100);
+
+    await page.screenshot({
+      path: './tests/screenshots/mobile-theme-dropdown.png',
+      animations: 'disabled',
+    });
+  });
+
   test('Capture Mobile Scrolled Content under Header Snapshot (verifying no overlap)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
 

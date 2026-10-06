@@ -72,7 +72,7 @@ describe('Header component', () => {
     expect(installBtn).toBeNull();
   });
 
-  it('renders single-line header with flex-nowrap, z-30 stacking, and no flex-wrap', async () => {
+  it('renders single-line header with flex-nowrap, z-30 stacking, and right-pinned Create button', async () => {
     await act(async () => {
       root.render(<Header />);
     });
@@ -82,8 +82,19 @@ describe('Header component', () => {
     expect(header?.className).toContain('flex-nowrap');
     expect(header?.className).not.toContain('flex-wrap');
     expect(header?.className).toContain('z-30');
-    expect(header?.className).toContain('overflow-x-auto');
-    expect(header?.className).toContain('no-scrollbar');
+
+    // Left navigation container is horizontally scrollable with no-scrollbar
+    const navContainer = header?.firstElementChild as HTMLElement;
+    expect(navContainer).not.toBeNull();
+    expect(navContainer.className).toContain('overflow-x-auto');
+    expect(navContainer.className).toContain('no-scrollbar');
+
+    // Right action container pins Create button to top right corner
+    const rightContainer = header?.lastElementChild as HTMLElement;
+    expect(rightContainer).not.toBeNull();
+    expect(rightContainer.className).toContain('shrink-0');
+    expect(rightContainer.className).toContain('ml-auto');
+    expect(rightContainer.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
   });
 
   it('renders all key mobile navigation controls (Board, Backlog, Create, WebSocket, Themes)', async () => {
@@ -94,8 +105,43 @@ describe('Header component', () => {
     expect(container.querySelector('button[aria-label="Kanban Board View"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Backlog View"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Theme Selection"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Dark Mode"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Light Mode"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Kiosk Mode"]')).not.toBeNull();
+  });
+
+  it('opens mobile theme dropdown and switches theme when an option is clicked', async () => {
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    const themeDropdownTrigger = container.querySelector(
+      'button[aria-label="Theme Selection"]'
+    ) as HTMLButtonElement;
+    expect(themeDropdownTrigger).not.toBeNull();
+    expect(themeDropdownTrigger.getAttribute('aria-expanded')).toBe('false');
+
+    await act(async () => {
+      themeDropdownTrigger.click();
+    });
+
+    expect(themeDropdownTrigger.getAttribute('aria-expanded')).toBe('true');
+    const menu = container.querySelector('div[role="listbox"][aria-label="Select Theme"]');
+    expect(menu).not.toBeNull();
+
+    // Click Light Mode option
+    const options = menu?.querySelectorAll('button[role="option"]');
+    const lightOption = Array.from(options || []).find((btn) =>
+      btn.textContent?.includes('Light Mode')
+    ) as HTMLButtonElement;
+    expect(lightOption).toBeDefined();
+
+    await act(async () => {
+      lightOption.click();
+    });
+
+    expect(useBoardStore.getState().theme).toBe('light');
+    expect(container.querySelector('div[role="listbox"][aria-label="Select Theme"]')).toBeNull();
   });
 });

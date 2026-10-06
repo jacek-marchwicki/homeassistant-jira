@@ -90,7 +90,7 @@ describe('AssigneeSelect component', () => {
     expect(listbox).not.toBeNull();
     expect(listbox?.textContent).toContain('Unassigned');
     expect(listbox?.textContent).toContain('Jacek Marchwicki');
-    expect(listbox?.textContent).toContain('Alex Lead');
+    expect(listbox?.textContent).not.toContain('Alex Lead');
     expect(listbox?.textContent).toContain('Samantha Miller');
   });
 
@@ -115,7 +115,7 @@ describe('AssigneeSelect component', () => {
 
     const listbox = container.querySelector('[role="listbox"]');
     expect(listbox?.textContent).toContain('Samantha Miller');
-    expect(listbox?.textContent).not.toContain('Alex Lead');
+    expect(listbox?.textContent).not.toContain('Jacek Marchwicki');
   });
 
   it('allows picking a suggestion and triggers onChange', async () => {

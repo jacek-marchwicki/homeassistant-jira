@@ -32,15 +32,18 @@ export function AssigneeSelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { issues } = useBoardStore();
+  const { issues, currentUser } = useBoardStore();
 
-  // Aggregate suggested assignees from store issues and standard defaults
+  // Aggregate suggested assignees from store issues and current user
   const suggestions: AssigneeOption[] = useMemo(() => {
     const map = new Map<string, AssigneeOption>();
 
-    // Initial default suggestions
-    map.set('jacek marchwicki', { displayName: 'Jacek Marchwicki', accountId: 'usr-1' });
-    map.set('alex lead', { displayName: 'Alex Lead', accountId: 'usr-2' });
+    if (currentUser && currentUser.trim()) {
+      map.set(currentUser.trim().toLowerCase(), {
+        displayName: currentUser.trim(),
+        accountId: 'current-user',
+      });
+    }
 
     // Extract unique assignees from current board issues
     for (const issue of issues) {
@@ -69,7 +72,7 @@ export function AssigneeSelect({
     }
 
     return Array.from(map.values());
-  }, [issues, options]);
+  }, [issues, options, currentUser]);
 
   // Filtered suggestions based on search query
   const filteredSuggestions = useMemo(() => {
@@ -126,7 +129,7 @@ export function AssigneeSelect({
     setIsOpen(false);
   };
 
-  const currentUser: JiraUser | null = value.trim()
+  const selectedUser: JiraUser | null = value.trim()
     ? {
         displayName: value.trim(),
         avatarUrl: suggestions.find((s) => s.displayName.toLowerCase() === value.trim().toLowerCase())?.avatarUrl,
@@ -170,7 +173,7 @@ export function AssigneeSelect({
         aria-label="Assignee"
       >
         <div className="flex items-center gap-2 truncate">
-          <AssigneeAvatar assignee={currentUser} sizeClassName="w-5 h-5 shrink-0" />
+          <AssigneeAvatar assignee={selectedUser} sizeClassName="w-5 h-5 shrink-0" />
           <span className={`truncate ${!value ? 'text-[var(--jira-text-muted)]' : 'font-medium'}`}>
             {value || placeholder}
           </span>

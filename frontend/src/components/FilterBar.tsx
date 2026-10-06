@@ -25,8 +25,9 @@ export function FilterBar() {
   // Aggregate available assignees from board issues
   const assignees = useMemo(() => {
     const map = new Map<string, { displayName: string; avatarUrl?: string }>();
-    map.set('jacek marchwicki', { displayName: 'Jacek Marchwicki' });
-    map.set('alex lead', { displayName: 'Alex Lead' });
+    if (currentUser && currentUser.trim()) {
+      map.set(currentUser.trim().toLowerCase(), { displayName: currentUser.trim() });
+    }
 
     for (const issue of issues) {
       if (issue.assignee) {
@@ -43,7 +44,7 @@ export function FilterBar() {
       }
     }
     return Array.from(map.values());
-  }, [issues]);
+  }, [issues, currentUser]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

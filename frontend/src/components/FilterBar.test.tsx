@@ -23,7 +23,7 @@ const testIssues: JiraIssue[] = [
     summary: 'Task 2',
     priority: 'medium',
     status: { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
-    assignee: null,
+    assignee: { displayName: 'Sarah Connor' },
     start_date: null,
   },
 ];
@@ -178,20 +178,21 @@ describe('FilterBar component', () => {
     const dropdown = container.querySelector('[role="listbox"]');
     expect(dropdown).not.toBeNull();
     expect(dropdown?.textContent).toContain('Choose who is "Me"');
-    expect(dropdown?.textContent).toContain('Alex Lead');
+    expect(dropdown?.textContent).toContain('Sarah Connor');
+    expect(dropdown?.textContent).not.toContain('Alex Lead');
 
-    // Select Alex Lead
+    // Select Sarah Connor
     const options = container.querySelectorAll('[role="option"]');
-    const alexOption = Array.from(options).find((opt) =>
-      opt.textContent?.includes('Alex Lead')
+    const sarahOption = Array.from(options).find((opt) =>
+      opt.textContent?.includes('Sarah Connor')
     ) as HTMLElement;
-    expect(alexOption).toBeDefined();
+    expect(sarahOption).toBeDefined();
 
     await act(async () => {
-      alexOption.click();
+      sarahOption.click();
     });
 
-    expect(useBoardStore.getState().currentUser).toBe('Alex Lead');
+    expect(useBoardStore.getState().currentUser).toBe('Sarah Connor');
     expect(useBoardStore.getState().activeFilters).toContain('my');
     expect(container.querySelector('[role="listbox"]')).toBeNull();
 

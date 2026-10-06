@@ -97,11 +97,11 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
           <div className="p-1.5 sm:p-2 rounded-lg bg-[var(--jira-primary)]/20 text-[var(--jira-primary)] shrink-0">
             <Layers className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div className="min-w-0">
-            <h1 className="hidden sm:block text-sm sm:text-base md:text-lg font-bold tracking-tight text-[var(--jira-text-primary)] truncate max-w-[140px] xs:max-w-[180px] sm:max-w-none">
+          <div className="hidden sm:block min-w-0">
+            <h1 className="text-sm sm:text-base md:text-lg font-bold tracking-tight text-[var(--jira-text-primary)] truncate max-w-[140px] xs:max-w-[180px] sm:max-w-none">
               {boardName}
             </h1>
-            <p className="text-xs font-semibold sm:font-normal text-[var(--jira-text-primary)] sm:text-[var(--jira-text-secondary)] truncate max-w-[140px] xs:max-w-[180px] sm:max-w-none">
+            <p className="text-xs font-normal text-[var(--jira-text-secondary)] truncate max-w-[140px] xs:max-w-[180px] sm:max-w-none">
               {sprintName}
             </p>
           </div>

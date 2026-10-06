@@ -97,6 +97,17 @@ describe('Header component', () => {
     expect(rightContainer.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
   });
 
+  it('hides board name and sprint name (Active issues) on mobile screens', async () => {
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    const titleContainer = container.querySelector('h1')?.parentElement;
+    expect(titleContainer).not.toBeNull();
+    expect(titleContainer?.className).toContain('hidden');
+    expect(titleContainer?.className).toContain('sm:block');
+  });
+
   it('renders all key mobile navigation controls (Board, Backlog, Create, WebSocket, Themes)', async () => {
     await act(async () => {
       root.render(<Header />);

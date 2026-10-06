@@ -38,9 +38,9 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
     assert config["image"] == "ghcr.io/jacek-marchwicki/homeassistant-jira-{arch}"
     assert "{arch}" in config["image"]
 
-    # Multi-architecture support
+    # Multi-architecture support (modern 64-bit Home Assistant platforms)
     assert isinstance(config["arch"], list)
-    expected_archs = ["aarch64", "amd64", "armhf", "armv7", "i386"]
+    expected_archs = ["aarch64", "amd64"]
     for arch in expected_archs:
         assert arch in config["arch"], f"Architecture {arch} must be supported"
 
@@ -74,7 +74,7 @@ def test_addon_build_yaml_is_valid() -> None:
 
     assert "build_from" in build_cfg
     build_from = build_cfg["build_from"]
-    expected_archs = ["aarch64", "amd64", "armhf", "armv7", "i386"]
+    expected_archs = ["aarch64", "amd64"]
     for arch in expected_archs:
         assert arch in build_from
         assert build_from[arch] == "python:3.11-alpine"
@@ -86,7 +86,7 @@ def test_addon_dockerfile_contents() -> None:
     assert dockerfile_path.is_file(), "addon/Dockerfile must exist"
 
     content = dockerfile_path.read_text(encoding="utf-8")
-    assert "FROM node:22-alpine AS frontend-builder" in content
+    assert "FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder" in content
     assert "pnpm build" in content
     assert "ARG BUILD_FROM=" in content
     assert "FROM ${BUILD_FROM} AS runner" in content
@@ -114,7 +114,7 @@ def test_root_dockerfile_contents() -> None:
     assert dockerfile_path.is_file(), "Root Dockerfile must exist"
 
     content = dockerfile_path.read_text(encoding="utf-8")
-    assert "FROM node:22-alpine AS frontend-builder" in content
+    assert "FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder" in content
     assert "pnpm build" in content
     assert "FROM python:3.11-alpine AS runner" in content
     assert "COPY backend/ ./backend/" in content
@@ -334,7 +334,7 @@ def test_publish_images_workflow_is_valid() -> None:
     addon_job = jobs["build-addon-images"]
     matrix = addon_job["strategy"]["matrix"]["include"]
     matrix_archs = [entry["arch"] for entry in matrix]
-    for required_arch in ["aarch64", "amd64", "armhf", "armv7", "i386"]:
+    for required_arch in ["aarch64", "amd64"]:
         assert required_arch in matrix_archs
 
     # Verify GHCR registry references and permissions

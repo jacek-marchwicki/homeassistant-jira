@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Build Frontend Assets (React 19 + TypeScript + Vite + Tailwind CSS)
 # =============================================================================
-FROM node:22-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 # Enable corepack and activate modern pnpm

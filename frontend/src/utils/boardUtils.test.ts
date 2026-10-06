@@ -114,6 +114,21 @@ describe('boardUtils', () => {
       );
     });
 
+    it('resolves In Progress column when over ready-drop-target-inprogress droppable', () => {
+      const over = {
+        id: 'ready-drop-target-inprogress',
+        data: {
+          current: {
+            type: 'InProgressDropTarget',
+            targetType: 'inprogress',
+          },
+        },
+      };
+      expect(getColumnFromOver(over, homeColumns, [mockBaseIssue])?.id).toBe(
+        'col-in-progress'
+      );
+    });
+
     it('resolves target column from an Issue sortable item', () => {
       const over = {
         id: 'HOME-1',

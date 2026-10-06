@@ -207,6 +207,59 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     });
   });
 
+  test('Capture In Progress Drop Target at Top of Ready List during Drag Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    const card = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(card).toBeVisible();
+
+    const box = await card.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      // Move 25px down to activate pointer sensor
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 25);
+    }
+
+    // Verify intermediate In Progress column is never rendered on the board
+    await expect(page.getByTestId('column-col-inprogress')).not.toBeAttached();
+
+    // Verify drop target is displayed at the top of the Ready list
+    const dropTarget = page.getByTestId('ready-drop-target-inprogress');
+    await expect(dropTarget).toBeVisible();
+    await expect(dropTarget).toContainText('In Progress');
+    await expect(dropTarget).toContainText('Drop target');
+
+    const readyColumn = page.getByTestId('column-col-todo');
+    await expect(readyColumn).toBeVisible();
+
+    await readyColumn.screenshot({
+      path: './tests/screenshots/ready-drop-target-inprogress-column.png',
+      animations: 'disabled',
+    });
+
+    await dropTarget.screenshot({
+      path: './tests/screenshots/ready-drop-target-inprogress.png',
+      animations: 'disabled',
+    });
+
+    // Hover over drop target to capture active drag-over state
+    const targetBox = await dropTarget.boundingBox();
+    if (targetBox) {
+      await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
+    }
+    await page.waitForTimeout(100);
+
+    await dropTarget.screenshot({
+      path: './tests/screenshots/ready-drop-target-inprogress-hover.png',
+      animations: 'disabled',
+    });
+
+    await page.mouse.up();
+  });
+
   test('Capture Create Issue Modal Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const createButton = page.getByRole('button', { name: 'Create Issue' });

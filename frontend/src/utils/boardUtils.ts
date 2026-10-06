@@ -69,6 +69,16 @@ export function getColumnFromOver(
   if (!over || !columns || columns.length === 0) return undefined;
   const overData = over.data?.current;
 
+  // InProgress drop target at top of Ready list
+  if (
+    over.id === 'ready-drop-target-inprogress' ||
+    overData?.type === 'InProgressDropTarget' ||
+    overData?.targetType === 'inprogress'
+  ) {
+    const inProgressCol = columns.find((c) => isInProgressColumn(c));
+    if (inProgressCol) return inProgressCol;
+  }
+
   // 1. Direct Column droppable
   if (overData?.type === 'Column' && typeof overData.columnId === 'string') {
     const found = columns.find((c) => c.id === overData.columnId);

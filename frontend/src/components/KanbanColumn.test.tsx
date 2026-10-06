@@ -408,4 +408,91 @@ describe('KanbanColumn component', () => {
       root.unmount();
     });
   });
+
+  it('renders In Progress drop target at the top of Ready list when isDragging or showDropTarget is true', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-ready"
+            category="todo"
+            title="Ready"
+            colorVar="var(--jira-status-todo)"
+            issues={[mockIssue]}
+            isHighlighted={false}
+            showDropTarget={true}
+          />
+        </DndContext>
+      );
+    });
+
+    const dropTarget = container.querySelector('[data-testid="ready-drop-target-inprogress"]');
+    expect(dropTarget).not.toBeNull();
+    expect(dropTarget?.className).not.toContain('hidden');
+    expect(dropTarget?.textContent).toContain('In Progress');
+    expect(dropTarget?.textContent).toContain('Drop target');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('hides In Progress drop target on Ready column when neither isDragging nor showDropTarget is set', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-ready"
+            category="todo"
+            title="Ready"
+            colorVar="var(--jira-status-todo)"
+            issues={[mockIssue]}
+            isHighlighted={false}
+          />
+        </DndContext>
+      );
+    });
+
+    const dropTarget = container.querySelector('[data-testid="ready-drop-target-inprogress"]');
+    expect(dropTarget).not.toBeNull();
+    expect(dropTarget?.className).toContain('hidden');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('never renders In Progress drop target on non-Ready columns even if isDragging is true', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-done"
+            category="done"
+            title="Done"
+            colorVar="var(--jira-status-done)"
+            issues={[]}
+            isHighlighted={false}
+            isDragging={true}
+          />
+        </DndContext>
+      );
+    });
+
+    const dropTarget = container.querySelector('[data-testid="ready-drop-target-inprogress"]');
+    expect(dropTarget).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

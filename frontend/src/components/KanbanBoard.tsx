@@ -7,6 +7,7 @@ import {
   DragOverlay,
   DragStartEvent,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
   TouchSensor,
   closestCorners,
@@ -29,6 +30,7 @@ import {
   getColumnForIssue,
   getColumnFromOver,
   isBacklogIssue,
+  isInProgressColumn,
   isIntermediateColumn,
   splitIssuesByBacklog,
 } from '../utils/boardUtils.ts';
@@ -74,22 +76,49 @@ export function KanbanBoard() {
   // Active columns (excluding Backlog so it is never rendered as a Kanban column)
   const activeColumns = getActiveBoardColumns(columns);
 
-  // When not dragging, hide intermediate workflow columns (In Progress, In Review, etc.) since tasks are merged into Ready.
-  // During drag (activeIssue !== null), reveal all active columns so user can drop onto any workflow column.
+  // Intermediate workflow columns (In Progress, In Review, etc.) should never appear on the board as separate columns.
+  // Their tasks are merged into Ready, and an In Progress drop target appears at the top of the Ready list during drag.
   const displayedColumns = useMemo(() => {
-    if (activeIssue) {
-      return activeColumns;
-    }
     return activeColumns.filter((col) => !isIntermediateColumn(col));
-  }, [activeColumns, activeIssue]);
+  }, [activeColumns]);
 
   // Separate Backlog issues from Active Board issues
   const { boardIssues, backlogIssues } = splitIssuesByBacklog(filteredIssues, columns);
 
   // Collision detection: Prioritize pointer collisions to accurately target columns/cards under cursor
   const collisionDetectionStrategy: CollisionDetection = (args) => {
+    const { pointerCoordinates } = args;
+    if (pointerCoordinates && typeof document !== 'undefined') {
+      const dropTargetEl = document.querySelector('[data-testid="ready-drop-target-inprogress"]');
+      if (dropTargetEl) {
+        const rect = dropTargetEl.getBoundingClientRect();
+        if (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          pointerCoordinates.x >= rect.left &&
+          pointerCoordinates.x <= rect.right &&
+          pointerCoordinates.y >= rect.top &&
+          pointerCoordinates.y <= rect.bottom
+        ) {
+          const container = args.droppableContainers.find(
+            (c) => c.id === 'ready-drop-target-inprogress'
+          );
+          if (container) {
+            return [{ id: 'ready-drop-target-inprogress', data: { droppableContainer: container, value: 0 } }];
+          }
+          return [{ id: 'ready-drop-target-inprogress' }];
+        }
+      }
+    }
+
     const pointerCollisions = pointerWithin(args);
     if (pointerCollisions.length > 0) {
+      const inProgressTarget = pointerCollisions.find(
+        (c) => c.id === 'ready-drop-target-inprogress'
+      );
+      if (inProgressTarget) {
+        return [inProgressTarget, ...pointerCollisions.filter((c) => c.id !== inProgressTarget.id)];
+      }
       return pointerCollisions;
     }
     return closestCorners(args);
@@ -124,7 +153,16 @@ export function KanbanBoard() {
       return;
     }
 
-    const targetCol = getColumnFromOver(over, activeColumns, issues);
+    if (
+      over.id === 'ready-drop-target-inprogress' ||
+      overData?.type === 'InProgressDropTarget' ||
+      overData?.targetType === 'inprogress'
+    ) {
+      setOverColumnId('inprogress');
+      return;
+    }
+
+    const targetCol = getColumnFromOver(over, displayedColumns, issues);
     setOverColumnId(targetCol?.id ?? null);
   };
 
@@ -149,8 +187,22 @@ export function KanbanBoard() {
       return;
     }
 
+    if (
+      over.id === 'ready-drop-target-inprogress' ||
+      overData?.type === 'InProgressDropTarget' ||
+      overData?.targetType === 'inprogress'
+    ) {
+      const inProgressCol = columns.find((c) => isInProgressColumn(c));
+      const category = inProgressCol?.category ?? 'inprogress';
+      const statusName = inProgressCol?.name ?? 'In Progress';
+      if (activeItem.status?.category !== category) {
+        transitionIssueOptimistic(activeKey, category, statusName);
+      }
+      return;
+    }
+
     const currentColumn = getColumnForIssue(activeItem, activeColumns);
-    const targetCol = getColumnFromOver(over, activeColumns, issues);
+    const targetCol = getColumnFromOver(over, displayedColumns, issues);
 
     if (
       targetCol &&
@@ -169,6 +221,11 @@ export function KanbanBoard() {
     <DndContext
       sensors={sensors}
       collisionDetection={collisionDetectionStrategy}
+      measuring={{
+        droppable: {
+          strategy: MeasuringStrategy.Always,
+        },
+      }}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -189,6 +246,7 @@ export function KanbanBoard() {
                 colorVar={colorVar}
                 issues={colIssues}
                 isHighlighted={overColumnId === col.id}
+                isDragging={activeIssue !== null}
               />
             );
           })}

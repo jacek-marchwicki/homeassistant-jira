@@ -203,5 +203,22 @@ describe('KanbanBoard component', () => {
       root.unmount();
     });
   });
+
+  it('never displays In Progress as a column on the board', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<KanbanBoard />);
+    });
+
+    expect(container.querySelector('[data-testid="column-col-inprogress"]')).toBeNull();
+    expect(container.querySelector('[data-testid="column-col-todo"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="column-col-done"]')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 

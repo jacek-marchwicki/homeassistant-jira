@@ -1,10 +1,60 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AlertCircle, CircleDot, PlayCircle, Zap } from 'lucide-react';
-import { JiraIssue, JiraStatusCategory } from '../types/jira.ts';
+import { BoardColumn, JiraIssue, JiraStatusCategory } from '../types/jira.ts';
 import { splitReadyIssues } from '../utils/boardUtils.ts';
 import { useBoardStore } from '../store/boardStore.ts';
 import { IssueCard } from './IssueCard.tsx';
+
+interface ReadyInProgressDropTargetProps {
+  shouldShowDropTarget: boolean;
+  inProgressColumn?: BoardColumn;
+}
+
+function ReadyInProgressDropTarget({
+  shouldShowDropTarget,
+  inProgressColumn,
+}: ReadyInProgressDropTargetProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'ready-drop-target-inprogress',
+    data: {
+      type: 'InProgressDropTarget',
+      targetType: 'inprogress',
+      category: inProgressColumn?.category ?? 'inprogress',
+      columnId: inProgressColumn?.id ?? 'col-inprogress',
+      statusName: inProgressColumn?.name ?? 'In Progress',
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid="ready-drop-target-inprogress"
+      data-is-over={isOver ? 'true' : 'false'}
+      className={
+        shouldShowDropTarget
+          ? `flex items-center justify-between p-2.5 rounded-xl border-2 transition-all duration-150 select-none ${
+              isOver
+                ? 'border-[var(--jira-status-inprogress)] bg-[var(--jira-status-inprogress)]/25 ring-2 ring-[var(--jira-status-inprogress)]/50 shadow-md shadow-[var(--jira-status-inprogress)]/20'
+                : 'border-dashed border-[var(--jira-status-inprogress)]/50 bg-[var(--jira-status-inprogress)]/10 hover:border-[var(--jira-status-inprogress)]'
+            }`
+          : 'hidden'
+      }
+    >
+      <div className="flex items-center gap-2 text-xs font-bold text-[var(--jira-status-inprogress)]">
+        <PlayCircle className={`w-4 h-4 shrink-0 ${isOver ? 'animate-bounce' : ''}`} />
+        <span>In Progress</span>
+      </div>
+      <span
+        className={`text-2xs font-bold text-[var(--jira-status-inprogress)] bg-[var(--jira-status-inprogress)]/20 border border-[var(--jira-status-inprogress)]/30 px-2 py-0.5 rounded-full ${
+          isOver ? 'animate-pulse' : ''
+        }`}
+      >
+        Drop target
+      </span>
+    </div>
+  );
+}
 
 interface KanbanColumnProps {
   id: string;
@@ -13,6 +63,8 @@ interface KanbanColumnProps {
   colorVar: string;
   issues: JiraIssue[];
   isHighlighted?: boolean;
+  isDragging?: boolean;
+  showDropTarget?: boolean;
 }
 
 export function KanbanColumn({
@@ -22,6 +74,8 @@ export function KanbanColumn({
   colorVar,
   issues,
   isHighlighted = false,
+  isDragging = false,
+  showDropTarget = false,
 }: KanbanColumnProps) {
   const columns = useBoardStore((s) => s.columns);
   const { setNodeRef, isOver: isDroppableOver } = useDroppable({
@@ -34,13 +88,19 @@ export function KanbanColumn({
     },
   });
 
-  const isOver = Boolean(isHighlighted || isDroppableOver);
-  const issueIds = issues.map((i) => i.key);
   const isReadyColumn =
     title.trim().toLowerCase() === 'ready' ||
     id === 'col-ready' ||
     title.trim().toLowerCase() === 'to do' ||
     id === 'col-todo';
+
+  const inProgressColumn = columns.find(
+    (c) => c.category === 'inprogress' || c.name.trim().toLowerCase() === 'in progress'
+  );
+
+  const isOver = Boolean(isHighlighted || isDroppableOver);
+  const issueIds = issues.map((i) => i.key);
+  const shouldShowDropTarget = isReadyColumn && (isDragging || showDropTarget);
 
   const { overdue, expedited, inProgress, other } = isReadyColumn
     ? splitReadyIssues(issues, new Date(), columns)
@@ -89,6 +149,13 @@ export function KanbanColumn({
 
       {/* Column Issues List */}
       <div className="flex flex-col gap-2.5 flex-1">
+        {/* Drop target displayed at the top of the Ready list */}
+        {isReadyColumn && (
+          <ReadyInProgressDropTarget
+            shouldShowDropTarget={shouldShowDropTarget}
+            inProgressColumn={inProgressColumn}
+          />
+        )}
         <SortableContext items={issueIds} strategy={verticalListSortingStrategy}>
           {hasSpecialSections ? (
             <div className="flex flex-col gap-4 flex-1">

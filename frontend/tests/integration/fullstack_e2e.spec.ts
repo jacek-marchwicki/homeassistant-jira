@@ -397,6 +397,11 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
   test('12. Done Column Filter: displays recently updated Done issues and hides Done issues older than 2 days', async ({
     page,
   }) => {
+    // Wait for the board to be fully loaded and WebSocket connected
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+    await expect(page.getByText('Live WebSocket')).toBeVisible();
+    await expect(page.locator('article', { hasText: 'PROJ-101' })).toBeVisible();
+
     // 1. Post webhook with a Done issue completed 5 days ago
     const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
     const oldDoneRes = await page.request.post('/api/webhooks/jira', {
@@ -450,6 +455,60 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
 
     // 5. Verify issue completed 5 days ago is NOT displayed in the Done column
     await expect(page.locator('article', { hasText: 'PROJ-990' })).not.toBeVisible();
+  });
+
+  test('13. Drag-and-Drop: dragging issue to In Progress drop target at top of Ready transitions it to In Progress', async ({
+    page,
+  }) => {
+    // Wait for the board to be fully loaded and WebSocket connected
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+    await expect(page.getByText('Live WebSocket')).toBeVisible();
+
+    // Locate card PROJ-101 in Ready/To Do column
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(proj101Article).toBeVisible();
+
+    const box = await proj101Article.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      // Move 25px down to activate pointer sensor
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 25, { steps: 5 });
+    }
+
+    // In Progress column must never be rendered on the board
+    await expect(page.getByTestId('column-col-inprogress')).not.toBeAttached();
+
+    // Drop target must appear at top of Ready list
+    const dropTarget = page.getByTestId('ready-drop-target-inprogress');
+    await expect(dropTarget).toBeVisible();
+
+    // Hover over drop target
+    const targetBox = await dropTarget.boundingBox();
+    expect(targetBox).not.toBeNull();
+    if (targetBox) {
+      await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 5 });
+    }
+
+    await page.waitForTimeout(100);
+
+    // Re-target exact center after any DOM layout shift settles
+    const settledBox = await dropTarget.boundingBox();
+    if (settledBox) {
+      await page.mouse.move(settledBox.x + settledBox.width / 2, settledBox.y + settledBox.height / 2, { steps: 2 });
+    }
+
+    const transitionPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues/PROJ-101/transition') && res.status() === 200
+    );
+
+    await page.mouse.up();
+
+    const transitionResponse = await transitionPromise;
+    expect(transitionResponse.ok()).toBeTruthy();
+    const responseJson = await transitionResponse.json();
+    expect(responseJson.status.name).toBe('In Progress');
   });
 });
 

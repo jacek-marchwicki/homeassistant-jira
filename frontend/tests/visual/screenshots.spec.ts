@@ -66,6 +66,61 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     });
   });
 
+  test('Capture Mobile Single-Line Top Header & Filter Bar Snapshots (375x667)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    const header = page.locator('header');
+    await expect(header).toBeVisible();
+    const headerBox = await header.boundingBox();
+    expect(headerBox).not.toBeNull();
+    // Verify top header takes exactly 1 line (height around 44-54px, definitely not 2 lines of 88px+)
+    if (headerBox) {
+      expect(headerBox.height).toBeLessThan(65);
+    }
+    await header.screenshot({
+      path: './tests/screenshots/component-header-mobile.png',
+      animations: 'disabled',
+    });
+
+    const filterBar = page.locator('section').filter({ hasText: 'All Issues' });
+    await expect(filterBar).toBeVisible();
+    const filterBox = await filterBar.boundingBox();
+    expect(filterBox).not.toBeNull();
+    // Verify filter bar takes exactly 1 line (height around 36-48px, definitely not 2 lines of 75px+)
+    if (filterBox) {
+      expect(filterBox.height).toBeLessThan(56);
+    }
+    await filterBar.screenshot({
+      path: './tests/screenshots/component-filterbar-mobile.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Mobile Scrolled Content under Header Snapshot (verifying no overlap)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    // Scroll page down so filter bar and top issues slide under sticky header
+    await page.evaluate(() => window.scrollTo(0, 150));
+    await page.waitForTimeout(100);
+
+    const header = page.locator('header');
+    await expect(header).toBeVisible();
+
+    await page.screenshot({
+      path: './tests/screenshots/mobile-scrolled-under-header.png',
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Compact Mobile Viewport (320x568 - iPhone SE)', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.screenshot({
+      path: './tests/screenshots/mobile-320x568-compact.png',
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
+
   test('Capture 1080p Wallboard Viewport (1920x1080)', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.screenshot({

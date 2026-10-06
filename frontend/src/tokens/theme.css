@@ -124,3 +124,12 @@
     --jira-priority-lowest: #94a3b8;
   }
 }
+
+/* Utility to hide scrollbars while allowing smooth touch and mouse scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

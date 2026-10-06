@@ -217,5 +217,36 @@ describe('FilterBar component', () => {
     });
     document.body.removeChild(container);
   });
+
+  it('renders single-line filter bar with flex-nowrap, z-10 stacking, and no flex-wrap', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<FilterBar />);
+    });
+
+    const section = container.querySelector('section');
+    expect(section).not.toBeNull();
+    expect(section?.className).toContain('flex-nowrap');
+    expect(section?.className).not.toContain('flex-wrap');
+    expect(section?.className).toContain('z-10');
+
+    // Filter pills container is horizontally scrollable with no-scrollbar
+    const pillsContainer = section?.firstElementChild as HTMLElement;
+    expect(pillsContainer).not.toBeNull();
+    expect(pillsContainer.className).toContain('overflow-x-auto');
+    expect(pillsContainer.className).toContain('no-scrollbar');
+
+    // Search input is directly beside the pills container
+    const searchContainer = section?.lastElementChild as HTMLElement;
+    expect(searchContainer).not.toBeNull();
+    expect(searchContainer.className).toContain('shrink-0');
+    expect(searchContainer.querySelector('input')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 

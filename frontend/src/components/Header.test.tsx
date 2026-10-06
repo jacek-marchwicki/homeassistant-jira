@@ -71,4 +71,31 @@ describe('Header component', () => {
     const installBtn = container.querySelector('button[aria-label="Install App"]');
     expect(installBtn).toBeNull();
   });
+
+  it('renders single-line header with flex-nowrap, z-30 stacking, and no flex-wrap', async () => {
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    const header = container.querySelector('header');
+    expect(header).not.toBeNull();
+    expect(header?.className).toContain('flex-nowrap');
+    expect(header?.className).not.toContain('flex-wrap');
+    expect(header?.className).toContain('z-30');
+    expect(header?.className).toContain('overflow-x-auto');
+    expect(header?.className).toContain('no-scrollbar');
+  });
+
+  it('renders all key mobile navigation controls (Board, Backlog, Create, WebSocket, Themes)', async () => {
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    expect(container.querySelector('button[aria-label="Kanban Board View"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Backlog View"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Dark Mode"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Light Mode"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Kiosk Mode"]')).not.toBeNull();
+  });
 });

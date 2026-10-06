@@ -99,10 +99,10 @@ flowchart TD
     JiraClient <-->|REST API| JiraCloud
     SyncEngine <--> JiraClient
 
-    WSHub <-->|WebSockets (Live Push)| HAAddon
-    WSHub <-->|WebSockets (Live Push)| WallDisplay
-    WSHub <-->|WebSockets (Live Push)| DesktopWeb
-    WSHub <-->|WebSockets (Live Push)| MobileWeb
+    WSHub <-->|"WebSockets (Live Push)"| HAAddon
+    WSHub <-->|"WebSockets (Live Push)"| WallDisplay
+    WSHub <-->|"WebSockets (Live Push)"| DesktopWeb
+    WSHub <-->|"WebSockets (Live Push)"| MobileWeb
 
     HAAddon --- HAMobile
 ```

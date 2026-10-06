@@ -191,10 +191,14 @@ pnpm test:e2e
 ```
 
 ### 4. Run Visual Screenshot Tests
-Captures responsive snapshots across mobile (375×667), tablet (768×1024), desktop (1440×900 in Dark, Light, and Kiosk themes), 1080p wallboard (1920×1080), and atomic components into `frontend/tests/screenshots/`:
+Runs Playwright visual regression comparisons against golden snapshots in `frontend/tests/screenshots/` with tolerance thresholds (preventing working tree diffs on subpixel flutter):
 ```bash
 cd frontend
+# Run visual regression comparison against golden snapshots
 pnpm test:visual
+
+# Update golden snapshots after intentional UI modifications
+pnpm test:visual:update
 ```
 
 ### 5. Run Local CI Pipeline Runner

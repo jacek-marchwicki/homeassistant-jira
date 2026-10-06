@@ -19,10 +19,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
   test('Capture Desktop Viewports (Dark, Light, Kiosk Themes)', async ({ page }) => {
     // 1. Desktop Dark Mode (Default)
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.screenshot({
-      path: './tests/screenshots/desktop-dark.png',
+    await expect(page).toHaveScreenshot('desktop-dark.png', {
       fullPage: true,
-      animations: 'disabled',
     });
 
     // 2. Switch to Light Mode and Capture
@@ -30,10 +28,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await lightButton.click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await page.waitForTimeout(200); // Allow 150ms CSS color transition to fully settle
-    await page.screenshot({
-      path: './tests/screenshots/desktop-light.png',
+    await expect(page).toHaveScreenshot('desktop-light.png', {
       fullPage: true,
-      animations: 'disabled',
     });
 
     // 3. Switch to Kiosk / Wallboard Mode and Capture
@@ -41,28 +37,22 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await kioskButton.click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'kiosk');
     await page.waitForTimeout(200); // Allow 150ms CSS color transition to fully settle
-    await page.screenshot({
-      path: './tests/screenshots/desktop-kiosk.png',
+    await expect(page).toHaveScreenshot('desktop-kiosk.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
   test('Capture Tablet Viewport (768x1024)', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.screenshot({
-      path: './tests/screenshots/tablet-768x1024.png',
+    await expect(page).toHaveScreenshot('tablet-768x1024.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
   test('Capture Mobile Viewport (375x667)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.screenshot({
-      path: './tests/screenshots/mobile-375x667.png',
+    await expect(page).toHaveScreenshot('mobile-375x667.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
@@ -77,10 +67,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     if (headerBox) {
       expect(headerBox.height).toBeLessThan(65);
     }
-    await header.screenshot({
-      path: './tests/screenshots/component-header-mobile.png',
-      animations: 'disabled',
-    });
+    await expect(header).toHaveScreenshot('component-header-mobile.png');
 
     const filterBar = page.locator('section').filter({ hasText: 'All Issues' });
     await expect(filterBar).toBeVisible();
@@ -90,10 +77,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     if (filterBox) {
       expect(filterBox.height).toBeLessThan(56);
     }
-    await filterBar.screenshot({
-      path: './tests/screenshots/component-filterbar-mobile.png',
-      animations: 'disabled',
-    });
+    await expect(filterBar).toHaveScreenshot('component-filterbar-mobile.png');
   });
 
   test('Capture Mobile Theme Selector Dropdown Snapshot', async ({ page }) => {
@@ -107,10 +91,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(themeDropdown).toBeVisible();
     await page.waitForTimeout(100);
 
-    await page.screenshot({
-      path: './tests/screenshots/mobile-theme-dropdown.png',
-      animations: 'disabled',
-    });
+    await expect(page).toHaveScreenshot('mobile-theme-dropdown.png');
   });
 
   test('Capture Mobile Scrolled Content under Header Snapshot (verifying no overlap)', async ({ page }) => {
@@ -123,27 +104,20 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const header = page.locator('header');
     await expect(header).toBeVisible();
 
-    await page.screenshot({
-      path: './tests/screenshots/mobile-scrolled-under-header.png',
-      animations: 'disabled',
-    });
+    await expect(page).toHaveScreenshot('mobile-scrolled-under-header.png');
   });
 
   test('Capture Compact Mobile Viewport (320x568 - iPhone SE)', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
-    await page.screenshot({
-      path: './tests/screenshots/mobile-320x568-compact.png',
+    await expect(page).toHaveScreenshot('mobile-320x568-compact.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
   test('Capture 1080p Wallboard Viewport (1920x1080)', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.screenshot({
-      path: './tests/screenshots/wallboard-1920x1080.png',
+    await expect(page).toHaveScreenshot('wallboard-1920x1080.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
@@ -152,27 +126,18 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     // 1. Navigation Header & Status Badge
     const header = page.locator('header');
-    await header.screenshot({
-      path: './tests/screenshots/component-header.png',
-      animations: 'disabled',
-    });
+    await expect(header).toHaveScreenshot('component-header.png');
 
     // 2. Kanban Column & Issue Card with Quick Action
     const proj101 = page.locator('article', { hasText: 'PROJ-101' });
-    await proj101.screenshot({
-      path: './tests/screenshots/component-card.png',
-      animations: 'disabled',
-    });
+    await expect(proj101).toHaveScreenshot('component-card.png');
   });
 
   test('Capture Workflow Columns Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
 
     const board = page.locator('main');
-    await board.screenshot({
-      path: './tests/screenshots/board-workflow-columns.png',
-      animations: 'disabled',
-    });
+    await expect(board).toHaveScreenshot('board-workflow-columns.png');
   });
 
   test('Capture Ready Column Sub-Sections (Overdue, Expedited, and In Progress) Snapshot', async ({ page }) => {
@@ -255,28 +220,16 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(otherSection).toBeVisible();
 
     // 1. Capture Overdue section snapshot
-    await overdueSection.screenshot({
-      path: './tests/screenshots/ready-section-overdue.png',
-      animations: 'disabled',
-    });
+    await expect(overdueSection).toHaveScreenshot('ready-section-overdue.png');
 
     // 2. Capture Expedited section snapshot
-    await expeditedSection.screenshot({
-      path: './tests/screenshots/ready-section-expedited.png',
-      animations: 'disabled',
-    });
+    await expect(expeditedSection).toHaveScreenshot('ready-section-expedited.png');
 
     // 3. Capture In Progress section snapshot
-    await inProgressSection.screenshot({
-      path: './tests/screenshots/ready-section-inprogress.png',
-      animations: 'disabled',
-    });
+    await expect(inProgressSection).toHaveScreenshot('ready-section-inprogress.png');
 
     // 4. Capture full Ready column snapshot with all sub-sections
-    await readyColumn.screenshot({
-      path: './tests/screenshots/ready-column-sections.png',
-      animations: 'disabled',
-    });
+    await expect(readyColumn).toHaveScreenshot('ready-column-sections.png');
   });
 
   test('Capture Header-Integrated In Progress Drop Target during Drag Snapshot', async ({ page }) => {
@@ -310,20 +263,11 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const readyHeader = readyColumn.locator('div.border-b').first();
     await expect(readyHeader.locator(dropTarget)).toBeAttached();
 
-    await readyHeader.screenshot({
-      path: './tests/screenshots/ready-header-drop-target-inprogress.png',
-      animations: 'disabled',
-    });
+    await expect(readyHeader).toHaveScreenshot('ready-header-drop-target-inprogress.png');
 
-    await readyColumn.screenshot({
-      path: './tests/screenshots/ready-drop-target-inprogress-column.png',
-      animations: 'disabled',
-    });
+    await expect(readyColumn).toHaveScreenshot('ready-drop-target-inprogress-column.png');
 
-    await dropTarget.screenshot({
-      path: './tests/screenshots/ready-drop-target-inprogress.png',
-      animations: 'disabled',
-    });
+    await expect(dropTarget).toHaveScreenshot('ready-drop-target-inprogress.png');
 
     // Hover over drop target to capture active drag-over state
     const targetBox = await dropTarget.boundingBox();
@@ -332,10 +276,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     }
     await page.waitForTimeout(100);
 
-    await dropTarget.screenshot({
-      path: './tests/screenshots/ready-drop-target-inprogress-hover.png',
-      animations: 'disabled',
-    });
+    await expect(dropTarget).toHaveScreenshot('ready-drop-target-inprogress-hover.png');
 
     await page.mouse.up();
   });
@@ -384,10 +325,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     expect(Math.abs(currentRelativeY - initialRelativeY)).toBeLessThanOrEqual(2);
 
     // Capture mobile screen with active drag and header drop target
-    await page.screenshot({
-      path: './tests/screenshots/mobile-touch-dnd-zero-shift.png',
-      animations: 'disabled',
-    });
+    await expect(page).toHaveScreenshot('mobile-touch-dnd-zero-shift.png');
 
     await page.mouse.up();
   });
@@ -402,17 +340,11 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(page.locator('#create-issue-title')).toHaveText('Create Issue');
 
     // 1. Capture full screen modal snapshot
-    await page.screenshot({
-      path: './tests/screenshots/modal-create-issue.png',
-      animations: 'disabled',
-    });
+    await expect(page).toHaveScreenshot('modal-create-issue.png');
 
     // 2. Capture isolated modal dialog container
     const dialogBox = modal.locator('> div');
-    await dialogBox.screenshot({
-      path: './tests/screenshots/component-modal-create.png',
-      animations: 'disabled',
-    });
+    await expect(dialogBox).toHaveScreenshot('component-modal-create.png');
 
     // 3. Switch to Preview in RichTextEditor and capture rich text preview snapshot
     const descTextarea = page.locator('#create-description');
@@ -421,10 +353,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await previewBtn.click();
     const previewArea = page.getByTestId('rich-text-preview');
     await expect(previewArea).toBeVisible();
-    await previewArea.screenshot({
-      path: './tests/screenshots/component-rich-text-preview.png',
-      animations: 'disabled',
-    });
+    await expect(previewArea).toHaveScreenshot('component-rich-text-preview.png');
   });
 
   test('Capture Edit Issue Modal Snapshot', async ({ page }) => {
@@ -447,17 +376,11 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(hint2y).toBeVisible();
 
     // 3. Capture full screen modal snapshot
-    await page.screenshot({
-      path: './tests/screenshots/modal-edit-issue.png',
-      animations: 'disabled',
-    });
+    await expect(page).toHaveScreenshot('modal-edit-issue.png');
 
     // 4. Capture isolated modal dialog container
     const dialogBox = modal.locator('> div');
-    await dialogBox.screenshot({
-      path: './tests/screenshots/component-modal-edit.png',
-      animations: 'disabled',
-    });
+    await expect(dialogBox).toHaveScreenshot('component-modal-edit.png');
 
     // 5. Verify Jira browse link format
     const modalJiraLink = modal.locator('a[aria-label="Open PROJ-101 in Jira"]');
@@ -470,10 +393,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(datesBar).toBeVisible();
     await expect(datesBar).toContainText('Created:');
     await expect(datesBar).toContainText('Updated:');
-    await datesBar.screenshot({
-      path: './tests/screenshots/component-edit-dates.png',
-      animations: 'disabled',
-    });
+    await expect(datesBar).toHaveScreenshot('component-edit-dates.png');
   });
 
   test('Capture Edit Issue Modal with Comments Snapshot', async ({ page }) => {
@@ -490,10 +410,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(commentsSection.getByText(/Comments/)).toBeVisible();
 
     // Capture isolated comments section snapshot
-    await commentsSection.screenshot({
-      path: './tests/screenshots/component-comments-section.png',
-      animations: 'disabled',
-    });
+    await expect(commentsSection).toHaveScreenshot('component-comments-section.png');
   });
 
   test('Capture Create Issue Modal with Assignee Picker Open Snapshot', async ({ page }) => {
@@ -512,10 +429,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(listbox).toBeVisible();
 
     // Capture the modal with open assignee suggestions dropdown
-    await modal.locator('> div').screenshot({
-      path: './tests/screenshots/component-modal-create-assignee-picker.png',
-      animations: 'disabled',
-    });
+    await expect(modal.locator('> div')).toHaveScreenshot('component-modal-create-assignee-picker.png');
   });
 
   test('Capture Create Issue Modal with Description and Details Filled Snapshot', async ({ page }) => {
@@ -534,10 +448,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       );
 
     const dialogBox = modal.locator('> div');
-    await dialogBox.screenshot({
-      path: './tests/screenshots/component-modal-create-description.png',
-      animations: 'disabled',
-    });
+    await expect(dialogBox).toHaveScreenshot('component-modal-create-description.png');
   });
 
   test('Capture Create Issue Modal with Status Selector Open Snapshot', async ({ page }) => {
@@ -554,10 +465,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const listbox = modal.locator('[role="listbox"][aria-label="Status"]');
     await expect(listbox).toBeVisible();
 
-    await modal.locator('> div').screenshot({
-      path: './tests/screenshots/component-modal-create-status-picker.png',
-      animations: 'disabled',
-    });
+    await expect(modal.locator('> div')).toHaveScreenshot('component-modal-create-status-picker.png');
   });
 
   test('Capture Issue Card with Status Selector Open Snapshot', async ({ page }) => {
@@ -571,10 +479,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const listbox = card.locator('[role="listbox"][aria-label="Change status for PROJ-101"]');
     await expect(listbox).toBeVisible();
 
-    await card.screenshot({
-      path: './tests/screenshots/component-card-status-picker.png',
-      animations: 'disabled',
-    });
+    await expect(card).toHaveScreenshot('component-card-status-picker.png');
   });
 
   test('Capture Board Filtered by Search Query Snapshot', async ({ page }) => {
@@ -584,10 +489,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await searchInput.fill('PROJ-101');
     await page.waitForTimeout(100);
 
-    await page.screenshot({
-      path: './tests/screenshots/board-search-filtered.png',
+    await expect(page).toHaveScreenshot('board-search-filtered.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
@@ -601,10 +504,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const listbox = page.locator('[role="listbox"][aria-label="Choose who is Me"]');
     await expect(listbox).toBeVisible();
 
-    await page.screenshot({
-      path: './tests/screenshots/filter-who-is-me-picker.png',
+    await expect(page).toHaveScreenshot('filter-who-is-me-picker.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
@@ -622,10 +523,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await jiraLink.hover();
     await page.waitForTimeout(100);
 
-    await issueCard.screenshot({
-      path: './tests/screenshots/component-card-jira-link-hover.png',
-      animations: 'disabled',
-    });
+    await expect(issueCard).toHaveScreenshot('component-card-jira-link-hover.png');
   });
 
   test('Capture Edit Issue Modal Jira Link Hover Snapshot', async ({ page }) => {
@@ -644,10 +542,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await page.waitForTimeout(100);
 
     const header = modal.locator('div.flex.items-center.justify-between').first();
-    await header.screenshot({
-      path: './tests/screenshots/component-modal-edit-jira-link-hover.png',
-      animations: 'disabled',
-    });
+    await expect(header).toHaveScreenshot('component-modal-edit-jira-link-hover.png');
   });
 
   test('Capture High Volume Multi-Page Issues Snapshot', async ({ page }) => {
@@ -700,10 +595,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const firstCard = page.locator('article', { hasText: 'HOME-1000' });
     await expect(firstCard).toBeVisible();
 
-    await page.screenshot({
-      path: './tests/screenshots/board-high-volume-pagination.png',
-      animations: 'disabled',
-    });
+    await expect(page).toHaveScreenshot('board-high-volume-pagination.png');
   });
 
   test('Capture Create Issue Modal with Issue Type Selector Open Snapshot (with Epic)', async ({ page }) => {
@@ -722,10 +614,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const epicOption = listbox.locator('[role="option"]', { hasText: 'Epic' });
     await expect(epicOption).toBeVisible();
 
-    await modal.locator('> div').screenshot({
-      path: './tests/screenshots/component-modal-create-type-picker.png',
-      animations: 'disabled',
-    });
+    await expect(modal.locator('> div')).toHaveScreenshot('component-modal-create-type-picker.png');
   });
 
   test('Capture Epic Issue Card Snapshot (HOME-2200)', async ({ page }) => {
@@ -772,10 +661,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const epicIcon = epicCard.locator('[aria-label="Epic"]');
     await expect(epicIcon).toBeVisible();
 
-    await epicCard.screenshot({
-      path: './tests/screenshots/component-card-epic.png',
-      animations: 'disabled',
-    });
+    await expect(epicCard).toHaveScreenshot('component-card-epic.png');
   });
 
   test('Capture Filter Bar with "Hide Epics" Toggle Snapshot', async ({ page }) => {
@@ -787,10 +673,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const hideEpicsBtn = filterBar.getByRole('button', { name: 'Hide Epics' });
     await expect(hideEpicsBtn).toBeVisible();
 
-    await filterBar.screenshot({
-      path: './tests/screenshots/component-filterbar-hide-epics.png',
-      animations: 'disabled',
-    });
+    await expect(filterBar).toHaveScreenshot('component-filterbar-hide-epics.png');
   });
 
   test('Capture Home Assistant Ingress Viewport & Theme Bridge Snapshot', async ({ page }) => {
@@ -809,10 +692,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await page.waitForTimeout(200);
 
-    await page.screenshot({
-      path: './tests/screenshots/home-assistant-ingress.png',
+    await expect(page).toHaveScreenshot('home-assistant-ingress.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
@@ -896,10 +777,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await page.waitForTimeout(200);
 
-    await page.screenshot({
-      path: './tests/screenshots/home-assistant-ingress-embedded.png',
+    await expect(page).toHaveScreenshot('home-assistant-ingress-embedded.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
@@ -943,10 +822,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await page.waitForTimeout(200);
 
-    await page.screenshot({
-      path: './tests/screenshots/home-assistant-ingress-mobile.png',
+    await expect(page).toHaveScreenshot('home-assistant-ingress-mobile.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 
@@ -956,10 +833,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const header = page.locator('header');
     await expect(header).toBeVisible();
 
-    await page.screenshot({
-      path: './tests/screenshots/standalone-docker.png',
+    await expect(page).toHaveScreenshot('standalone-docker.png', {
       fullPage: true,
-      animations: 'disabled',
     });
   });
 });

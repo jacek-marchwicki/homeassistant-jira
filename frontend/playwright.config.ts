@@ -20,7 +20,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: [['list']],
-  snapshotDir: './tests/screenshots/snapshots',
+  snapshotDir: './tests/screenshots',
+  snapshotPathTemplate: '{testDir}/screenshots/{arg}{ext}',
   outputDir: './tests/screenshots/test-results',
 
   expect: {

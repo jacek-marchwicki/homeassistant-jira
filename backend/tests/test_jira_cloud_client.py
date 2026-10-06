@@ -284,6 +284,28 @@ def test_get_board_columns_from_project_statuses() -> None:
     asyncio.run(_test())
 
 
+def test_get_board_columns_fallback_does_not_contain_in_review() -> None:
+    """Verify fallback columns do not inject phantom 'In Review' status."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            # Simulate endpoint failure or empty statuses
+            return httpx.Response(500, json={"error": "Status service unavailable"})
+
+        client = create_mock_client(handler)
+        # Passing empty list of issues so it falls back to DEFAULT_JIRA_CLOUD_COLUMNS
+        cols = await client.get_board_columns("HOME", issues=[])
+        assert len(cols) == 3
+        col_names = [c.name for c in cols]
+        assert col_names == ["To Do", "In Progress", "Done"]
+        assert not any(
+            "review" in c.name.lower() or c.category == StatusCategory.IN_REVIEW for c in cols
+        )
+        await client.close()
+
+    asyncio.run(_test())
+
+
 def test_jira_error_handling_401_and_429() -> None:
     """Verify 401 and 429 status codes raise appropriately typed JiraAPIErrors."""
 

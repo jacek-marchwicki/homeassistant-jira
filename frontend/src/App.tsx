@@ -85,7 +85,7 @@ export default function App() {
     };
   }, [handleWsMessage, setWsConnected]);
 
-  if (isLoading) {
+  if (isLoading && issues.length === 0) {
     return (
       <div
         className="flex flex-col items-center justify-center min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]"

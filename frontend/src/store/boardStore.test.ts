@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useBoardStore } from './boardStore.ts';
+import { useBoardStore, DEFAULT_COLUMNS } from './boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
+import { getAvailableStatuses } from '../utils/boardUtils.ts';
 
 const mockIssue: JiraIssue = {
   id: '101',
@@ -362,6 +363,83 @@ describe('Zustand BoardStore', () => {
     expect(issue).toBeDefined();
     expect(issue?.summary).toBe('Created over WS');
   });
+
+  it('loadBoard uses SWR background sync (isSyncing) when existing issues are present', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        board_name: 'Engineering Sprint Board',
+        sprint_name: 'Active Sprint 42',
+        columns: [],
+        issues: [
+          {
+            ...mockIssue,
+            summary: 'Synced from Jira Cloud',
+          },
+        ],
+      }),
+    });
+
+    useBoardStore.setState({
+      issues: [mockIssue],
+      isLoading: false,
+      isSyncing: false,
+    });
+
+    const promise = useBoardStore.getState().loadBoard();
+
+    // Since existing issues are present, isLoading stays false while isSyncing is true
+    expect(useBoardStore.getState().isLoading).toBe(false);
+    expect(useBoardStore.getState().isSyncing).toBe(true);
+
+    await promise;
+
+    expect(useBoardStore.getState().isLoading).toBe(false);
+    expect(useBoardStore.getState().isSyncing).toBe(false);
+    expect(useBoardStore.getState().issues[0].summary).toBe('Synced from Jira Cloud');
+  });
+
+  it('DEFAULT_COLUMNS does not contain phantom In Review status', () => {
+    expect(DEFAULT_COLUMNS.map((c) => c.name)).toEqual(['To Do', 'In Progress', 'Done']);
+    expect(
+      DEFAULT_COLUMNS.some((c) => c.category === 'inreview' || c.name.toLowerCase().includes('review'))
+    ).toBe(false);
+  });
+
+  it('loadBoard sets exact Jira project columns without injecting In Review', async () => {
+    const jiraColumns = [
+      { id: 'col-10002', name: 'Backlog', category: 'todo' as const, status_ids: ['10002'] },
+      { id: 'col-10003', name: 'Ready', category: 'todo' as const, status_ids: ['10003'] },
+      { id: 'col-3', name: 'In Progress', category: 'inprogress' as const, status_ids: ['3'] },
+      { id: 'col-10001', name: 'Done', category: 'done' as const, status_ids: ['10001'] },
+    ];
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        board_name: 'HOME Project Board',
+        sprint_name: '',
+        columns: jiraColumns,
+        issues: [],
+      }),
+    });
+
+    useBoardStore.setState({ issues: [], columns: DEFAULT_COLUMNS });
+    await useBoardStore.getState().loadBoard();
+
+    const currentColumns = useBoardStore.getState().columns;
+    expect(currentColumns.map((c) => c.name)).toEqual(['Backlog', 'Ready', 'In Progress', 'Done']);
+    expect(
+      currentColumns.some((c) => c.name.toLowerCase().includes('review') || c.category === 'inreview')
+    ).toBe(false);
+
+    // Verify available statuses also do not contain In Review
+    const statuses = getAvailableStatuses(currentColumns);
+    expect(
+      statuses.some((s) => s.name.toLowerCase().includes('review') || s.category === 'inreview')
+    ).toBe(false);
+  });
 });
+
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -108,7 +109,10 @@ _cached_issue_state: dict[str, str] = {}
 
 async def poll_board_issues(board_id: str) -> None:
     """Fetch board issues and broadcast any detected deltas."""
+    global _cached_board_response
     issues = await jira_client.get_board_issues(board_id)
+    if _cached_board_response is not None:
+        _cached_board_response.issues = issues
     for issue in issues:
         status_val = issue.status.category.value
         state_signature = f"{status_val}:{issue.summary}:{issue.updated_at}"
@@ -206,6 +210,75 @@ class BoardResponse(BaseModel):
     issues: list[JiraIssue]
 
 
+_cached_board_response: BoardResponse | None = None
+_board_cache_timestamp: float = 0.0
+_board_cache_lock = asyncio.Lock()
+BOARD_CACHE_TTL_SECONDS: float = 30.0
+
+
+async def fetch_and_cache_board(force: bool = False) -> BoardResponse:
+    """Fetch board metadata and active issues from Jira, updating in-memory cache."""
+    global _cached_board_response, _board_cache_timestamp
+
+    now = time.time()
+    if (
+        not force
+        and _cached_board_response is not None
+        and (now - _board_cache_timestamp) < BOARD_CACHE_TTL_SECONDS
+    ):
+        return _cached_board_response
+
+    async with _board_cache_lock:
+        now = time.time()
+        if (
+            not force
+            and _cached_board_response is not None
+            and (now - _board_cache_timestamp) < BOARD_CACHE_TTL_SECONDS
+        ):
+            return _cached_board_response
+
+        board_id = settings.jira_board_id
+        issues, columns = await asyncio.gather(
+            jira_client.get_board_issues(board_id),
+            jira_client.get_board_columns(board_id),
+        )
+
+        # Seed cache for polling loop
+        for issue in issues:
+            _cached_issue_state[issue.key] = (
+                f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+            )
+
+        if isinstance(jira_client, FakeJiraClient):
+            board_name = "Engineering Sprint Board"
+            sprint_name = "Active Sprint 42"
+        else:
+            board_name = (
+                f"{board_id.upper()} Board"
+                if board_id and board_id != "engineering-1"
+                else "Engineering Sprint Board"
+            )
+            sprint_name = (
+                "Active Issues" if board_id and board_id != "engineering-1" else "Active Sprint 42"
+            )
+
+        jira_base_url = (settings.jira_url or "https://jira.example.com").strip().rstrip("/")
+        if jira_base_url.endswith("/browse"):
+            jira_base_url = jira_base_url[:-7].rstrip("/")
+
+        cached = BoardResponse(
+            board_id=board_id,
+            board_name=board_name,
+            sprint_name=sprint_name,
+            jira_url=jira_base_url,
+            columns=columns,
+            issues=issues,
+        )
+        _cached_board_response = cached
+        _board_cache_timestamp = time.time()
+        return cached
+
+
 class CommentCreateRequest(BaseModel):
     """Payload to create a new comment on an issue."""
 
@@ -235,9 +308,12 @@ class SimulateErrorRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan context managing background polling."""
+    """Application lifespan context managing background polling and cache warming."""
     stop_event = asyncio.Event()
     polling_task: asyncio.Task[None] | None = None
+
+    # Pre-warm board cache asynchronously on startup so initial requests are instant
+    cache_warm_task = asyncio.create_task(fetch_and_cache_board(force=True))
 
     if settings.polling_interval_seconds > 0 and settings.has_jira_credentials:
         polling_task = asyncio.create_task(
@@ -257,6 +333,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await polling_task
         except asyncio.CancelledError:
             pass
+    if not cache_warm_task.done():
+        cache_warm_task.cancel()
 
 
 app = FastAPI(
@@ -291,47 +369,30 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/board", response_model=BoardResponse)
-async def get_board() -> BoardResponse:
-    """Retrieve current board metadata and all active issues from Jira client."""
-    board_id = settings.jira_board_id
+async def get_board(refresh: bool = Query(default=False)) -> BoardResponse:
+    """Retrieve current board metadata and active issues.
+
+    Returns instantly (< 5ms) from in-memory cache if available,
+    triggering asynchronous background refresh if cache is older than TTL.
+    """
+    global _cached_board_response, _board_cache_timestamp
+    if refresh:
+        try:
+            return await fetch_and_cache_board(force=True)
+        except JiraAPIError as exc:
+            logger.error("Failed to refresh board issues from Jira: %s", exc)
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    if _cached_board_response is not None:
+        if (time.time() - _board_cache_timestamp) >= BOARD_CACHE_TTL_SECONDS:
+            asyncio.create_task(fetch_and_cache_board(force=True))
+        return _cached_board_response
+
     try:
-        issues = await jira_client.get_board_issues(board_id)
-        columns = await jira_client.get_board_columns(board_id)
+        return await fetch_and_cache_board(force=True)
     except JiraAPIError as exc:
         logger.error("Failed to fetch board issues from Jira: %s", exc)
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-
-    # Seed cache for polling loop
-    for issue in issues:
-        _cached_issue_state[issue.key] = (
-            f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
-        )
-
-    if isinstance(jira_client, FakeJiraClient):
-        board_name = "Engineering Sprint Board"
-        sprint_name = "Active Sprint 42"
-    else:
-        board_name = (
-            f"{board_id.upper()} Board"
-            if board_id and board_id != "engineering-1"
-            else "Engineering Sprint Board"
-        )
-        sprint_name = (
-            "Active Issues" if board_id and board_id != "engineering-1" else "Active Sprint 42"
-        )
-
-    jira_base_url = (settings.jira_url or "https://jira.example.com").strip().rstrip("/")
-    if jira_base_url.endswith("/browse"):
-        jira_base_url = jira_base_url[:-7].rstrip("/")
-
-    return BoardResponse(
-        board_id=board_id,
-        board_name=board_name,
-        sprint_name=sprint_name,
-        jira_url=jira_base_url,
-        columns=columns,
-        issues=issues,
-    )
 
 
 @app.post("/api/issues/{key}/transition", response_model=JiraIssue)
@@ -355,6 +416,10 @@ async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
     _cached_issue_state[issue.key] = (
         f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
     )
+    if _cached_board_response is not None:
+        _cached_board_response.issues = [
+            issue if x.key == issue.key else x for x in _cached_board_response.issues
+        ]
 
     # Broadcast real-time delta via WebSockets
     await ws_hub.broadcast(
@@ -397,6 +462,10 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
     _cached_issue_state[issue.key] = (
         f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
     )
+    if _cached_board_response is not None:
+        _cached_board_response.issues = [
+            issue if x.key == issue.key else x for x in _cached_board_response.issues
+        ]
 
     # Broadcast real-time delta via WebSockets
     await ws_hub.broadcast(
@@ -439,6 +508,10 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     _cached_issue_state[issue.key] = (
         f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
     )
+    if _cached_board_response is not None:
+        _cached_board_response.issues = [issue] + [
+            x for x in _cached_board_response.issues if x.key != issue.key
+        ]
 
     # Broadcast real-time delta via WebSockets
     await ws_hub.broadcast(
@@ -555,6 +628,15 @@ async def handle_jira_webhook(
     _cached_issue_state[issue.key] = (
         f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
     )
+    if _cached_board_response is not None:
+        idx = next(
+            (i for i, x in enumerate(_cached_board_response.issues) if x.key == issue.key),
+            None,
+        )
+        if idx is not None:
+            _cached_board_response.issues[idx] = issue
+        else:
+            _cached_board_response.issues.insert(0, issue)
 
     # Broadcast real-time delta via WebSockets to all connected browsers
     webhook_event = payload.get("webhookEvent")
@@ -593,9 +675,12 @@ def simulate_error(request: SimulateErrorRequest) -> dict[str, Any]:
 @app.post("/api/test/reset")
 def reset_test_state() -> dict[str, Any]:
     """Reset FakeJiraClient state back to initial seed issues and clear caches."""
+    global _cached_board_response, _board_cache_timestamp
     if isinstance(jira_client, FakeJiraClient):
         jira_client.reset()
         _cached_issue_state.clear()
+        _cached_board_response = None
+        _board_cache_timestamp = 0.0
         return {"status": "reset", "message": "Test state reset to initial seed"}
     return {"status": "ignored", "message": "Client is not FakeJiraClient"}
 

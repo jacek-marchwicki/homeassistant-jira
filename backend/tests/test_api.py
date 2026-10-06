@@ -13,6 +13,7 @@ class TestPresentationApi(unittest.TestCase):
 
     def setUp(self) -> None:
         self.client = TestClient(app)
+        self.client.post("/api/test/reset")
 
     def test_health_endpoint(self) -> None:
         """Verify GET /health returns 200 OK and expected metadata."""
@@ -162,6 +163,35 @@ class TestPresentationApi(unittest.TestCase):
             json={"body": "   "},
         )
         self.assertEqual(res.status_code, 400)
+
+    def test_board_caching_and_refresh(self) -> None:
+        """Verify GET /api/board serves cached state and refresh=true refreshes."""
+        res1 = self.client.get("/api/board")
+        self.assertEqual(res1.status_code, 200)
+
+        # Force refresh via query param
+        res2 = self.client.get("/api/board?refresh=true")
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res1.json()["board_id"], res2.json()["board_id"])
+
+    def test_board_cache_updated_on_mutation(self) -> None:
+        """Verify mutations update the cached board issues immediately."""
+        self.client.post("/api/test/reset")
+        board_before = self.client.get("/api/board").json()
+        target_issue = next(i for i in board_before["issues"] if i["key"] == "PROJ-101")
+        self.assertNotEqual(target_issue["status"]["category"], "done")
+
+        # Mutate issue
+        trans_res = self.client.post(
+            "/api/issues/PROJ-101/transition",
+            json={"target_category": "done"},
+        )
+        self.assertEqual(trans_res.status_code, 200)
+
+        # Board served from cache should reflect mutation
+        board_after = self.client.get("/api/board").json()
+        updated_issue = next(i for i in board_after["issues"] if i["key"] == "PROJ-101")
+        self.assertEqual(updated_issue["status"]["category"], "done")
 
 
 if __name__ == "__main__":

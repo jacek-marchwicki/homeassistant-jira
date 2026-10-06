@@ -1,4 +1,4 @@
-import { Download, LayoutGrid, Layers, ListTodo, Moon, Plus, Sun, Tv, Wifi, WifiOff } from 'lucide-react';
+import { Download, LayoutGrid, Layers, ListTodo, Loader2, Moon, Plus, Sun, Tv, Wifi, WifiOff } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { splitIssuesByBacklog } from '../utils/boardUtils.ts';
 
@@ -12,6 +12,7 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
     boardName,
     sprintName,
     wsConnected,
+    isSyncing,
     theme,
     setTheme,
     currentView,
@@ -100,6 +101,18 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
 
       {/* Live WebSocket Status & Themes */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {isSyncing && (
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-[var(--jira-text-secondary)] bg-[var(--jira-canvas)] border border-[var(--jira-border)]"
+            title="Synchronizing latest issues from Jira..."
+            aria-label="Syncing with Jira"
+            data-testid="syncing-badge"
+          >
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--jira-primary)]" />
+            <span className="hidden md:inline text-2xs">Syncing</span>
+          </div>
+        )}
+
         <div
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
             wsConnected

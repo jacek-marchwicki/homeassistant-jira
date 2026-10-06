@@ -33,6 +33,7 @@ class JiraDashboardSettings(BaseModel):
     polling_interval_seconds: int = Field(
         default=60, description="Interval in seconds for fallback polling (0 disables polling)"
     )
+    jira_jql: str | None = Field(default=None, description="Custom JQL filter for board issues")
 
     @property
     def has_jira_credentials(self) -> bool:
@@ -72,6 +73,7 @@ class JiraDashboardSettings(BaseModel):
             "jira_api_token": "JIRA_API_TOKEN",
             "jira_personal_access_token": "JIRA_PAT",
             "jira_board_id": "JIRA_BOARD_ID",
+            "jira_jql": "JIRA_JQL",
             "webhook_secret": "JIRA_WEBHOOK_SECRET",
             "polling_interval_seconds": "POLLING_INTERVAL_SECONDS",
         }

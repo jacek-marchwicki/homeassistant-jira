@@ -13,7 +13,6 @@ from typing import Any
 import httpx
 
 from jira_dashboard.adapters.jira_client import (
-    DEFAULT_COLUMNS,
     STATUS_MAP,
     JiraAPIError,
     JiraClientProtocol,
@@ -31,6 +30,17 @@ from jira_dashboard.domain import (
 )
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_JIRA_CLOUD_COLUMNS: list[BoardColumn] = [
+    BoardColumn(id="col-todo", name="To Do", category=StatusCategory.TODO, status_ids=["1"]),
+    BoardColumn(
+        id="col-inprogress",
+        name="In Progress",
+        category=StatusCategory.IN_PROGRESS,
+        status_ids=["2"],
+    ),
+    BoardColumn(id="col-done", name="Done", category=StatusCategory.DONE, status_ids=["3"]),
+]
 
 
 def map_category_key(cat_key: str, status_name: str = "") -> StatusCategory:
@@ -84,6 +94,26 @@ def map_priority(name: str) -> Priority:
     if "low" in lowered or "minor" in lowered:
         return Priority.LOW
     return Priority.MEDIUM
+
+
+JIRA_ISSUE_FIELDS: list[str] = [
+    "summary",
+    "description",
+    "issuetype",
+    "priority",
+    "status",
+    "assignee",
+    "created",
+    "updated",
+    "duedate",
+    "startDate",
+    "customfield_10015",  # Start date
+    "customfield_10027",  # Recreate after
+    "customfield_10016",  # Story points
+    "customfield_10026",
+    "customfield_10004",
+    "customfield_10028",
+]
 
 
 class JiraCloudClient(JiraClientProtocol):
@@ -397,10 +427,15 @@ class JiraCloudClient(JiraClientProtocol):
         return f"{base}/browse/{key}"
 
     async def get_board_issues(self, board_id: str) -> list[JiraIssue]:
-        """Fetch all issues for a given board ID or project key across all pages."""
+        """Fetch active issues for a given board ID or project key across all pages."""
+        fields_str = ",".join(JIRA_ISSUE_FIELDS)
         try:
             # 1. First attempt Jira Agile API
-            agile_params: dict[str, Any] = {"maxResults": 100, "startAt": 0}
+            agile_params: dict[str, Any] = {
+                "maxResults": 100,
+                "startAt": 0,
+                "fields": fields_str,
+            }
             res = await self._send_request(
                 "GET",
                 f"/rest/agile/1.0/board/{board_id}/issue",
@@ -420,11 +455,15 @@ class JiraCloudClient(JiraClientProtocol):
                 total = data.get("total", len(issues_raw))
                 is_last = data.get("isLast", len(issues_raw) >= total)
 
-                # Page through all remaining issues
-                max_pages = 50  # Safety circuit breaker: up to 5,000 issues
+                # Page through remaining active issues (up to 2,000 issues)
+                max_pages = 20
                 page_count = 1
                 while not is_last and len(issues_raw) < total and page_count < max_pages:
-                    next_params: dict[str, Any] = {"maxResults": 100, "startAt": len(issues_raw)}
+                    next_params: dict[str, Any] = {
+                        "maxResults": 100,
+                        "startAt": len(issues_raw),
+                        "fields": fields_str,
+                    }
                     next_res = await self._send_request(
                         "GET",
                         f"/rest/agile/1.0/board/{board_id}/issue",
@@ -444,11 +483,20 @@ class JiraCloudClient(JiraClientProtocol):
                 return [self._parse_issue(issue) for issue in issues_raw]
 
             # 2. Modern JQL search endpoint fallback (/rest/api/3/search/jql or /rest/api/3/search)
-            jql = f"project = '{board_id}' ORDER BY updated DESC"
+            # Query active issues (non-Done issues or issues updated within the last 14 days)
+            # to avoid transferring thousands of historical closed tickets.
+            if self.settings.jira_jql:
+                jql = self.settings.jira_jql
+            else:
+                jql = (
+                    f"project = '{board_id}' AND "
+                    "(statusCategory != Done OR updated >= -14d) ORDER BY updated DESC"
+                )
+
             search_endpoint = "/rest/api/3/search/jql"
             search_params: dict[str, Any] = {
                 "jql": jql,
-                "fields": "*all",
+                "fields": fields_str,
                 "maxResults": 100,
                 "startAt": 0,
             }
@@ -467,7 +515,7 @@ class JiraCloudClient(JiraClientProtocol):
                 len(issues_raw) >= total and not next_page_token
             )
 
-            max_pages = 50
+            max_pages = 20
             page_count = 1
             while (
                 not is_last
@@ -476,7 +524,7 @@ class JiraCloudClient(JiraClientProtocol):
             ):
                 page_params: dict[str, Any] = {
                     "jql": jql,
-                    "fields": "*all",
+                    "fields": fields_str,
                     "maxResults": 100,
                     "startAt": len(issues_raw),
                 }
@@ -502,7 +550,9 @@ class JiraCloudClient(JiraClientProtocol):
         except httpx.RequestError as exc:
             raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
 
-    async def get_board_columns(self, board_id: str) -> list[BoardColumn]:
+    async def get_board_columns(
+        self, board_id: str, issues: list[JiraIssue] | None = None
+    ) -> list[BoardColumn]:
         """Fetch workflow columns for a given project or board from Jira."""
         category_order = {
             StatusCategory.TODO: 0,
@@ -540,7 +590,8 @@ class JiraCloudClient(JiraClientProtocol):
                     return discovered
 
             # 2. Fallback: extract distinct statuses from issues on board
-            issues = await self.get_board_issues(board_id)
+            if issues is None:
+                issues = await self.get_board_issues(board_id)
             if issues:
                 seen_status_names: set[str] = set()
                 issue_cols: list[BoardColumn] = []
@@ -561,10 +612,10 @@ class JiraCloudClient(JiraClientProtocol):
                     issue_cols.sort(key=lambda col: category_order.get(col.category, 99))
                     return issue_cols
 
-            return list(DEFAULT_COLUMNS)
+            return list(DEFAULT_JIRA_CLOUD_COLUMNS)
         except Exception as exc:
             logger.debug("Failed to fetch project statuses for %s: %s", board_id, exc)
-            return list(DEFAULT_COLUMNS)
+            return list(DEFAULT_JIRA_CLOUD_COLUMNS)
 
     async def get_issue(self, issue_key: str) -> JiraIssue | None:
         """Fetch a single issue by key."""

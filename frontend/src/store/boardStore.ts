@@ -20,15 +20,49 @@ const CATEGORY_TITLES: Record<JiraStatusCategory, string> = {
 export const DEFAULT_COLUMNS: BoardColumn[] = [
   { id: 'col-todo', name: 'To Do', category: 'todo', status_ids: ['1'] },
   { id: 'col-inprogress', name: 'In Progress', category: 'inprogress', status_ids: ['2'] },
-  { id: 'col-inreview', name: 'In Review', category: 'inreview', status_ids: ['3'] },
-  { id: 'col-done', name: 'Done', category: 'done', status_ids: ['4'] },
+  { id: 'col-done', name: 'Done', category: 'done', status_ids: ['3'] },
 ];
+
+export const LOCAL_STORAGE_BOARD_CACHE_KEY = 'ha_jira_board_cache_v1';
+
+export interface CachedBoardData {
+  boardName: string;
+  sprintName: string;
+  jiraUrl: string;
+  columns: BoardColumn[];
+  issues: JiraIssue[];
+}
+
+export function loadCachedBoard(): CachedBoardData | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_BOARD_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.issues) && parsed.issues.length > 0) {
+      return parsed;
+    }
+  } catch {
+    // Ignore corrupt local cache
+  }
+  return null;
+}
+
+export function saveCachedBoard(data: CachedBoardData): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_BOARD_CACHE_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore quota issues
+  }
+}
 
 export type DashboardView = 'board' | 'backlog';
 
 export interface BoardStoreState {
   theme: ThemeMode;
   isLoading: boolean;
+  isSyncing: boolean;
   issues: JiraIssue[];
   columns: BoardColumn[];
   boardName: string;
@@ -72,14 +106,20 @@ export interface BoardStoreState {
   handleWsMessage: (data: unknown) => void;
 }
 
+const initialCache = loadCachedBoard();
+
 export const useBoardStore = create<BoardStoreState>((set, get) => ({
   theme: getInitialTheme(),
-  isLoading: true,
-  issues: [],
-  columns: DEFAULT_COLUMNS,
-  boardName: '',
-  sprintName: '',
-  jiraUrl: 'https://jira.example.com',
+  isLoading: !initialCache,
+  isSyncing: false,
+  issues: initialCache?.issues || [],
+  columns:
+    initialCache?.columns && initialCache.columns.length > 0
+      ? initialCache.columns
+      : DEFAULT_COLUMNS,
+  boardName: initialCache?.boardName || '',
+  sprintName: initialCache?.sprintName || '',
+  jiraUrl: initialCache?.jiraUrl || 'https://jira.example.com',
   wsConnected: false,
   activeFilters: ['my', 'active'],
   activeFilter: 'my,active',
@@ -186,31 +226,43 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   },
 
   loadBoard: async () => {
-    set({ isLoading: true });
+    const hasExistingData = get().issues.length > 0;
+    if (!hasExistingData) {
+      set({ isLoading: true });
+    } else {
+      set({ isSyncing: true });
+    }
     try {
       const res = await fetch(getApiUrl('/api/board'));
       if (res.ok) {
         const data = await res.json();
-        set({
+        const nextState: CachedBoardData = {
           boardName: data.board_name || 'Engineering Sprint Board',
           sprintName: data.sprint_name || '',
           jiraUrl: data.jira_url || 'https://jira.example.com',
           columns: data.columns && data.columns.length > 0 ? data.columns : DEFAULT_COLUMNS,
           issues: data.issues || [],
+        };
+        saveCachedBoard(nextState);
+        set({
+          ...nextState,
           errorMessage: null,
           isLoading: false,
+          isSyncing: false,
         });
       } else {
         const err = await res.json().catch(() => ({}));
         set({
           errorMessage: err.detail || `Failed to load board (HTTP ${res.status})`,
           isLoading: false,
+          isSyncing: false,
         });
       }
     } catch {
       set({
         errorMessage: 'Unable to connect to Jira backend server.',
         isLoading: false,
+        isSyncing: false,
       });
     }
   },

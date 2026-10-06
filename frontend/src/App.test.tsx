@@ -110,4 +110,29 @@ describe('App component loading indicator & board rendering', () => {
     expect(retryBtn).not.toBeNull();
     expect(retryBtn?.textContent).toContain('Retry');
   });
+
+  it('renders board immediately without loading screen when issues are already cached', async () => {
+    // Pending fetch to simulate background revalidation
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+    act(() => {
+      useBoardStore.setState({
+        isLoading: false,
+        isSyncing: true,
+        boardName: 'Engineering Sprint Board',
+        sprintName: 'Active Sprint 42',
+        issues: [testIssue],
+      });
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    // Verify loading indicator is NOT shown
+    expect(container.querySelector('[data-testid="loading-indicator"]')).toBeNull();
+    // Verify board is immediately rendered
+    expect(container.textContent).toContain('Engineering Sprint Board');
+    expect(container.textContent).toContain('Setup CI/CD pipeline');
+  });
 });

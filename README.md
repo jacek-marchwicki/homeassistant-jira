@@ -332,13 +332,11 @@ In the add-on's **Configuration** tab, enter your Jira connection settings:
 
 | Option | Type | Required | Description | Example |
 |---|---|---|---|---|
-| `jira_url` | URL | Yes | Base URL of your Jira Cloud or Data Center instance | `https://mycompany.atlassian.net` |
-| `jira_email` | String | Jira Cloud | Your Atlassian account email address | `alex@mycompany.com` |
-| `jira_api_token` | Password | Jira Cloud | Jira Cloud API Token ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens)) | `ATATT3xFfGF0...` |
-| `jira_pat` | Password | Jira DC | Personal Access Token for Jira Data Center / Server | `Nzg4NjM4MDQ1MzU4...` |
+| `jira_url` | URL | Yes | Base URL of your Jira Cloud instance | `https://mycompany.atlassian.net` |
+| `jira_email` | String | Yes | Your Atlassian account email address | `alex@mycompany.com` |
+| `jira_api_token` | Password | Yes | Jira Cloud API Token ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens)) | `ATATT3xFfGF0...` |
 | `jira_board_id` | String | No | Target Jira Board ID (optional, defaults to primary board) | `42` |
 | `polling_interval_seconds` | Integer | No | Fallback polling interval in seconds (default: `60`, `0` disables) | `60` |
-| `jira_jql` | String | No | Custom JQL query filter for board issues | `project = HOME` |
 
 ### Launching the Dashboard
 1. Go to the **Info** tab, toggle **Show in sidebar**, and click **Start**.

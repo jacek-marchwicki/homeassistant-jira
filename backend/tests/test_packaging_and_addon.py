@@ -58,10 +58,8 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
     assert "jira_url" in options and "jira_url" in schema
     assert "jira_email" in options and "jira_email" in schema
     assert "jira_api_token" in options and "jira_api_token" in schema
-    assert "jira_pat" in options and "jira_pat" in schema
     assert "jira_board_id" in options and "jira_board_id" in schema
     assert "polling_interval_seconds" in options and "polling_interval_seconds" in schema
-    assert "jira_jql" in options and "jira_jql" in schema
 
 
 def test_addon_build_yaml_is_valid() -> None:
@@ -238,9 +236,7 @@ def test_home_assistant_options_file_loading(
         "JIRA_URL",
         "JIRA_EMAIL",
         "JIRA_API_TOKEN",
-        "JIRA_PAT",
         "JIRA_BOARD_ID",
-        "JIRA_JQL",
         "POLLING_INTERVAL_SECONDS",
     ]:
         monkeypatch.delenv(env_var, raising=False)
@@ -252,7 +248,6 @@ def test_home_assistant_options_file_loading(
         "jira_api_token": "secret-token-12345",
         "jira_board_id": "ha-board-99",
         "polling_interval_seconds": 45,
-        "jira_jql": "project = HA",
     }
     options_file.write_text(json.dumps(options_data), encoding="utf-8")
 
@@ -262,21 +257,7 @@ def test_home_assistant_options_file_loading(
     assert loaded_settings.jira_api_token == "secret-token-12345"
     assert loaded_settings.jira_board_id == "ha-board-99"
     assert loaded_settings.polling_interval_seconds == 45
-    assert loaded_settings.jira_jql == "project = HA"
     assert loaded_settings.has_jira_credentials is True
-
-    # Validate mapping of jira_pat from options.json
-    pat_options_file = tmp_path / "pat_options.json"
-    pat_options_data = {
-        "jira_url": "https://ha-datacenter.internal",
-        "jira_pat": "my-personal-access-token-999",
-        "jira_board_id": "dc-board-1",
-    }
-    pat_options_file.write_text(json.dumps(pat_options_data), encoding="utf-8")
-    pat_settings = JiraDashboardSettings.load(options_path=pat_options_file)
-    assert pat_settings.jira_url == "https://ha-datacenter.internal"
-    assert pat_settings.jira_personal_access_token == "my-personal-access-token-999"
-    assert pat_settings.has_jira_credentials is True
 
 
 def test_repository_yaml_is_valid() -> None:

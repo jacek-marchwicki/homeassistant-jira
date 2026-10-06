@@ -683,5 +683,152 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       animations: 'disabled',
     });
   });
+
+  test('Capture Home Assistant Ingress with Host Sidebar Navigation Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // Inject Home Assistant UI host frame with sidebar and Ingress header bar
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty('--primary-background-color', '#101724');
+      document.documentElement.style.setProperty('--card-background-color', '#1c2538');
+      document.documentElement.style.setProperty('--ha-card-background', '#232e42');
+      document.documentElement.style.setProperty('--primary-text-color', '#e1e7f0');
+      document.documentElement.style.setProperty('--secondary-text-color', '#94a3b8');
+      document.documentElement.style.setProperty('--accent-color', '#0284c7');
+      document.documentElement.style.setProperty('--divider-color', '#2d3b55');
+
+      const haContainer = document.createElement('div');
+      haContainer.id = 'ha-host-simulation';
+      haContainer.style.display = 'flex';
+      haContainer.style.position = 'fixed';
+      haContainer.style.inset = '0';
+      haContainer.style.zIndex = '99999';
+      haContainer.style.backgroundColor = '#101724';
+      haContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+
+      haContainer.innerHTML = `
+        <div style="width: 256px; height: 100%; background: #111827; border-right: 1px solid #1f2937; display: flex; flex-direction: column; justify-content: space-between; padding: 16px 12px; box-sizing: border-box;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 20px;">
+              <div style="width: 28px; height: 28px; border-radius: 6px; background: #0284c7; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">HA</div>
+              <span style="color: #f3f4f6; font-size: 16px; font-weight: 600;">Home Assistant</span>
+            </div>
+            <nav style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="padding: 10px 14px; border-radius: 8px; color: #9ca3af; font-size: 14px; display: flex; align-items: center; gap: 12px;">
+                <span>🏠</span> Overview
+              </div>
+              <div style="padding: 10px 14px; border-radius: 8px; color: #9ca3af; font-size: 14px; display: flex; align-items: center; gap: 12px;">
+                <span>⚡</span> Energy
+              </div>
+              <div style="padding: 10px 14px; border-radius: 8px; color: #9ca3af; font-size: 14px; display: flex; align-items: center; gap: 12px;">
+                <span>🗺️</span> Map
+              </div>
+              <div style="padding: 10px 14px; border-radius: 8px; background: rgba(2, 132, 199, 0.15); color: #38bdf8; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 12px; border-left: 3px solid #0284c7;">
+                <span>📋</span> Jira Dashboard
+              </div>
+              <div style="padding: 10px 14px; border-radius: 8px; color: #9ca3af; font-size: 14px; display: flex; align-items: center; gap: 12px;">
+                <span>⚙️</span> Settings
+              </div>
+            </nav>
+          </div>
+          <div style="padding: 12px; border-top: 1px solid #1f2937; display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #374151; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #e5e7eb;">JM</div>
+            <div style="display: flex; flex-direction: column;">
+              <span style="font-size: 13px; color: #f3f4f6; font-weight: 500;">Admin</span>
+              <span style="font-size: 11px; color: #9ca3af;">homeassistant.local</span>
+            </div>
+          </div>
+        </div>
+        <div id="ha-ingress-frame-container" style="flex: 1; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: #0f172a;">
+          <div style="height: 52px; background: #111827; border-bottom: 1px solid #1f2937; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="color: #9ca3af; font-size: 14px;">Add-on Ingress</span>
+              <span style="color: #4b5563;">/</span>
+              <span style="color: #f3f4f6; font-size: 14px; font-weight: 500;">Jira</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; border: 1px solid #334155;">Ingress Active</span>
+            </div>
+          </div>
+          <div id="ha-ingress-content-slot" style="flex: 1; overflow: auto;"></div>
+        </div>
+      `;
+
+      document.body.appendChild(haContainer);
+      const slot = document.getElementById('ha-ingress-content-slot');
+      const root = document.getElementById('root');
+      if (slot && root) {
+        slot.appendChild(root);
+      }
+    });
+
+    await page.waitForTimeout(200);
+
+    await page.screenshot({
+      path: './tests/screenshots/home-assistant-ingress-embedded.png',
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Home Assistant Ingress Mobile Companion App Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    // Inject Home Assistant Companion Mobile App navigation bar
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty('--primary-background-color', '#101724');
+      document.documentElement.style.setProperty('--card-background-color', '#1c2538');
+      document.documentElement.style.setProperty('--ha-card-background', '#232e42');
+      document.documentElement.style.setProperty('--primary-text-color', '#e1e7f0');
+      document.documentElement.style.setProperty('--secondary-text-color', '#94a3b8');
+      document.documentElement.style.setProperty('--accent-color', '#0284c7');
+      document.documentElement.style.setProperty('--divider-color', '#2d3b55');
+
+      const mobileTopBar = document.createElement('div');
+      mobileTopBar.id = 'ha-mobile-header';
+      mobileTopBar.style.position = 'sticky';
+      mobileTopBar.style.top = '0';
+      mobileTopBar.style.left = '0';
+      mobileTopBar.style.right = '0';
+      mobileTopBar.style.height = '48px';
+      mobileTopBar.style.background = '#111827';
+      mobileTopBar.style.borderBottom = '1px solid #1f2937';
+      mobileTopBar.style.display = 'flex';
+      mobileTopBar.style.alignItems = 'center';
+      mobileTopBar.style.padding = '0 16px';
+      mobileTopBar.style.gap = '12px';
+      mobileTopBar.style.zIndex = '50';
+      mobileTopBar.innerHTML = `
+        <span style="font-size: 18px; color: #9ca3af;">☰</span>
+        <span style="font-size: 16px; font-weight: 600; color: #f3f4f6;">Jira</span>
+      `;
+
+      const root = document.getElementById('root');
+      if (root && root.parentNode) {
+        root.parentNode.insertBefore(mobileTopBar, root);
+      }
+    });
+
+    await page.waitForTimeout(200);
+
+    await page.screenshot({
+      path: './tests/screenshots/home-assistant-ingress-mobile.png',
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
+
+  test('Capture Standalone Docker Packaging Web Application Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const header = page.locator('header');
+    await expect(header).toBeVisible();
+
+    await page.screenshot({
+      path: './tests/screenshots/standalone-docker.png',
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
 });
 

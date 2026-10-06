@@ -62,6 +62,11 @@ class JiraDashboardSettings(BaseModel):
                 with open(path, encoding="utf-8") as f:
                     file_options = json.load(f)
                 if isinstance(file_options, dict):
+                    if (
+                        "jira_pat" in file_options
+                        and "jira_personal_access_token" not in file_options
+                    ):
+                        file_options["jira_personal_access_token"] = file_options["jira_pat"]
                     config_data.update(file_options)
             except Exception:
                 pass

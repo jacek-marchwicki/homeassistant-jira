@@ -56,6 +56,7 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
     assert "jira_url" in options and "jira_url" in schema
     assert "jira_email" in options and "jira_email" in schema
     assert "jira_api_token" in options and "jira_api_token" in schema
+    assert "jira_pat" in options and "jira_pat" in schema
     assert "jira_board_id" in options and "jira_board_id" in schema
     assert "polling_interval_seconds" in options and "polling_interval_seconds" in schema
     assert "jira_jql" in options and "jira_jql" in schema
@@ -246,3 +247,54 @@ def test_home_assistant_options_file_loading(
     assert loaded_settings.polling_interval_seconds == 45
     assert loaded_settings.jira_jql == "project = HA"
     assert loaded_settings.has_jira_credentials is True
+
+    # Validate mapping of jira_pat from options.json
+    pat_options_file = tmp_path / "pat_options.json"
+    pat_options_data = {
+        "jira_url": "https://ha-datacenter.internal",
+        "jira_pat": "my-personal-access-token-999",
+        "jira_board_id": "dc-board-1",
+    }
+    pat_options_file.write_text(json.dumps(pat_options_data), encoding="utf-8")
+    pat_settings = JiraDashboardSettings.load(options_path=pat_options_file)
+    assert pat_settings.jira_url == "https://ha-datacenter.internal"
+    assert pat_settings.jira_personal_access_token == "my-personal-access-token-999"
+    assert pat_settings.has_jira_credentials is True
+
+
+def test_repository_yaml_is_valid() -> None:
+    """Validate repository.yaml exists and contains required HA Add-on repository keys."""
+    repo_yaml_path = PROJECT_ROOT / "repository.yaml"
+    assert repo_yaml_path.is_file(), "repository.yaml must exist at the project root"
+
+    with open(repo_yaml_path, encoding="utf-8") as f:
+        repo_data = yaml.safe_load(f)
+
+    assert isinstance(repo_data, dict)
+    assert "name" in repo_data and len(repo_data["name"]) > 0
+    assert "url" in repo_data and repo_data["url"].startswith("http")
+    assert "maintainer" in repo_data and "@" in repo_data["maintainer"]
+
+
+def test_addon_documentation_and_assets() -> None:
+    """Validate addon/DOCS.md, addon/CHANGELOG.md, addon/icon.png, and addon/logo.png exist."""
+    addon_dir = PROJECT_ROOT / "addon"
+
+    docs_file = addon_dir / "DOCS.md"
+    assert docs_file.is_file(), "addon/DOCS.md must exist for Home Assistant UI documentation tab"
+    docs_text = docs_file.read_text(encoding="utf-8")
+    assert "Home Assistant Ingress" in docs_text
+    assert "Configuration" in docs_text
+
+    changelog_file = addon_dir / "CHANGELOG.md"
+    assert changelog_file.is_file(), "addon/CHANGELOG.md must exist"
+    changelog_text = changelog_file.read_text(encoding="utf-8")
+    assert "0.1.0" in changelog_text
+
+    icon_file = addon_dir / "icon.png"
+    assert icon_file.is_file(), "addon/icon.png must exist for Add-on store icon"
+    assert icon_file.stat().st_size > 0
+
+    logo_file = addon_dir / "logo.png"
+    assert logo_file.is_file(), "addon/logo.png must exist for Add-on store banner/logo"
+    assert logo_file.stat().st_size > 0

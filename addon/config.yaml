@@ -22,6 +22,7 @@ options:
   jira_url: "https://your-domain.atlassian.net"
   jira_email: "user@example.com"
   jira_api_token: ""
+  jira_pat: ""
   jira_board_id: "engineering-1"
   polling_interval_seconds: 60
   jira_jql: ""
@@ -29,6 +30,7 @@ schema:
   jira_url: "str?"
   jira_email: "str?"
   jira_api_token: "password?"
+  jira_pat: "password?"
   jira_board_id: "str?"
   polling_interval_seconds: "int?"
   jira_jql: "str?"

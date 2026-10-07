@@ -184,32 +184,34 @@ def test_jira_webhook_ingestion_and_broadcast(client: TestClient) -> None:
 
 
 def test_simulate_error_and_recovery(client: TestClient) -> None:
-    """Verify simulate-error endpoint allows testing optimistic UI rollback scenarios."""
-    # Enable error simulation
-    sim_res = client.post(
-        "/api/test/simulate-error",
-        json={"enable": True, "status_code": 503, "message": "Jira Service Outage"},
-    )
-    assert sim_res.status_code == 200
-    assert sim_res.json()["simulate_failure"] is True
+    """Verify simulate-error endpoint allows testing offline queuing and recovery."""
+    try:
+        # Enable error simulation
+        sim_res = client.post(
+            "/api/test/simulate-error",
+            json={"enable": True, "status_code": 503, "message": "Jira Service Outage"},
+        )
+        assert sim_res.status_code == 200
+        assert sim_res.json()["simulate_failure"] is True
 
-    # Transition should now fail with 503
-    fail_res = client.post(
-        "/api/issues/PROJ-101/transition",
-        json={"target_category": "done"},
-    )
-    assert fail_res.status_code == 503
-    assert "Jira Service Outage" in fail_res.json().get("detail", "")
+        # In offline mode, transition succeeds immediately locally (200) and queues in outbox
+        offline_res = client.post(
+            "/api/issues/PROJ-101/transition",
+            json={"target_category": "done"},
+        )
+        assert offline_res.status_code == 200
+        assert offline_res.json()["status"]["category"] == "done"
 
-    # Disable error simulation
-    reset_res = client.post(
-        "/api/test/simulate-error",
-        json={"enable": False},
-    )
-    assert reset_res.status_code == 200
-    assert reset_res.json()["simulate_failure"] is False
+    finally:
+        # Disable error simulation
+        reset_res = client.post(
+            "/api/test/simulate-error",
+            json={"enable": False},
+        )
+        assert reset_res.status_code == 200
+        assert reset_res.json()["simulate_failure"] is False
 
-    # Transition succeeds again
+    # Transition succeeds when online
     ok_res = client.post(
         "/api/issues/PROJ-101/transition",
         json={"target_category": "inprogress"},

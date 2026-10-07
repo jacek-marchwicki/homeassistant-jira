@@ -11,6 +11,7 @@ import asyncio
 import logging
 import os
 import time
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -21,8 +22,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from jira_dashboard.adapters import (
+    DEFAULT_COLUMNS,
     FakeJiraClient,
     JiraAPIError,
+    JiraSyncWorker,
+    SQLiteStorage,
     create_jira_client,
 )
 from jira_dashboard.config import JiraDashboardSettings
@@ -31,6 +35,8 @@ from jira_dashboard.domain import (
     IssueType,
     JiraComment,
     JiraIssue,
+    JiraStatus,
+    JiraUser,
     Priority,
     StatusCategory,
 )
@@ -43,6 +49,19 @@ logger = logging.getLogger(__name__)
 
 settings = JiraDashboardSettings.load()
 jira_client = create_jira_client(settings)
+storage = SQLiteStorage(settings.sqlite_db_path)
+storage.init_db()
+
+# Seed SQLite cache from FakeJiraClient if empty
+if not storage.get_issues() and isinstance(jira_client, FakeJiraClient):
+    storage.save_issues(list(jira_client._issues.values()))
+    storage.save_board_meta(
+        board_id=settings.jira_board_id,
+        board_name="Engineering Sprint Board",
+        sprint_name="Active Sprint 42",
+        jira_url=settings.jira_url or "https://jira.example.com",
+        columns=list(DEFAULT_COLUMNS),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +117,7 @@ class WebSocketHub:
 
 
 ws_hub = WebSocketHub()
+sync_worker = JiraSyncWorker(storage, jira_client, ws_broadcast_func=ws_hub.broadcast)
 
 
 # ---------------------------------------------------------------------------
@@ -238,10 +258,37 @@ async def fetch_and_cache_board(force: bool = False) -> BoardResponse:
             return _cached_board_response
 
         board_id = settings.jira_board_id
-        issues, columns = await asyncio.gather(
-            jira_client.get_board_issues(board_id),
-            jira_client.get_board_columns(board_id),
-        )
+        issues: list[JiraIssue] = []
+        columns: list[BoardColumn] = []
+        try:
+            issues, columns = await asyncio.gather(
+                jira_client.get_board_issues(board_id),
+                jira_client.get_board_columns(board_id),
+            )
+            storage.save_issues(issues)
+            b_name = (
+                "Engineering Sprint Board"
+                if isinstance(jira_client, FakeJiraClient)
+                else f"{board_id.upper()} Board"
+            )
+            storage.save_board_meta(
+                board_id=board_id,
+                board_name=b_name,
+                sprint_name="Active Sprint 42",
+                jira_url=settings.jira_url or "https://jira.example.com",
+                columns=columns,
+            )
+        except Exception as exc:
+            logger.warning("Could not fetch board from Jira (%s), falling back to SQLite", exc)
+            stored_issues = storage.get_issues()
+            stored_meta = storage.get_board_meta(board_id)
+            if stored_issues or stored_meta:
+                issues = stored_issues
+                columns = stored_meta["columns"] if stored_meta else list(DEFAULT_COLUMNS)
+            else:
+                if isinstance(exc, JiraAPIError):
+                    raise exc
+                raise JiraAPIError(str(exc)) from exc
 
         # Seed cache for polling loop
         for issue in issues:
@@ -308,9 +355,10 @@ class SimulateErrorRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan context managing background polling and cache warming."""
+    """Application lifespan context managing background polling, sync worker, and cache warming."""
     stop_event = asyncio.Event()
     polling_task: asyncio.Task[None] | None = None
+    sync_worker_task = asyncio.create_task(sync_worker.run_sync_loop(stop_event))
 
     # Pre-warm board cache asynchronously on startup so initial requests are instant
     cache_warm_task = asyncio.create_task(fetch_and_cache_board(force=True))
@@ -327,6 +375,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     stop_event.set()
+    sync_worker_task.cancel()
+    try:
+        await sync_worker_task
+    except asyncio.CancelledError:
+        pass
     if polling_task is not None:
         polling_task.cancel()
         try:
@@ -398,134 +451,273 @@ async def get_board(refresh: bool = Query(default=False)) -> BoardResponse:
 
 @app.post("/api/issues/{key}/transition", response_model=JiraIssue)
 async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
-    """Transition an issue to a target status category/name and broadcast to connected clients."""
+    """Transition an issue locally immediately, enqueue outbox sync to Jira, and broadcast delta."""
     if not request.target_category and not request.target_status:
         raise HTTPException(
             status_code=400,
             detail="Either target_category or target_status must be provided.",
         )
-    try:
-        issue = await jira_client.transition_issue(
-            key,
-            target_category=request.target_category,
-            target_status=request.target_status,
-        )
-    except JiraAPIError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-    # Update cache signature
-    _cached_issue_state[issue.key] = (
-        f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+    current_issue = storage.get_issue(key)
+    if current_issue is None and _cached_board_response is not None:
+        current_issue = next((i for i in _cached_board_response.issues if i.key == key), None)
+    if current_issue is None and isinstance(jira_client, FakeJiraClient):
+        current_issue = jira_client._issues.get(key)
+    if current_issue is None:
+        raise HTTPException(status_code=404, detail=f"Issue {key} not found")
+
+    orig_updated_at = current_issue.updated_at
+    target_cat = request.target_category
+    target_name = request.target_status
+
+    if target_name and not target_cat:
+        lowered = target_name.lower()
+        if "done" in lowered:
+            target_cat = StatusCategory.DONE
+        elif "review" in lowered:
+            target_cat = StatusCategory.IN_REVIEW
+        elif "progress" in lowered:
+            target_cat = StatusCategory.IN_PROGRESS
+        else:
+            target_cat = StatusCategory.TODO
+    elif target_cat and not target_name:
+        target_name = target_cat.value.replace("_", " ").title()
+
+    new_status = JiraStatus(
+        id=target_name or "status-1",
+        name=target_name or "Unknown",
+        category=target_cat or StatusCategory.TODO,
+    )
+
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    updated_issue = current_issue.model_copy(update={"status": new_status, "updated_at": now_iso})
+
+    # 1. Immediate local persistence
+    storage.upsert_issue(updated_issue)
+    _cached_issue_state[updated_issue.key] = (
+        f"{updated_issue.status.category.value}:{updated_issue.summary}:{updated_issue.updated_at}"
     )
     if _cached_board_response is not None:
         _cached_board_response.issues = [
-            issue if x.key == issue.key else x for x in _cached_board_response.issues
+            updated_issue if x.key == updated_issue.key else x
+            for x in _cached_board_response.issues
         ]
 
-    # Broadcast real-time delta via WebSockets
+    # 2. Enqueue outbox action
+    mutation_id = str(uuid.uuid4())
+    storage.enqueue_outbox(
+        client_mutation_id=mutation_id,
+        action_type="transition_issue",
+        issue_key=key,
+        payload={
+            "target_category": target_cat.value if target_cat else None,
+            "target_status": target_name,
+        },
+        base_updated_at=orig_updated_at,
+    )
+
+    # 3. Broadcast real-time delta via WebSockets
     await ws_hub.broadcast(
         {
             "event": "issue_transitioned",
-            "issue_key": issue.key,
-            "status_category": issue.status.category.value,
-            "status_name": issue.status.name,
-            "issue": issue.model_dump(),
+            "issue_key": updated_issue.key,
+            "status_category": updated_issue.status.category.value,
+            "status_name": updated_issue.status.name,
+            "issue": updated_issue.model_dump(),
         }
     )
 
-    return issue
+    # 4. Trigger async outbox processing without blocking response
+    asyncio.create_task(sync_worker.process_next_pending())
+
+    return updated_issue
 
 
 @app.patch("/api/issues/{key}", response_model=JiraIssue)
 @app.put("/api/issues/{key}", response_model=JiraIssue)
 async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
-    """Update issue details and broadcast delta to connected WebSocket clients."""
-    try:
-        issue = await jira_client.update_issue(
-            key,
-            summary=request.summary,
-            description=request.description,
-            issue_type=request.issue_type,
-            priority=request.priority,
-            status_category=request.status_category,
-            status_name=request.status_name,
-            assignee_name=request.assignee_name,
-            assignee_account_id=request.assignee_account_id,
-            story_points=request.story_points,
-            due_date=request.due_date,
-            start_date=request.start_date,
-            recreate_after=request.recreate_after,
-        )
-    except JiraAPIError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    """Update issue details locally, enqueue outbox sync to Jira, and broadcast delta."""
+    current_issue = storage.get_issue(key)
+    if current_issue is None and _cached_board_response is not None:
+        current_issue = next((i for i in _cached_board_response.issues if i.key == key), None)
+    if current_issue is None and isinstance(jira_client, FakeJiraClient):
+        current_issue = jira_client._issues.get(key)
+    if current_issue is None:
+        raise HTTPException(status_code=404, detail=f"Issue {key} not found")
 
-    # Update cache signature
-    _cached_issue_state[issue.key] = (
-        f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+    orig_updated_at = current_issue.updated_at
+    payload = request.model_dump(exclude_unset=True)
+
+    new_summary = request.summary if request.summary is not None else current_issue.summary
+    new_description = (
+        request.description if request.description is not None else current_issue.description
+    )
+    new_type = request.issue_type if request.issue_type is not None else current_issue.issue_type
+    new_priority = request.priority if request.priority is not None else current_issue.priority
+
+    new_status = current_issue.status
+    if request.status_name or request.status_category:
+        target_cat = request.status_category or current_issue.status.category
+        target_name = request.status_name or current_issue.status.name
+        new_status = JiraStatus(id=target_name, name=target_name, category=target_cat)
+
+    new_assignee = current_issue.assignee
+    if request.assignee_name is not None:
+        if request.assignee_name.strip() == "":
+            new_assignee = None
+        else:
+            new_assignee = JiraUser(
+                account_id=request.assignee_account_id
+                or (current_issue.assignee.account_id if current_issue.assignee else "usr-1"),
+                display_name=request.assignee_name.strip(),
+            )
+
+    new_story_points = (
+        request.story_points if request.story_points is not None else current_issue.story_points
+    )
+    new_due_date = request.due_date if request.due_date is not None else current_issue.due_date
+    new_start_date = (
+        request.start_date if request.start_date is not None else current_issue.start_date
+    )
+    new_recreate_after = (
+        request.recreate_after
+        if request.recreate_after is not None
+        else current_issue.recreate_after
+    )
+
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    updated_issue = JiraIssue(
+        id=current_issue.id,
+        key=current_issue.key,
+        summary=new_summary,
+        description=new_description,
+        issue_type=new_type,
+        priority=new_priority,
+        status=new_status,
+        assignee=new_assignee,
+        story_points=new_story_points,
+        due_date=new_due_date,
+        start_date=new_start_date,
+        recreate_after=new_recreate_after,
+        url=current_issue.url,
+        created_at=current_issue.created_at,
+        updated_at=now_iso,
+    )
+
+    # 1. Immediate local persistence
+    storage.upsert_issue(updated_issue)
+    _cached_issue_state[updated_issue.key] = (
+        f"{updated_issue.status.category.value}:{updated_issue.summary}:{updated_issue.updated_at}"
     )
     if _cached_board_response is not None:
         _cached_board_response.issues = [
-            issue if x.key == issue.key else x for x in _cached_board_response.issues
+            updated_issue if x.key == updated_issue.key else x
+            for x in _cached_board_response.issues
         ]
 
-    # Broadcast real-time delta via WebSockets
+    # 2. Enqueue outbox action with ONLY modified fields
+    mutation_id = str(uuid.uuid4())
+    storage.enqueue_outbox(
+        client_mutation_id=mutation_id,
+        action_type="update_issue",
+        issue_key=key,
+        payload=payload,
+        base_updated_at=orig_updated_at,
+    )
+
+    # 3. Broadcast real-time delta via WebSockets
     await ws_hub.broadcast(
         {
             "event": "issue_updated",
-            "issue_key": issue.key,
-            "status_category": issue.status.category.value,
-            "status_name": issue.status.name,
-            "issue": issue.model_dump(),
+            "issue_key": updated_issue.key,
+            "status_category": updated_issue.status.category.value,
+            "status_name": updated_issue.status.name,
+            "issue": updated_issue.model_dump(),
         }
     )
 
-    return issue
+    # 4. Trigger async outbox processing without blocking response
+    asyncio.create_task(sync_worker.process_next_pending())
+
+    return updated_issue
 
 
 @app.post("/api/issues", response_model=JiraIssue, status_code=201)
 async def create_issue(request: IssueCreateRequest) -> JiraIssue:
-    """Create a new Jira issue and broadcast delta to connected WebSocket clients."""
-    try:
-        issue = await jira_client.create_issue(
-            summary=request.summary,
-            description=request.description,
-            issue_type=request.issue_type,
-            priority=request.priority,
-            status_category=request.status_category,
-            status_name=request.status_name,
-            assignee_name=request.assignee_name,
-            assignee_account_id=request.assignee_account_id,
-            story_points=request.story_points,
-            due_date=request.due_date,
-            start_date=request.start_date,
-            recreate_after=request.recreate_after,
-            board_id=request.board_id,
-            project_key=request.project_key,
-        )
-    except JiraAPIError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    """Create a new issue locally immediately, enqueue outbox sync to Jira, and broadcast delta."""
+    proj_prefix = request.project_key
+    if not proj_prefix and request.board_id and not request.board_id.isdigit():
+        proj_prefix = request.board_id.split("-")[0].upper()
+    if not proj_prefix:
+        proj_prefix = "PROJ"
+    temp_key = f"{proj_prefix}-TEMP-{int(time.time() * 1000)}"
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-    # Update cache signature
-    _cached_issue_state[issue.key] = (
-        f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+    target_cat = request.status_category or StatusCategory.TODO
+    target_name = request.status_name or target_cat.value.replace("_", " ").title()
+    status = JiraStatus(id=target_name, name=target_name, category=target_cat)
+
+    assignee = None
+    if request.assignee_name and request.assignee_name.strip():
+        assignee = JiraUser(
+            account_id=request.assignee_account_id or "usr-1",
+            display_name=request.assignee_name.strip(),
+        )
+
+    jira_base_url = (settings.jira_url or "https://jira.example.com").strip().rstrip("/")
+    created_issue = JiraIssue(
+        id=temp_key,
+        key=temp_key,
+        summary=request.summary,
+        description=request.description,
+        issue_type=request.issue_type,
+        priority=request.priority,
+        status=status,
+        assignee=assignee,
+        story_points=request.story_points,
+        due_date=request.due_date,
+        start_date=request.start_date,
+        recreate_after=request.recreate_after,
+        url=f"{jira_base_url}/browse/{temp_key}",
+        created_at=now_iso,
+        updated_at=now_iso,
+    )
+
+    # 1. Immediate local persistence
+    storage.upsert_issue(created_issue)
+    _cached_issue_state[created_issue.key] = (
+        f"{created_issue.status.category.value}:{created_issue.summary}:{created_issue.updated_at}"
     )
     if _cached_board_response is not None:
-        _cached_board_response.issues = [issue] + [
-            x for x in _cached_board_response.issues if x.key != issue.key
+        _cached_board_response.issues = [created_issue] + [
+            x for x in _cached_board_response.issues if x.key != created_issue.key
         ]
 
-    # Broadcast real-time delta via WebSockets
+    # 2. Enqueue outbox action
+    mutation_id = str(uuid.uuid4())
+    storage.enqueue_outbox(
+        client_mutation_id=mutation_id,
+        action_type="create_issue",
+        issue_key=temp_key,
+        payload=request.model_dump(exclude_unset=True),
+        base_updated_at=None,
+    )
+
+    # 3. Broadcast delta
     await ws_hub.broadcast(
         {
             "event": "issue_created",
-            "issue_key": issue.key,
-            "status_category": issue.status.category.value,
-            "status_name": issue.status.name,
-            "issue": issue.model_dump(),
+            "issue_key": created_issue.key,
+            "status_category": created_issue.status.category.value,
+            "status_name": created_issue.status.name,
+            "issue": created_issue.model_dump(),
         }
     )
 
-    return issue
+    # 4. Trigger async outbox processing without blocking response
+    asyncio.create_task(sync_worker.process_next_pending())
+
+    return created_issue
 
 
 @app.get("/api/issues/{key}/comments", response_model=list[JiraComment])
@@ -682,6 +874,15 @@ def reset_test_state() -> dict[str, Any]:
         _cached_issue_state.clear()
         _cached_board_response = None
         _board_cache_timestamp = 0.0
+        storage.rebuild_schema_preserving_outbox()
+        storage.save_issues(list(jira_client._issues.values()))
+        storage.save_board_meta(
+            board_id=settings.jira_board_id,
+            board_name="Engineering Sprint Board",
+            sprint_name="Active Sprint 42",
+            jira_url=settings.jira_url or "https://jira.example.com",
+            columns=list(DEFAULT_COLUMNS),
+        )
         return {"status": "reset", "message": "Test state reset to initial seed"}
     return {"status": "ignored", "message": "Client is not FakeJiraClient"}
 

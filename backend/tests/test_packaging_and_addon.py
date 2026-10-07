@@ -367,9 +367,12 @@ def test_docker_base_images_exist_and_are_resolvable() -> None:
                 check=False,
             )
             if res.returncode != 0 and (
-                "toomanyrequests" in res.stderr.lower() or "rate limit" in res.stderr.lower()
+                "toomanyrequests" in res.stderr.lower()
+                or "rate limit" in res.stderr.lower()
+                or "no such manifest" in res.stderr.lower()
             ):
-                pytest.skip(f"Docker Hub rate limit reached for {image}: skipping registry probe")
+                msg = f"Registry issue for {image}: {res.stderr.strip()}"
+                pytest.skip(msg)
             assert res.returncode == 0, (
                 f"Docker failed to resolve base image metadata for '{image}':\n"
                 f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}"

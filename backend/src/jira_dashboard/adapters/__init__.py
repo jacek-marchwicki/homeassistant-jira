@@ -2,6 +2,7 @@
 
 from jira_dashboard.adapters.factory import create_jira_client
 from jira_dashboard.adapters.jira_client import (
+    DEFAULT_COLUMNS,
     FakeJiraClient,
     JiraAPIError,
     JiraClientProtocol,
@@ -11,6 +12,7 @@ from jira_dashboard.adapters.storage import SQLiteStorage
 from jira_dashboard.adapters.sync_worker import JiraSyncWorker
 
 __all__ = [
+    "DEFAULT_COLUMNS",
     "FakeJiraClient",
     "JiraAPIError",
     "JiraClientProtocol",
@@ -19,4 +21,3 @@ __all__ = [
     "SQLiteStorage",
     "create_jira_client",
 ]
-

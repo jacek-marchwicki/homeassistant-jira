@@ -30,6 +30,10 @@ class JiraDashboardSettings(BaseModel):
     polling_interval_seconds: int = Field(
         default=60, description="Interval in seconds for fallback polling (0 disables polling)"
     )
+    sqlite_db_path: str = Field(
+        default="/data/jira_dashboard.sqlite3",
+        description="Path to SQLite database for offline storage",
+    )
 
     @property
     def has_jira_credentials(self) -> bool:
@@ -68,6 +72,7 @@ class JiraDashboardSettings(BaseModel):
             "jira_board_id": "JIRA_BOARD_ID",
             "webhook_secret": "JIRA_WEBHOOK_SECRET",
             "polling_interval_seconds": "POLLING_INTERVAL_SECONDS",
+            "sqlite_db_path": "SQLITE_DB_PATH",
         }
 
         for field_name, env_var in env_mappings.items():

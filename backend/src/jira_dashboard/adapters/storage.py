@@ -32,7 +32,11 @@ class SQLiteStorage:
     def __init__(self, db_path: Path | str = ":memory:") -> None:
         self.db_path = str(db_path)
         if self.db_path != ":memory:":
-            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+            try:
+                Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                self.db_path = str(Path("./data/jira_dashboard.sqlite3").resolve())
+                Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._conn: sqlite3.Connection | None = None
 

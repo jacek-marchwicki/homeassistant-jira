@@ -15,6 +15,7 @@ def test_poll_board_issues_detects_delta_and_broadcasts(monkeypatch) -> None:
 
     async def _test() -> None:
         # Seed initial state in _cached_issue_state
+        main._cached_issue_state.clear()
         main._cached_issue_state["PROJ-101"] = "todo:Configure Ingress:2026-10-04T00:00:00Z"
 
         # Mock ws_hub broadcast

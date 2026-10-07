@@ -155,4 +155,39 @@ describe('Header component', () => {
     expect(useBoardStore.getState().theme).toBe('light');
     expect(container.querySelector('div[role="listbox"][aria-label="Select Theme"]')).toBeNull();
   });
+
+  it('renders offline badge with pending count when syncStatus is offline', async () => {
+    act(() => {
+      useBoardStore.setState({
+        syncStatus: 'offline',
+        pendingSyncCount: 3,
+      });
+    });
+
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    const offlineBadge = container.querySelector('[data-testid="offline-sync-badge"]');
+    expect(offlineBadge).not.toBeNull();
+    expect(offlineBadge?.textContent).toContain('Offline (3 pending)');
+  });
+
+  it('renders syncing badge when syncStatus is syncing', async () => {
+    act(() => {
+      useBoardStore.setState({
+        syncStatus: 'syncing',
+        pendingSyncCount: 0,
+      });
+    });
+
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    const syncingBadge = container.querySelector('[data-testid="syncing-badge"]');
+    expect(syncingBadge).not.toBeNull();
+    expect(syncingBadge?.textContent).toContain('Syncing');
+  });
 });
+

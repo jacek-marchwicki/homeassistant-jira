@@ -318,7 +318,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     targetCategory: JiraStatusCategory,
     targetStatus?: string
   ) => {
-    const { issues, rollbackQueue } = get();
+    const { issues, columns, rollbackQueue } = get();
     const originalIssue = issues.find((i) => i.key === issueKey);
     if (!originalIssue) return;
     if (
@@ -329,13 +329,19 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
 
     // 1. Instant Optimistic State Mutation (< 50ms)
-    const targetTitle = targetStatus || CATEGORY_TITLES[targetCategory] || targetCategory;
+    const targetCol = columns.find(
+      (c) =>
+        (targetStatus && c.name.trim().toLowerCase() === targetStatus.trim().toLowerCase()) ||
+        c.category === targetCategory
+    );
+    const targetStatusId = targetCol?.status_ids?.[0] || targetCol?.id || `col-${targetCategory}`;
+    const targetTitle = targetStatus || targetCol?.name || CATEGORY_TITLES[targetCategory] || targetCategory;
     const updatedIssues = issues.map((item) => {
       if (item.key !== issueKey) return item;
       return {
         ...item,
         status: {
-          ...item.status,
+          id: targetStatusId,
           category: targetCategory,
           name: targetTitle,
         },
@@ -420,7 +426,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   },
 
   updateIssueOptimistic: async (issueKey: string, updates: IssueUpdatePayload) => {
-    const { issues, rollbackQueue } = get();
+    const { issues, columns, rollbackQueue } = get();
     const originalIssue = issues.find((i) => i.key === issueKey);
     if (!originalIssue) return;
 
@@ -429,8 +435,14 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     if (updates.status_name || updates.status_category) {
       const targetCategory = updates.status_category || originalIssue.status.category;
       const targetName = updates.status_name || originalIssue.status.name;
+      const targetCol = columns.find(
+        (c) =>
+          (updates.status_name && c.name.trim().toLowerCase() === updates.status_name.trim().toLowerCase()) ||
+          c.category === targetCategory
+      );
+      const targetStatusId = targetCol?.status_ids?.[0] || targetCol?.id || originalIssue.status.id;
       newStatus = {
-        ...originalIssue.status,
+        id: targetStatusId,
         category: targetCategory,
         name: targetName,
       };

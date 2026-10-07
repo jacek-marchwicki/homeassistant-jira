@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Check,
   ChevronDown,
+  CloudOff,
   Download,
   LayoutGrid,
   Layers,
@@ -28,6 +29,8 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
     sprintName,
     wsConnected,
     isSyncing,
+    syncStatus,
+    pendingSyncCount,
     theme,
     setTheme,
     currentView,
@@ -156,12 +159,26 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
           </button>
         </div>
 
-        {/* Live WebSocket Status - Text skipped on mobile when live */}
+        {/* Sync & Live WebSocket Status */}
         <div className="flex items-center shrink-0">
-          {isSyncing && (
+          {syncStatus === 'offline' && (
+            <div
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/25 shrink-0 mr-1.5"
+              title="Operating offline. Changes queued for sync."
+              aria-label="Offline Mode"
+              data-testid="offline-sync-badge"
+            >
+              <CloudOff className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-2xs font-semibold">
+                Offline{pendingSyncCount > 0 ? ` (${pendingSyncCount} pending)` : ''}
+              </span>
+            </div>
+          )}
+
+          {(syncStatus === 'syncing' || isSyncing) && syncStatus !== 'offline' && (
             <div
               className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-xs font-medium text-[var(--jira-text-secondary)] bg-[var(--jira-canvas)] border border-[var(--jira-border)] shrink-0 mr-1.5"
-              title="Synchronizing latest issues from Jira..."
+              title="Synchronizing changes with Jira..."
               aria-label="Syncing with Jira"
               data-testid="syncing-badge"
             >

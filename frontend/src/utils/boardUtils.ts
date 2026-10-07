@@ -115,6 +115,12 @@ export function isBacklogIssue(issue: JiraIssue, columns?: BoardColumn[]): boole
     return true;
   }
 
+  // Done issues or in-progress issues never belong to the Backlog
+  const category = issue.status?.category?.trim().toLowerCase();
+  if (category === 'done' || category === 'inprogress' || category === 'inreview') {
+    return false;
+  }
+
   const statusName = issue.status?.name?.trim().toLowerCase();
   if (statusName === 'backlog') {
     return true;

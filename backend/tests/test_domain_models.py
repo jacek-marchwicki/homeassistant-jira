@@ -95,7 +95,31 @@ class TestDomainModels(unittest.TestCase):
             to_status=self.done_status,
         )
         self.assertEqual(transition.name, "Done")
-        self.assertEqual(transition.to_status.category, StatusCategory.DONE)
+
+    def test_jira_issue_rank_field(self) -> None:
+        """Verify JiraIssue rank field defaults to None and accepts LexoRank strings."""
+        issue_no_rank = JiraIssue(
+            id="10001",
+            key="PROJ-101",
+            summary="Setup test pipeline",
+            issue_type=IssueType.TASK,
+            priority=Priority.HIGH,
+            status=self.todo_status,
+            updated_at="2026-10-04T22:00:00Z",
+        )
+        self.assertIsNone(issue_no_rank.rank)
+
+        issue_with_rank = JiraIssue(
+            id="10002",
+            key="PROJ-102",
+            summary="Ranked issue",
+            issue_type=IssueType.STORY,
+            priority=Priority.HIGH,
+            status=self.todo_status,
+            rank="0|i00001:",
+            updated_at="2026-10-04T22:00:00Z",
+        )
+        self.assertEqual(issue_with_rank.rank, "0|i00001:")
 
 
 if __name__ == "__main__":

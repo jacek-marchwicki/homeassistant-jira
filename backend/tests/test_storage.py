@@ -284,3 +284,86 @@ def test_replace_all_issues_replaces_old_and_preserves_creations(
     assert "REAL-1" in keys
     # LOCAL-999 must be preserved because it has pending create_issue outbox entry
     assert "LOCAL-999" in keys
+
+
+def test_storage_rank_persistence_and_sorting(temp_db_path: Path) -> None:
+    storage = SQLiteStorage(temp_db_path)
+    storage.init_db()
+
+    issue_b = JiraIssue(
+        id="2",
+        key="PROJ-2",
+        summary="Second",
+        issue_type=IssueType.TASK,
+        priority=Priority.MEDIUM,
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        rank="0|i00002:",
+        updated_at="2026-10-01T00:00:00Z",
+    )
+    issue_a = JiraIssue(
+        id="1",
+        key="PROJ-1",
+        summary="First",
+        issue_type=IssueType.TASK,
+        priority=Priority.HIGH,
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        rank="0|i00001:",
+        updated_at="2026-10-01T00:00:00Z",
+    )
+    storage.save_issues([issue_b, issue_a])
+    issues = storage.get_issues()
+    assert [i.key for i in issues] == ["PROJ-1", "PROJ-2"]
+    assert issues[0].rank == "0|i00001:"
+    assert issues[1].rank == "0|i00002:"
+
+
+def test_storage_migration_adds_rank_column(temp_db_path: Path) -> None:
+    import sqlite3
+
+    conn = sqlite3.connect(str(temp_db_path))
+    # Create legacy table without rank column
+    conn.execute(
+        """
+        CREATE TABLE cached_issues (
+            key TEXT PRIMARY KEY,
+            id TEXT,
+            summary TEXT NOT NULL,
+            description TEXT,
+            issue_type TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            status_id TEXT NOT NULL,
+            status_name TEXT NOT NULL,
+            status_category TEXT NOT NULL,
+            assignee_account_id TEXT,
+            assignee_display_name TEXT,
+            assignee_avatar_url TEXT,
+            story_points REAL,
+            due_date TEXT,
+            start_date TEXT,
+            recreate_after TEXT,
+            url TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            raw_json TEXT
+        );
+        """
+    )
+    conn.close()
+
+    storage = SQLiteStorage(temp_db_path)
+    storage.init_db()  # Should auto-migrate and add rank column
+
+    issue = JiraIssue(
+        id="1",
+        key="PROJ-1",
+        summary="Migrated issue",
+        issue_type=IssueType.TASK,
+        priority=Priority.HIGH,
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        rank="0|i00001:",
+        updated_at="2026-10-01T00:00:00Z",
+    )
+    storage.upsert_issue(issue)
+    fetched = storage.get_issue("PROJ-1")
+    assert fetched is not None
+    assert fetched.rank == "0|i00001:"

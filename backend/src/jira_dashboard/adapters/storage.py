@@ -93,6 +93,7 @@ class SQLiteStorage:
                         due_date TEXT,
                         start_date TEXT,
                         recreate_after TEXT,
+                        rank TEXT,
                         url TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
@@ -100,6 +101,15 @@ class SQLiteStorage:
                     );
                     """
                 )
+                # Check for and apply schema migrations
+                cur = conn.execute("PRAGMA table_info(cached_issues);")
+                existing_cols = {
+                    row["name"] if isinstance(row, sqlite3.Row) else row[1]
+                    for row in cur.fetchall()
+                }
+                if "rank" not in existing_cols:
+                    conn.execute("ALTER TABLE cached_issues ADD COLUMN rank TEXT;")
+
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS sync_outbox (
@@ -253,6 +263,7 @@ class SQLiteStorage:
             due_date=row["due_date"],
             start_date=row["start_date"],
             recreate_after=row["recreate_after"],
+            rank=row["rank"] if "rank" in row.keys() else None,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
@@ -307,9 +318,9 @@ class SQLiteStorage:
                 key, id, summary, description, issue_type, priority,
                 status_id, status_name, status_category,
                 assignee_account_id, assignee_display_name, assignee_avatar_url,
-                story_points, due_date, start_date, recreate_after, url,
+                story_points, due_date, start_date, recreate_after, rank, url,
                 created_at, updated_at, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(key) DO UPDATE SET
                 id = excluded.id,
                 summary = excluded.summary,
@@ -326,6 +337,7 @@ class SQLiteStorage:
                 due_date = excluded.due_date,
                 start_date = excluded.start_date,
                 recreate_after = excluded.recreate_after,
+                rank = excluded.rank,
                 url = excluded.url,
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
@@ -348,6 +360,7 @@ class SQLiteStorage:
                 issue.due_date,
                 issue.start_date,
                 issue.recreate_after,
+                issue.rank,
                 issue.url,
                 issue.created_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 issue.updated_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -359,7 +372,14 @@ class SQLiteStorage:
         """Fetch all cached issues."""
         with self._lock:
             conn = self._get_connection()
-            cur = conn.execute("SELECT * FROM cached_issues ORDER BY updated_at DESC;")
+            cur = conn.execute(
+                """
+                SELECT * FROM cached_issues
+                ORDER BY CASE WHEN rank IS NOT NULL AND rank != '' THEN 0 ELSE 1 END,
+                         rank ASC,
+                         updated_at DESC;
+                """
+            )
             return [self._row_to_issue(r) for r in cur.fetchall()]
 
     def get_issue(self, key: str) -> JiraIssue | None:

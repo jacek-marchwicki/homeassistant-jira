@@ -334,7 +334,7 @@ class FakeJiraClient:
 
     async def get_issue(self, issue_key: str) -> JiraIssue | None:
         """Return issue by key or None."""
-        if self.simulate_board_failure:
+        if self.simulate_board_failure or self.simulate_failure:
             raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
         return self._issues.get(issue_key)
 

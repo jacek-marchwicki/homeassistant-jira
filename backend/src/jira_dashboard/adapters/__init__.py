@@ -8,12 +8,14 @@ from jira_dashboard.adapters.jira_client import (
 )
 from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
 from jira_dashboard.adapters.storage import SQLiteStorage
+from jira_dashboard.adapters.sync_worker import JiraSyncWorker
 
 __all__ = [
     "FakeJiraClient",
     "JiraAPIError",
     "JiraClientProtocol",
     "JiraCloudClient",
+    "JiraSyncWorker",
     "SQLiteStorage",
     "create_jira_client",
 ]

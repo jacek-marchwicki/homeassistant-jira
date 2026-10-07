@@ -24,6 +24,22 @@ export const DEFAULT_COLUMNS: BoardColumn[] = [
 ];
 
 export const LOCAL_STORAGE_BOARD_CACHE_KEY = 'ha_jira_board_cache_v1';
+export const LOCAL_STORAGE_OUTBOX_KEY = 'ha_jira_offline_outbox_v1';
+
+export class ServerRejectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ServerRejectionError';
+  }
+}
+
+export interface OfflineOutboxItem {
+  id: string;
+  action: 'create_issue' | 'update_issue' | 'transition_issue';
+  issueKey?: string;
+  payload: Record<string, any>;
+  createdAt: number;
+}
 
 export interface CachedBoardData {
   boardName: string;
@@ -57,6 +73,28 @@ export function saveCachedBoard(data: CachedBoardData): void {
   }
 }
 
+export function loadCachedOutbox(): OfflineOutboxItem[] {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_OUTBOX_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // Ignore corrupt local cache
+  }
+  return [];
+}
+
+export function saveCachedOutbox(items: OfflineOutboxItem[]): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_OUTBOX_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore quota issues
+  }
+}
+
 export type DashboardView = 'board' | 'backlog';
 
 export interface BoardStoreState {
@@ -79,6 +117,9 @@ export interface BoardStoreState {
   isBacklogExpandedOnBoard: boolean;
   editingIssue: JiraIssue | null;
   isCreateModalOpen: boolean;
+  offlineOutbox: OfflineOutboxItem[];
+  syncStatus: 'synced' | 'syncing' | 'offline';
+  pendingSyncCount: number;
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
@@ -103,10 +144,12 @@ export interface BoardStoreState {
   ) => Promise<void>;
   updateIssueOptimistic: (issueKey: string, updates: IssueUpdatePayload) => Promise<void>;
   createIssueOptimistic: (payload: IssueCreatePayload) => Promise<JiraIssue | null>;
+  flushOfflineQueue: () => Promise<void>;
   handleWsMessage: (data: unknown) => void;
 }
 
 const initialCache = loadCachedBoard();
+const initialOutbox = loadCachedOutbox();
 
 export const useBoardStore = create<BoardStoreState>((set, get) => ({
   theme: getInitialTheme(),
@@ -137,6 +180,9 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   isBacklogExpandedOnBoard: false,
   editingIssue: null,
   isCreateModalOpen: false,
+  offlineOutbox: initialOutbox,
+  syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
+  pendingSyncCount: initialOutbox.length,
 
   setCurrentUser: (userName: string) => {
     const trimmed = userName.trim();
@@ -303,20 +349,25 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       issues: updatedIssues,
       rollbackQueue: { ...rollbackQueue, [issueKey]: originalIssue },
     });
+    persistCurrentBoardState(get);
 
     // 2. Background Asynchronous Sync to Backend & Jira
     try {
+      const payload: { target_category: string; target_status?: string } = {
+        target_category: targetCategory,
+      };
+      if (targetStatus) {
+        payload.target_status = targetStatus;
+      }
+
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/transition`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          target_category: targetCategory,
-          target_status: targetStatus,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
+        throw new ServerRejectionError(`Server returned ${res.status}`);
       }
 
       const updated = await res.json();
@@ -325,24 +376,46 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           item.key === issueKey ? { ...updated, _optimisticState: 'synced' } : item
         ),
       }));
-    } catch {
-      // 3. Graceful Rollback on Sync Rejection
-      set((state) => {
-        const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
-        return {
-          issues: state.issues.map((item) =>
-            item.key === issueKey ? { ...rollbackIssue, _optimisticState: 'failed' } : item
-          ),
-          errorMessage: `Failed to transition ${issueKey}. Reverting to previous status.`,
-        };
-      });
+      persistCurrentBoardState(get);
+    } catch (err) {
+      if (err instanceof ServerRejectionError) {
+        // 3. Graceful Rollback on Server Rejection
+        set((state) => {
+          const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
+          return {
+            issues: state.issues.map((item) =>
+              item.key === issueKey ? { ...rollbackIssue, _optimisticState: 'failed' } : item
+            ),
+            errorMessage: `Failed to transition ${issueKey}. Reverting to previous status.`,
+          };
+        });
 
-      // Clear error message after 5 seconds
-      setTimeout(() => {
-        if (get().errorMessage?.includes(issueKey)) {
-          set({ errorMessage: null });
-        }
-      }, 5000);
+        // Clear error message after 5 seconds
+        setTimeout(() => {
+          if (get().errorMessage?.includes(issueKey)) {
+            set({ errorMessage: null });
+          }
+        }, 5000);
+      } else {
+        // Network failure / offline: keep optimistic state and queue mutation
+        const outboxItem: OfflineOutboxItem = {
+          id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          action: 'transition_issue',
+          issueKey,
+          payload: targetStatus
+            ? { target_category: targetCategory, target_status: targetStatus }
+            : { target_category: targetCategory },
+          createdAt: Date.now(),
+        };
+        const updatedOutbox = [...get().offlineOutbox, outboxItem];
+        saveCachedOutbox(updatedOutbox);
+        set({
+          offlineOutbox: updatedOutbox,
+          pendingSyncCount: updatedOutbox.length,
+          syncStatus: 'offline',
+        });
+        persistCurrentBoardState(get);
+      }
     }
   },
 
@@ -411,6 +484,15 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       rollbackQueue: { ...rollbackQueue, [issueKey]: originalIssue },
       editingIssue: null,
     });
+    persistCurrentBoardState(get);
+
+    // Calculate dirty single-field delta
+    const delta: Record<string, any> = {};
+    for (const [key, val] of Object.entries(updates)) {
+      if (val !== undefined) {
+        delta[key] = val;
+      }
+    }
 
     // 2. Background Asynchronous Sync to Backend
     try {
@@ -421,7 +503,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       });
 
       if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
+        throw new ServerRejectionError(`Server returned ${res.status}`);
       }
 
       const updated = await res.json();
@@ -430,23 +512,43 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           item.key === issueKey ? { ...updated, _optimisticState: 'synced' } : item
         ),
       }));
-    } catch {
-      // 3. Graceful Rollback on Sync Rejection
-      set((state) => {
-        const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
-        return {
-          issues: state.issues.map((item) =>
-            item.key === issueKey ? { ...rollbackIssue, _optimisticState: 'failed' } : item
-          ),
-          errorMessage: `Failed to update ${issueKey}. Reverting changes.`,
-        };
-      });
+      persistCurrentBoardState(get);
+    } catch (err) {
+      if (err instanceof ServerRejectionError) {
+        // 3. Graceful Rollback on Server Rejection
+        set((state) => {
+          const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
+          return {
+            issues: state.issues.map((item) =>
+              item.key === issueKey ? { ...rollbackIssue, _optimisticState: 'failed' } : item
+            ),
+            errorMessage: `Failed to update ${issueKey}. Reverting changes.`,
+          };
+        });
 
-      setTimeout(() => {
-        if (get().errorMessage?.includes(issueKey)) {
-          set({ errorMessage: null });
-        }
-      }, 5000);
+        setTimeout(() => {
+          if (get().errorMessage?.includes(issueKey)) {
+            set({ errorMessage: null });
+          }
+        }, 5000);
+      } else {
+        // Network failure / offline: keep optimistic state and queue delta
+        const outboxItem: OfflineOutboxItem = {
+          id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          action: 'update_issue',
+          issueKey,
+          payload: delta,
+          createdAt: Date.now(),
+        };
+        const updatedOutbox = [...get().offlineOutbox, outboxItem];
+        saveCachedOutbox(updatedOutbox);
+        set({
+          offlineOutbox: updatedOutbox,
+          pendingSyncCount: updatedOutbox.length,
+          syncStatus: 'offline',
+        });
+        persistCurrentBoardState(get);
+      }
     }
   },
 
@@ -481,6 +583,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       issues: [tempIssue, ...state.issues],
       isCreateModalOpen: false,
     }));
+    persistCurrentBoardState(get);
 
     // 2. Background Asynchronous Sync to Backend
     try {
@@ -491,7 +594,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       });
 
       if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
+        throw new ServerRejectionError(`Server returned ${res.status}`);
       }
 
       const created: JiraIssue = await res.json();
@@ -511,21 +614,155 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           ),
         };
       });
+      persistCurrentBoardState(get);
       return created;
-    } catch {
-      // 3. Graceful Rollback on Sync Rejection
-      set((state) => ({
-        issues: state.issues.filter((item) => item.key !== tempKey),
-        errorMessage: 'Failed to create issue. Please check connection.',
-      }));
+    } catch (err) {
+      if (err instanceof ServerRejectionError) {
+        // 3. Graceful Rollback on Server Rejection
+        set((state) => ({
+          issues: state.issues.filter((item) => item.key !== tempKey),
+          errorMessage: 'Failed to create issue. Please check connection.',
+        }));
 
-      setTimeout(() => {
-        if (get().errorMessage?.includes('Failed to create issue')) {
-          set({ errorMessage: null });
-        }
-      }, 5000);
-      return null;
+        setTimeout(() => {
+          if (get().errorMessage?.includes('Failed to create issue')) {
+            set({ errorMessage: null });
+          }
+        }, 5000);
+        return null;
+      } else {
+        // Network failure / offline: keep temp issue in state and queue creation
+        const outboxItem: OfflineOutboxItem = {
+          id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          action: 'create_issue',
+          issueKey: tempKey,
+          payload: { ...payload },
+          createdAt: Date.now(),
+        };
+        const updatedOutbox = [...get().offlineOutbox, outboxItem];
+        saveCachedOutbox(updatedOutbox);
+        set({
+          offlineOutbox: updatedOutbox,
+          pendingSyncCount: updatedOutbox.length,
+          syncStatus: 'offline',
+        });
+        persistCurrentBoardState(get);
+        return tempIssue;
+      }
     }
+  },
+
+  flushOfflineQueue: async () => {
+    const currentQueue = [...get().offlineOutbox];
+    if (currentQueue.length === 0) {
+      set({ syncStatus: 'synced', pendingSyncCount: 0 });
+      return;
+    }
+
+    set({ syncStatus: 'syncing' });
+    const remainingOutbox = [...currentQueue];
+
+    for (const item of currentQueue) {
+      try {
+        let res: Response;
+        if (item.action === 'transition_issue' && item.issueKey) {
+          res = await fetch(getApiUrl(`/api/issues/${item.issueKey}/transition`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item.payload),
+          });
+        } else if (item.action === 'update_issue' && item.issueKey) {
+          res = await fetch(getApiUrl(`/api/issues/${item.issueKey}`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item.payload),
+          });
+        } else if (item.action === 'create_issue') {
+          res = await fetch(getApiUrl('/api/issues'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item.payload),
+          });
+        } else {
+          const idx = remainingOutbox.findIndex((it) => it.id === item.id);
+          if (idx !== -1) remainingOutbox.splice(idx, 1);
+          continue;
+        }
+
+        if (res.ok) {
+          const remoteIssue: JiraIssue = await res.json();
+          set((state) => {
+            if (item.action === 'create_issue' && item.issueKey) {
+              const withoutTemp = state.issues.filter((i) => i.key !== item.issueKey);
+              const exists = withoutTemp.some((i) => i.key === remoteIssue.key);
+              if (exists) {
+                return {
+                  issues: withoutTemp.map((i) =>
+                    i.key === remoteIssue.key ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                  ),
+                };
+              }
+              return {
+                issues: state.issues.map((i) =>
+                  i.key === item.issueKey ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                ),
+              };
+            } else {
+              return {
+                issues: state.issues.map((i) =>
+                  i.key === (item.issueKey || remoteIssue.key)
+                    ? { ...remoteIssue, _optimisticState: 'synced' }
+                    : i
+                ),
+              };
+            }
+          });
+        } else {
+          // Server rejected or conflict: adopt remote state if returned
+          try {
+            const body = await res.json();
+            if (body && body.key && body.status) {
+              set((state) => ({
+                issues: state.issues.map((i) =>
+                  i.key === body.key ? { ...body, _optimisticState: 'synced' } : i
+                ),
+              }));
+            }
+          } catch {
+            // Response not JSON
+          }
+        }
+
+        // Successfully drained or skipped conflict: remove from outbox
+        const itemIdx = remainingOutbox.findIndex((it) => it.id === item.id);
+        if (itemIdx !== -1) {
+          remainingOutbox.splice(itemIdx, 1);
+        }
+        saveCachedOutbox(remainingOutbox);
+        set({
+          offlineOutbox: [...remainingOutbox],
+          pendingSyncCount: remainingOutbox.length,
+        });
+        persistCurrentBoardState(get);
+      } catch {
+        // Network fetch error: still offline! Stop draining queue.
+        saveCachedOutbox(remainingOutbox);
+        set({
+          offlineOutbox: [...remainingOutbox],
+          pendingSyncCount: remainingOutbox.length,
+          syncStatus: 'offline',
+        });
+        return;
+      }
+    }
+
+    saveCachedOutbox(remainingOutbox);
+    set({
+      offlineOutbox: [...remainingOutbox],
+      pendingSyncCount: remainingOutbox.length,
+      syncStatus: remainingOutbox.length === 0 ? 'synced' : 'offline',
+    });
+    persistCurrentBoardState(get);
   },
 
   handleWsMessage: (data: unknown) => {
@@ -572,3 +809,20 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 }));
+
+function persistCurrentBoardState(get: () => BoardStoreState): void {
+  const state = get();
+  saveCachedBoard({
+    boardName: state.boardName,
+    sprintName: state.sprintName,
+    jiraUrl: state.jiraUrl,
+    columns: state.columns,
+    issues: state.issues,
+  });
+}
+
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('online', () => {
+    void useBoardStore.getState().flushOfflineQueue();
+  });
+}

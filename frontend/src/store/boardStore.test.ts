@@ -442,6 +442,128 @@ describe('Zustand BoardStore', () => {
       statuses.some((s) => s.name.toLowerCase().includes('review') || s.category === 'inreview')
     ).toBe(false);
   });
+
+  describe('Offline Outbox & Reconnection Sync', () => {
+    beforeEach(() => {
+      localStorage.clear();
+      useBoardStore.setState({
+        issues: [mockIssue],
+        offlineOutbox: [],
+        syncStatus: 'synced',
+        pendingSyncCount: 0,
+      });
+    });
+
+    it('offline transition appends to offlineOutbox in localStorage and keeps optimistic state', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error('Network error: offline'));
+
+      await useBoardStore.getState().transitionIssueOptimistic('PROJ-101', 'done', 'Done');
+
+      // 1. Issue remains in optimistic state (not reverted!)
+      const currentIssue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+      expect(currentIssue?.status.category).toBe('done');
+      expect(currentIssue?._optimisticState).toBe('pending');
+
+      // 2. Outbox has queued mutation
+      const outbox = useBoardStore.getState().offlineOutbox;
+      expect(outbox.length).toBe(1);
+      expect(outbox[0].action).toBe('transition_issue');
+      expect(outbox[0].issueKey).toBe('PROJ-101');
+      expect(outbox[0].payload).toEqual({ target_category: 'done', target_status: 'Done' });
+
+      // 3. Saved to localStorage
+      const savedRaw = localStorage.getItem('ha_jira_offline_outbox_v1');
+      expect(savedRaw).toBeTruthy();
+      expect(JSON.parse(savedRaw!).length).toBe(1);
+
+      // 4. Sync status reflects offline
+      expect(useBoardStore.getState().syncStatus).toBe('offline');
+      expect(useBoardStore.getState().pendingSyncCount).toBe(1);
+    });
+
+    it('updating only assignee extracts single-field delta in outbox payload', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+      await useBoardStore.getState().updateIssueOptimistic('PROJ-101', {
+        assignee_name: 'Alex Lead',
+      });
+
+      const outbox = useBoardStore.getState().offlineOutbox;
+      expect(outbox.length).toBe(1);
+      expect(outbox[0].action).toBe('update_issue');
+      expect(outbox[0].payload).toEqual({ assignee_name: 'Alex Lead' });
+      // Should not contain untouched fields
+      expect(outbox[0].payload.summary).toBeUndefined();
+      expect(outbox[0].payload.description).toBeUndefined();
+
+      const current = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+      expect(current?.assignee?.displayName).toBe('Alex Lead');
+    });
+
+    it('flushOfflineQueue flushes pending items in FIFO order upon reconnection', async () => {
+      const outboxItem1 = {
+        id: 'outbox-1',
+        action: 'transition_issue' as const,
+        issueKey: 'PROJ-101',
+        payload: { target_category: 'done', target_status: 'Done' },
+        createdAt: Date.now(),
+      };
+
+      useBoardStore.setState({
+        offlineOutbox: [outboxItem1],
+        pendingSyncCount: 1,
+        syncStatus: 'offline',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...mockIssue,
+          status: { id: '4', name: 'Done', category: 'done' },
+        }),
+      });
+
+      await useBoardStore.getState().flushOfflineQueue();
+
+      expect(useBoardStore.getState().offlineOutbox.length).toBe(0);
+      expect(useBoardStore.getState().syncStatus).toBe('synced');
+      expect(useBoardStore.getState().pendingSyncCount).toBe(0);
+
+      const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+      expect(issue?._optimisticState).toBe('synced');
+    });
+
+    it('flushOfflineQueue adopts remote state on conflict (remote-wins)', async () => {
+      const outboxItem = {
+        id: 'outbox-conflict',
+        action: 'update_issue' as const,
+        issueKey: 'PROJ-101',
+        payload: { summary: 'Conflicting Local Edit' },
+        createdAt: Date.now(),
+      };
+
+      useBoardStore.setState({
+        offlineOutbox: [outboxItem],
+        pendingSyncCount: 1,
+        syncStatus: 'offline',
+      });
+
+      // Server returns remote version that supersedes the local change
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...mockIssue,
+          summary: 'Remote Authoritative Version',
+        }),
+      });
+
+      await useBoardStore.getState().flushOfflineQueue();
+
+      expect(useBoardStore.getState().offlineOutbox.length).toBe(0);
+      const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+      expect(issue?.summary).toBe('Remote Authoritative Version');
+    });
+  });
 });
 
 

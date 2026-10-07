@@ -21,6 +21,8 @@ import {
   isDoneIssueWithinDays,
   filterIssuesForColumn,
   getJiraIssueUrl,
+  sortIssuesByRank,
+  calculateRankBetween,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -989,6 +991,45 @@ describe('boardUtils', () => {
       expect(getJiraIssueUrl(issue)).toBe('https://jira.example.com/browse/PROJ-400');
     });
   });
+
+  describe('sortIssuesByRank and calculateRankBetween', () => {
+    it('sorts issues ascending by rank', () => {
+      const issues: JiraIssue[] = [
+        { ...mockBaseIssue, key: 'B', rank: '0|i00002:' },
+        { ...mockBaseIssue, key: 'A', rank: '0|i00001:' },
+        { ...mockBaseIssue, key: 'C', rank: '0|i00003:' },
+      ];
+      const sorted = sortIssuesByRank(issues);
+      expect(sorted.map((i) => i.key)).toEqual(['A', 'B', 'C']);
+    });
+
+    it('places unranked issues after ranked issues, sorted by updated_at or key', () => {
+      const issues: JiraIssue[] = [
+        { ...mockBaseIssue, key: 'NO-RANK-1', rank: undefined, updated_at: '2026-10-02T00:00:00Z' },
+        { ...mockBaseIssue, key: 'A', rank: '0|i00001:', updated_at: '2026-10-01T00:00:00Z' },
+        { ...mockBaseIssue, key: 'NO-RANK-2', rank: undefined, updated_at: '2026-10-03T00:00:00Z' },
+      ];
+      const sorted = sortIssuesByRank(issues);
+      expect(sorted[0].key).toBe('A');
+      expect(sorted[1].key).toBe('NO-RANK-2');
+      expect(sorted[2].key).toBe('NO-RANK-1');
+    });
+
+    it('calculates intermediate rank between two ranks', () => {
+      const rank = calculateRankBetween('0|i00001:', '0|i00003:');
+      expect(rank > '0|i00001:').toBe(true);
+      expect(rank < '0|i00003:').toBe(true);
+    });
+
+    it('calculates rank before first issue or after last issue', () => {
+      const beforeFirst = calculateRankBetween(null, '0|i00002:');
+      expect(beforeFirst < '0|i00002:').toBe(true);
+
+      const afterLast = calculateRankBetween('0|i00002:', null);
+      expect(afterLast > '0|i00002:').toBe(true);
+    });
+  });
 });
+
 
 

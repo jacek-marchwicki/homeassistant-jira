@@ -620,7 +620,118 @@ describe('Zustand BoardStore', () => {
       expect(cached?.issues[0].key).toBe('HOME-1');
     });
   });
+
+  describe('rankIssueOptimistic and offline ranking', () => {
+    it('updates issue rank instantly (< 50ms) and re-sorts issues array', async () => {
+      const issueA: JiraIssue = {
+        id: '1',
+        key: 'A',
+        summary: 'Issue A',
+        priority: 'high',
+        status: { id: '1', name: 'To Do', category: 'todo' },
+        rank: '0|i00001:',
+      };
+      const issueB: JiraIssue = {
+        id: '2',
+        key: 'B',
+        summary: 'Issue B',
+        priority: 'high',
+        status: { id: '1', name: 'To Do', category: 'todo' },
+        rank: '0|i00002:',
+      };
+      useBoardStore.setState({ issues: [issueA, issueB] });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...issueA, rank: '0|i00003:' }),
+      });
+
+      const startTime = performance.now();
+      const promise = useBoardStore
+        .getState()
+        .rankIssueOptimistic('A', undefined, 'B', '0|i00003:');
+
+      const elapsed = performance.now() - startTime;
+      expect(elapsed).toBeLessThan(50);
+
+      const stateIssues = useBoardStore.getState().issues;
+      expect(stateIssues.map((i) => i.key)).toEqual(['B', 'A']);
+      expect(stateIssues.find((i) => i.key === 'A')?.rank).toBe('0|i00003:');
+
+      await promise;
+    });
+
+    it('queues rank_issue in offlineOutbox and sets syncStatus to offline when network fails', async () => {
+      const issueA: JiraIssue = {
+        id: '1',
+        key: 'A',
+        summary: 'Issue A',
+        priority: 'high',
+        status: { id: '1', name: 'To Do', category: 'todo' },
+        rank: '0|i00001:',
+      };
+      const issueB: JiraIssue = {
+        id: '2',
+        key: 'B',
+        summary: 'Issue B',
+        priority: 'high',
+        status: { id: '1', name: 'To Do', category: 'todo' },
+        rank: '0|i00002:',
+      };
+      useBoardStore.setState({ issues: [issueA, issueB], offlineOutbox: [] });
+
+      global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+
+      await useBoardStore.getState().rankIssueOptimistic('A', undefined, 'B', '0|i00003:');
+
+      const store = useBoardStore.getState();
+      expect(store.syncStatus).toBe('offline');
+      expect(store.offlineOutbox.length).toBe(1);
+      expect(store.offlineOutbox[0].action).toBe('rank_issue');
+      expect(store.offlineOutbox[0].issueKey).toBe('A');
+    });
+
+    it('flushes pending rank_issue items on flushOfflineQueue', async () => {
+      const issueA: JiraIssue = {
+        id: '1',
+        key: 'A',
+        summary: 'Issue A',
+        priority: 'high',
+        status: { id: '1', name: 'To Do', category: 'todo' },
+        rank: '0|i00003:',
+      };
+      useBoardStore.setState({
+        issues: [issueA],
+        offlineOutbox: [
+          {
+            id: 'outbox-1',
+            action: 'rank_issue',
+            issueKey: 'A',
+            payload: { rank_after_key: 'B', rank: '0|i00003:' },
+            createdAt: Date.now(),
+          },
+        ],
+        syncStatus: 'offline',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...issueA, rank: '0|i00003:' }),
+      });
+
+      await useBoardStore.getState().flushOfflineQueue();
+
+      const store = useBoardStore.getState();
+      expect(store.syncStatus).toBe('synced');
+      expect(store.offlineOutbox.length).toBe(0);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/issues/A/rank'),
+        expect.objectContaining({ method: 'PUT' })
+      );
+    });
+  });
 });
+
 
 
 

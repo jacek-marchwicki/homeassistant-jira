@@ -8,6 +8,7 @@ import {
 } from '../types/jira.ts';
 import { applyTheme, getInitialTheme, ThemeMode } from '../tokens/themeBridge.ts';
 import { getApiUrl } from '../utils/paths.ts';
+import { sortIssuesByRank } from '../utils/boardUtils.ts';
 
 const CATEGORY_TITLES: Record<JiraStatusCategory, string> = {
   todo: 'To Do',
@@ -35,7 +36,7 @@ export class ServerRejectionError extends Error {
 
 export interface OfflineOutboxItem {
   id: string;
-  action: 'create_issue' | 'update_issue' | 'transition_issue';
+  action: 'create_issue' | 'update_issue' | 'transition_issue' | 'rank_issue';
   issueKey?: string;
   payload: Record<string, any>;
   createdAt: number;
@@ -66,7 +67,10 @@ export function loadCachedBoard(): CachedBoardData | null {
         window.localStorage.removeItem(LOCAL_STORAGE_BOARD_CACHE_KEY);
         return null;
       }
-      return parsed;
+      return {
+        ...parsed,
+        issues: sortIssuesByRank(parsed.issues),
+      };
     }
   } catch {
     // Ignore corrupt local cache
@@ -154,6 +158,12 @@ export interface BoardStoreState {
   ) => Promise<void>;
   updateIssueOptimistic: (issueKey: string, updates: IssueUpdatePayload) => Promise<void>;
   createIssueOptimistic: (payload: IssueCreatePayload) => Promise<JiraIssue | null>;
+  rankIssueOptimistic: (
+    issueKey: string,
+    rankBeforeKey?: string,
+    rankAfterKey?: string,
+    targetRank?: string
+  ) => Promise<void>;
   flushOfflineQueue: () => Promise<void>;
   handleWsMessage: (data: unknown) => void;
 }
@@ -297,7 +307,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           sprintName: data.sprint_name || '',
           jiraUrl: data.jira_url || 'https://jira.example.com',
           columns: data.columns && data.columns.length > 0 ? data.columns : DEFAULT_COLUMNS,
-          issues: data.issues || [],
+          issues: sortIssuesByRank(data.issues || []),
         };
         saveCachedBoard(nextState);
         set({
@@ -674,6 +684,116 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 
+  rankIssueOptimistic: async (
+    issueKey: string,
+    rankBeforeKey?: string,
+    rankAfterKey?: string,
+    targetRank?: string
+  ) => {
+    const { issues, rollbackQueue } = get();
+    const originalIssue = issues.find((i) => i.key === issueKey);
+    if (!originalIssue) return;
+
+    // 1. Instant Optimistic State Mutation (< 50ms)
+    const newRank = targetRank || originalIssue.rank || '0|i00001:';
+
+    const updatedIssues = sortIssuesByRank(
+      issues.map((item) =>
+        item.key === issueKey
+          ? {
+              ...item,
+              rank: newRank,
+              _optimisticState: 'pending' as const,
+            }
+          : item
+      )
+    );
+
+    set({
+      issues: updatedIssues,
+      rollbackQueue: { ...rollbackQueue, [issueKey]: originalIssue },
+    });
+    persistCurrentBoardState(get);
+
+    // 2. Background Asynchronous Sync to Backend & Jira
+    try {
+      const payload: Record<string, any> = {};
+      if (rankBeforeKey !== undefined) payload.rank_before_key = rankBeforeKey;
+      if (rankAfterKey !== undefined) payload.rank_after_key = rankAfterKey;
+      if (targetRank !== undefined) payload.target_rank = targetRank;
+
+      const res = await fetch(getApiUrl(`/api/issues/${issueKey}/rank`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        throw new ServerRejectionError(`Server returned ${res.status}`);
+      }
+
+      const updated = await res.json();
+      set((state) => ({
+        issues: sortIssuesByRank(
+          state.issues.map((item) =>
+            item.key === issueKey
+              ? {
+                  ...item,
+                  ...updated,
+                  rank: updated.rank || newRank,
+                  _optimisticState: 'synced',
+                }
+              : item
+          )
+        ),
+        rollbackQueue: Object.fromEntries(
+          Object.entries(state.rollbackQueue).filter(([k]) => k !== issueKey)
+        ),
+      }));
+      persistCurrentBoardState(get);
+    } catch (err) {
+      if (err instanceof ServerRejectionError) {
+        // 3. Graceful Rollback on Server Rejection
+        set((state) => ({
+          issues: sortIssuesByRank(
+            state.issues.map((item) => (item.key === issueKey ? originalIssue : item))
+          ),
+          errorMessage: `Failed to rank issue ${issueKey}. Reverting to previous position.`,
+          rollbackQueue: Object.fromEntries(
+            Object.entries(state.rollbackQueue).filter(([k]) => k !== issueKey)
+          ),
+        }));
+
+        setTimeout(() => {
+          if (get().errorMessage?.includes(issueKey)) {
+            set({ errorMessage: null });
+          }
+        }, 5000);
+      } else {
+        // Network failure / offline: keep optimistic state and queue rank action
+        const outboxItem: OfflineOutboxItem = {
+          id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          action: 'rank_issue',
+          issueKey,
+          payload: {
+            rank_before_key: rankBeforeKey,
+            rank_after_key: rankAfterKey,
+            target_rank: targetRank,
+          },
+          createdAt: Date.now(),
+        };
+        const updatedOutbox = [...get().offlineOutbox, outboxItem];
+        saveCachedOutbox(updatedOutbox);
+        set({
+          offlineOutbox: updatedOutbox,
+          pendingSyncCount: updatedOutbox.length,
+          syncStatus: 'offline',
+        });
+        persistCurrentBoardState(get);
+      }
+    }
+  },
+
   flushOfflineQueue: async () => {
     const currentQueue = [...get().offlineOutbox];
     if (currentQueue.length === 0) {
@@ -699,6 +819,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });
+        } else if (item.action === 'rank_issue' && item.issueKey) {
+          res = await fetch(getApiUrl(`/api/issues/${item.issueKey}/rank`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item.payload),
+          });
         } else if (item.action === 'create_issue') {
           res = await fetch(getApiUrl('/api/issues'), {
             method: 'POST',
@@ -719,22 +845,28 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
               const exists = withoutTemp.some((i) => i.key === remoteIssue.key);
               if (exists) {
                 return {
-                  issues: withoutTemp.map((i) =>
-                    i.key === remoteIssue.key ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                  issues: sortIssuesByRank(
+                    withoutTemp.map((i) =>
+                      i.key === remoteIssue.key ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                    )
                   ),
                 };
               }
               return {
-                issues: state.issues.map((i) =>
-                  i.key === item.issueKey ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                issues: sortIssuesByRank(
+                  state.issues.map((i) =>
+                    i.key === item.issueKey ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                  )
                 ),
               };
             } else {
               return {
-                issues: state.issues.map((i) =>
-                  i.key === (item.issueKey || remoteIssue.key)
-                    ? { ...remoteIssue, _optimisticState: 'synced' }
-                    : i
+                issues: sortIssuesByRank(
+                  state.issues.map((i) =>
+                    i.key === (item.issueKey || remoteIssue.key)
+                      ? { ...remoteIssue, _optimisticState: 'synced' }
+                      : i
+                  )
                 ),
               };
             }
@@ -745,8 +877,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             const body = await res.json();
             if (body && body.key && body.status) {
               set((state) => ({
-                issues: state.issues.map((i) =>
-                  i.key === body.key ? { ...body, _optimisticState: 'synced' } : i
+                issues: sortIssuesByRank(
+                  state.issues.map((i) =>
+                    i.key === body.key ? { ...body, _optimisticState: 'synced' } : i
+                  )
                 ),
               }));
             }
@@ -797,8 +931,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         const exists = state.issues.some((i) => i.key === incomingIssue.key);
         if (exists) {
           return {
-            issues: state.issues.map((item) =>
-              item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
+            issues: sortIssuesByRank(
+              state.issues.map((item) =>
+                item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
+              )
             ),
           };
         }
@@ -809,25 +945,32 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         if (tempIndex !== -1) {
           const updatedList = [...state.issues];
           updatedList[tempIndex] = { ...incomingIssue, _optimisticState: 'synced' };
-          return { issues: updatedList };
+          return { issues: sortIssuesByRank(updatedList) };
         }
-        return { issues: [incomingIssue, ...state.issues] };
+        return { issues: sortIssuesByRank([incomingIssue, ...state.issues]) };
       });
-    } else if ((msg.event === 'issue_transitioned' || msg.event === 'issue_updated') && msg.issue) {
+    } else if (
+      (msg.event === 'issue_transitioned' ||
+        msg.event === 'issue_updated' ||
+        msg.event === 'issue_ranked') &&
+      msg.issue
+    ) {
       const incomingIssue = msg.issue as JiraIssue;
       set((state) => {
         const exists = state.issues.some((item) => item.key === incomingIssue.key);
         if (!exists) {
-          return { issues: [incomingIssue, ...state.issues] };
+          return { issues: sortIssuesByRank([incomingIssue, ...state.issues]) };
         }
         return {
-          issues: state.issues.map((item) =>
-            item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
+          issues: sortIssuesByRank(
+            state.issues.map((item) =>
+              item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
+            )
           ),
         };
       });
     } else if (msg.event === 'board_synced' && Array.isArray(msg.issues)) {
-      set({ issues: msg.issues as JiraIssue[] });
+      set({ issues: sortIssuesByRank(msg.issues as JiraIssue[]) });
     }
   },
 }));

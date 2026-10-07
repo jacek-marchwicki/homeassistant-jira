@@ -644,4 +644,86 @@ export function getJiraIssueUrl(issue: JiraIssue, jiraBaseUrl?: string): string 
   return `${fallback}/browse/${issue.key}`;
 }
 
+/**
+ * Sorts issues ascending by rank (LexoRank).
+ * Issues with defined rank are sorted lexicographically by rank first.
+ * Issues without rank are placed after ranked issues, sorted descending by updated_at,
+ * or ascending by key.
+ */
+export function sortIssuesByRank(issues: JiraIssue[]): JiraIssue[] {
+  return [...issues].sort((a, b) => {
+    if (a.rank && b.rank) {
+      if (a.rank < b.rank) return -1;
+      if (a.rank > b.rank) return 1;
+      return a.key.localeCompare(b.key);
+    }
+    if (a.rank && !b.rank) return -1;
+    if (!a.rank && b.rank) return 1;
+
+    // Both unranked: sort by updated_at descending, then key ascending
+    const aDate = a.updated_at || a.updatedAt || '';
+    const bDate = b.updated_at || b.updatedAt || '';
+    if (aDate && bDate && aDate !== bDate) {
+      return bDate.localeCompare(aDate);
+    }
+    return a.key.localeCompare(b.key);
+  });
+}
+
+/**
+ * Calculates a lexicographically intermediate rank between prevRank and nextRank.
+ * If prevRank is missing, generates a rank strictly smaller than nextRank.
+ * If nextRank is missing, generates a rank strictly greater than prevRank.
+ * If both are missing, defaults to '0|i00001:'.
+ */
+export function calculateRankBetween(
+  prevRank?: string | null,
+  nextRank?: string | null
+): string {
+  if (!prevRank && !nextRank) {
+    return '0|i00001:';
+  }
+
+  if (!prevRank && nextRank) {
+    const match = nextRank.match(/^(.*?)(\d+)(:*)$/);
+    if (match) {
+      const num = parseInt(match[2], 10);
+      if (num > 0) {
+        return match[1] + String(num - 1).padStart(match[2].length, '0') + match[3];
+      }
+    }
+    for (let i = nextRank.length - 1; i >= 0; i--) {
+      const code = nextRank.charCodeAt(i);
+      if (code > 33) {
+        return nextRank.slice(0, i) + String.fromCharCode(code - 1) + nextRank.slice(i + 1);
+      }
+    }
+    return '0|00000:';
+  }
+
+  if (prevRank && !nextRank) {
+    const match = prevRank.match(/^(.*?)(\d+)(:*)$/);
+    if (match) {
+      const num = parseInt(match[2], 10);
+      return match[1] + String(num + 1).padStart(match[2].length, '0') + match[3];
+    }
+    return prevRank + 'z';
+  }
+
+  // Both exist: check if they have matching digit pattern
+  const matchA = prevRank!.match(/^(.*?)(\d+)(:*)$/);
+  const matchB = nextRank!.match(/^(.*?)(\d+)(:*)$/);
+  if (matchA && matchB && matchA[1] === matchB[1] && matchA[3] === matchB[3]) {
+    const numA = parseInt(matchA[2], 10);
+    const numB = parseInt(matchB[2], 10);
+    if (numB - numA > 1) {
+      const midNum = Math.floor((numA + numB) / 2);
+      return matchA[1] + String(midNum).padStart(matchA[2].length, '0') + matchA[3];
+    }
+  }
+
+  return prevRank! + 'i';
+}
+
+
 

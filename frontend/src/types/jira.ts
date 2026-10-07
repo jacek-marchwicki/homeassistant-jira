@@ -62,6 +62,7 @@ export interface JiraIssue {
   created_at?: string;
   updatedAt?: string;
   updated_at?: string;
+  rank?: string | null;
   // Optimistic tracking state
   _optimisticState?: 'synced' | 'pending' | 'failed';
   _pendingTargetStatusId?: string;

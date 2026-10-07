@@ -742,3 +742,55 @@ def test_parse_issue_epic_and_recreate_after() -> None:
         await client.close()
 
     asyncio.run(_test())
+
+
+def test_jira_cloud_client_rank_issue() -> None:
+    """Verify rank_issue calls PUT /rest/agile/1.0/issue/rank."""
+
+    async def _test() -> None:
+        captured_requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured_requests.append(request)
+            if "/rest/agile/1.0/issue/rank" in str(request.url):
+                return httpx.Response(204)
+            if "/rest/api/3/issue/PROJ-101" in str(request.url):
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "101",
+                        "key": "PROJ-101",
+                        "fields": {
+                            "summary": "Task 101",
+                            "issuetype": {"name": "Task"},
+                            "priority": {"name": "High"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                            "customfield_10019": "0|i00003:",
+                            "created": "2026-10-01T09:00:00Z",
+                            "updated": "2026-10-04T22:30:00Z",
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        updated = await client.rank_issue(
+            "PROJ-101", rank_after_key="PROJ-98", target_rank="0|i00003:"
+        )
+        assert updated.key == "PROJ-101"
+        assert updated.rank == "0|i00003:"
+        # Check PUT request payload
+        rank_req = next(r for r in captured_requests if "/issue/rank" in str(r.url))
+        assert rank_req.method == "PUT"
+        import json
+
+        body = json.loads(rank_req.content.decode("utf-8"))
+        assert body["issues"] == ["PROJ-101"]
+        assert body["rankAfterIssue"] == "PROJ-98"
+        await client.close()
+
+    asyncio.run(_test())

@@ -68,6 +68,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         ),
         story_points=5.0,
         recreate_after="1w",
+        rank="0|i00001:",
         created_at="2026-10-01T09:00:00Z",
         updated_at="2026-10-04T22:30:00Z",
     ),
@@ -85,6 +86,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
             avatar_url=None,
         ),
         story_points=5.0,
+        rank="0|i00002:",
         created_at="2026-10-01T09:30:00Z",
         updated_at="2026-10-04T22:40:00Z",
     ),
@@ -98,6 +100,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         status=STATUS_MAP[StatusCategory.IN_REVIEW],
         assignee=None,
         story_points=8.0,
+        rank="0|i00003:",
         created_at="2026-10-01T10:00:00Z",
         updated_at="2026-10-04T22:45:00Z",
     ),
@@ -115,6 +118,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
             avatar_url=None,
         ),
         story_points=2.0,
+        rank="0|i00004:",
         created_at="2026-10-01T08:00:00Z",
         updated_at="2026-10-04T22:50:00Z",
     ),
@@ -128,6 +132,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         status=STATUS_BACKLOG,
         assignee=None,
         story_points=3.0,
+        rank="0|i00005:",
         created_at="2026-10-02T11:00:00Z",
         updated_at="2026-10-04T22:35:00Z",
     ),
@@ -146,6 +151,7 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         ),
         story_points=3.0,
         recreate_after="2y!",
+        rank="0|i00006:",
         created_at="2026-10-02T11:30:00Z",
         updated_at="2026-10-04T22:55:00Z",
     ),
@@ -258,6 +264,16 @@ class JiraClientProtocol(Protocol):
 
     async def delete_comment(self, issue_key: str, comment_id: str) -> bool:
         """Delete a comment on an issue."""
+        ...
+
+    async def rank_issue(
+        self,
+        issue_key: str,
+        rank_before_key: str | None = None,
+        rank_after_key: str | None = None,
+        target_rank: str | None = None,
+    ) -> JiraIssue:
+        """Rank an issue relative to other issues or set its rank value."""
         ...
 
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
@@ -400,6 +416,59 @@ class FakeJiraClient:
         )
         self._issues[issue_key] = updated_issue
         return updated_issue
+
+    async def rank_issue(
+        self,
+        issue_key: str,
+        rank_before_key: str | None = None,
+        rank_after_key: str | None = None,
+        target_rank: str | None = None,
+    ) -> JiraIssue:
+        """Rank an issue relative to other issues in in-memory store."""
+        if self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+
+        issue = self._issues.get(issue_key)
+        if not issue:
+            raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
+
+        # Build list without active issue
+        issue_list = [i for i in self._issues.values() if i.key != issue_key]
+
+        if rank_before_key:
+            idx = next((i for i, it in enumerate(issue_list) if it.key == rank_before_key), -1)
+            if idx != -1:
+                issue_list.insert(idx, issue)
+            else:
+                issue_list.append(issue)
+        elif rank_after_key:
+            idx = next((i for i, it in enumerate(issue_list) if it.key == rank_after_key), -1)
+            if idx != -1:
+                issue_list.insert(idx + 1, issue)
+            else:
+                issue_list.append(issue)
+        else:
+            issue_list.append(issue)
+
+        pos = issue_list.index(issue)
+        new_rank = target_rank or f"0|i{pos + 1:05d}:"
+        updated_issue = issue.model_copy(
+            update={
+                "rank": new_rank,
+                "updated_at": "2026-10-05T00:00:00Z",
+            }
+        )
+        issue_list[pos] = updated_issue
+
+        reordered_issues = {}
+        for idx, item in enumerate(issue_list):
+            item_rank = (
+                item.rank if (item.key == issue_key and target_rank) else f"0|i{idx + 1:05d}:"
+            )
+            reordered_issues[item.key] = item.model_copy(update={"rank": item_rank})
+
+        self._issues = reordered_issues
+        return self._issues[issue_key]
 
     async def update_issue(
         self,

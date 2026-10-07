@@ -113,6 +113,9 @@ JIRA_ISSUE_FIELDS: list[str] = [
     "customfield_10026",
     "customfield_10004",
     "customfield_10028",
+    "customfield_10019",  # Jira LexoRank
+    "rank",
+    "customfield_10009",
 ]
 
 
@@ -344,6 +347,12 @@ class JiraCloudClient(JiraClientProtocol):
         )
         recreate_after = str(raw_recreate_after) if raw_recreate_after is not None else None
 
+        # Rank (customfield_10019, rank, or customfield_10009)
+        raw_rank = (
+            fields.get("customfield_10019") or fields.get("rank") or fields.get("customfield_10009")
+        )
+        rank = str(raw_rank) if raw_rank is not None else None
+
         # Description
         raw_description = fields.get("description")
         description: str | None = None
@@ -386,6 +395,7 @@ class JiraCloudClient(JiraClientProtocol):
             due_date=due_date,
             start_date=start_date,
             recreate_after=recreate_after,
+            rank=rank,
             created_at=created_at,
             updated_at=updated_at,
         )
@@ -700,6 +710,40 @@ class JiraCloudClient(JiraClientProtocol):
             return updated
         except httpx.RequestError as exc:
             raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+
+    async def rank_issue(
+        self,
+        issue_key: str,
+        rank_before_key: str | None = None,
+        rank_after_key: str | None = None,
+        target_rank: str | None = None,
+    ) -> JiraIssue:
+        """Rank an issue using Jira Agile REST API PUT /rest/agile/1.0/issue/rank."""
+        rank_payload: dict[str, Any] = {
+            "issues": [issue_key],
+        }
+        if rank_before_key:
+            rank_payload["rankBeforeIssue"] = rank_before_key
+        elif rank_after_key:
+            rank_payload["rankAfterIssue"] = rank_after_key
+
+        try:
+            res = await self._send_request(
+                "PUT",
+                "/rest/agile/1.0/issue/rank",
+                json=rank_payload,
+            )
+            self._handle_response_errors(res)
+        except Exception as exc:
+            logger.warning("Failed to call Jira Agile rank API for issue %s: %s", issue_key, exc)
+            raise
+
+        updated = await self.get_issue(issue_key)
+        if updated is None:
+            raise JiraAPIError(f"Issue {issue_key} not found after ranking", status_code=404)
+        if target_rank and not updated.rank:
+            updated = updated.model_copy(update={"rank": target_rank})
+        return updated
 
     async def update_issue(
         self,

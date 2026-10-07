@@ -215,3 +215,11 @@ def test_fake_jira_client_create_issue() -> None:
         assert fetched.summary == "New custom issue"
 
     asyncio.run(_test())
+
+
+def test_fake_jira_client_empty_when_env_not_fake(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify FakeJiraClient does not seed example issues when JIRA_USE_FAKE is not '1'."""
+    monkeypatch.delenv("JIRA_USE_FAKE", raising=False)
+    client = FakeJiraClient()
+    assert client._issues == {}
+    assert client._comments == {}

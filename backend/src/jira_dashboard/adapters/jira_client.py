@@ -281,13 +281,23 @@ class FakeJiraClient:
     """
 
     def __init__(self, initial_issues: list[JiraIssue] | None = None) -> None:
-        seed = initial_issues if initial_issues is not None else DEFAULT_SEED_ISSUES
+        import os
+
+        if initial_issues is not None:
+            seed = initial_issues
+        elif os.environ.get("JIRA_USE_FAKE") == "1":
+            seed = DEFAULT_SEED_ISSUES
+        else:
+            seed = []
+
         self._issues: dict[str, JiraIssue] = {
             issue.key: issue.model_copy(deep=True) for issue in seed
         }
-        self._comments: dict[str, list[JiraComment]] = {
-            k: [c.model_copy(deep=True) for c in v] for k, v in DEFAULT_SEED_COMMENTS.items()
-        }
+        self._comments: dict[str, list[JiraComment]] = (
+            {k: [c.model_copy(deep=True) for c in v] for k, v in DEFAULT_SEED_COMMENTS.items()}
+            if os.environ.get("JIRA_USE_FAKE") == "1"
+            else {}
+        )
         self.simulate_failure: bool = False
         self.simulate_transition_failure: bool = False
         self.simulate_board_failure: bool = False
@@ -296,10 +306,15 @@ class FakeJiraClient:
 
     def reset(self) -> None:
         """Reset in-memory issues and simulated failure flags to initial seed state."""
-        self._issues = {issue.key: issue.model_copy(deep=True) for issue in DEFAULT_SEED_ISSUES}
-        self._comments = {
-            k: [c.model_copy(deep=True) for c in v] for k, v in DEFAULT_SEED_COMMENTS.items()
-        }
+        import os
+
+        seed = DEFAULT_SEED_ISSUES if os.environ.get("JIRA_USE_FAKE") == "1" else []
+        self._issues = {issue.key: issue.model_copy(deep=True) for issue in seed}
+        self._comments = (
+            {k: [c.model_copy(deep=True) for c in v] for k, v in DEFAULT_SEED_COMMENTS.items()}
+            if os.environ.get("JIRA_USE_FAKE") == "1"
+            else {}
+        )
         self.simulate_failure = False
         self.simulate_transition_failure = False
         self.simulate_board_failure = False

@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useBoardStore, DEFAULT_COLUMNS } from './boardStore.ts';
+import {
+  useBoardStore,
+  DEFAULT_COLUMNS,
+  loadCachedBoard,
+  LOCAL_STORAGE_BOARD_CACHE_KEY,
+} from './boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
 import { getAvailableStatuses } from '../utils/boardUtils.ts';
 
@@ -562,6 +567,57 @@ describe('Zustand BoardStore', () => {
       expect(useBoardStore.getState().offlineOutbox.length).toBe(0);
       const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
       expect(issue?.summary).toBe('Remote Authoritative Version');
+    });
+  });
+
+  describe('loadCachedBoard', () => {
+    it('discards legacy example tasks and purges localStorage cache', () => {
+      window.localStorage.setItem(
+        LOCAL_STORAGE_BOARD_CACHE_KEY,
+        JSON.stringify({
+          boardName: 'Engineering Sprint Board',
+          sprintName: 'Active Sprint 42',
+          jiraUrl: 'https://jira.example.com',
+          columns: DEFAULT_COLUMNS,
+          issues: [
+            {
+              id: '101',
+              key: 'PROJ-101',
+              summary: 'Example task',
+              url: 'https://jira.example.com/browse/PROJ-101',
+              status: { id: '1', name: 'To Do', category: 'todo' },
+            },
+          ],
+        })
+      );
+
+      const cached = loadCachedBoard();
+      expect(cached).toBeNull();
+      expect(window.localStorage.getItem(LOCAL_STORAGE_BOARD_CACHE_KEY)).toBeNull();
+    });
+
+    it('loads valid real cached tasks without purging', () => {
+      const realData = {
+        boardName: 'HOME Board',
+        sprintName: 'Active Issues',
+        jiraUrl: 'https://company.atlassian.net',
+        columns: DEFAULT_COLUMNS,
+        issues: [
+          {
+            id: '1001',
+            key: 'HOME-1',
+            summary: 'Real task',
+            url: 'https://company.atlassian.net/browse/HOME-1',
+            status: { id: '1', name: 'To Do', category: 'todo' },
+          },
+        ],
+      };
+      window.localStorage.setItem(LOCAL_STORAGE_BOARD_CACHE_KEY, JSON.stringify(realData));
+
+      const cached = loadCachedBoard();
+      expect(cached).not.toBeNull();
+      expect(cached?.boardName).toBe('HOME Board');
+      expect(cached?.issues[0].key).toBe('HOME-1');
     });
   });
 });

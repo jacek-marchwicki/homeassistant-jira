@@ -56,6 +56,16 @@ export function loadCachedBoard(): CachedBoardData | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.issues) && parsed.issues.length > 0) {
+      // Discard legacy example/seeded tasks if present from earlier test/development runs
+      const hasExampleIssues =
+        parsed.issues.some((issue: any) => issue.url?.includes('example.com')) ||
+        (parsed.boardName === 'Engineering Sprint Board' &&
+          parsed.issues.some((issue: any) => issue.key && issue.key.startsWith('PROJ-')));
+
+      if (hasExampleIssues) {
+        window.localStorage.removeItem(LOCAL_STORAGE_BOARD_CACHE_KEY);
+        return null;
+      }
       return parsed;
     }
   } catch {

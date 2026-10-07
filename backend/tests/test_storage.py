@@ -222,3 +222,65 @@ def test_schema_migration_preserves_pending_outbox(temp_db_path: Path) -> None:
     assert len(pending) == 1
     assert pending[0]["client_mutation_id"] == "mut-preserve"
     assert pending[0]["payload"]["summary"] == "Preserve me during schema rebuild"
+
+
+def test_replace_all_issues_replaces_old_and_preserves_creations(
+    temp_db_path: Path,
+) -> None:
+    storage = SQLiteStorage(temp_db_path)
+    storage.init_db()
+
+    # 1. Save old issues
+    old_issue = JiraIssue(
+        id="old-1",
+        key="PROJ-OLD",
+        summary="Old example issue",
+        url="https://example.com/browse/PROJ-OLD",
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        issue_type=IssueType.TASK,
+        priority=Priority.MEDIUM,
+        updated_at="2026-10-07T12:00:00Z",
+    )
+    storage.save_issues([old_issue])
+    assert len(storage.get_issues()) == 1
+
+    # 2. Enqueue a pending local creation
+    storage.enqueue_outbox(
+        client_mutation_id="mut-local",
+        action_type="create_issue",
+        issue_key="LOCAL-999",
+        payload={"summary": "Pending local issue"},
+    )
+    local_issue = JiraIssue(
+        id="local-999",
+        key="LOCAL-999",
+        summary="Pending local issue",
+        url="https://example.com/browse/LOCAL-999",
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        issue_type=IssueType.TASK,
+        priority=Priority.MEDIUM,
+        updated_at="2026-10-07T12:00:00Z",
+    )
+    storage.upsert_issue(local_issue)
+    assert len(storage.get_issues()) == 2
+
+    # 3. Replace all with new issues from Jira
+    new_issue = JiraIssue(
+        id="new-1",
+        key="REAL-1",
+        summary="Real Jira issue",
+        url="https://jira.com/browse/REAL-1",
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        issue_type=IssueType.TASK,
+        priority=Priority.HIGH,
+        updated_at="2026-10-07T12:00:00Z",
+    )
+    storage.replace_all_issues([new_issue])
+
+    keys = {i.key for i in storage.get_issues()}
+    # PROJ-OLD must be evicted
+    assert "PROJ-OLD" not in keys
+    # REAL-1 must be present
+    assert "REAL-1" in keys
+    # LOCAL-999 must be preserved because it has pending create_issue outbox entry
+    assert "LOCAL-999" in keys

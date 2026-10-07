@@ -265,6 +265,30 @@ class SQLiteStorage:
                 for issue in issues:
                     self._upsert_issue_unlocked(conn, issue)
 
+    def replace_all_issues(self, issues: list[JiraIssue]) -> None:
+        """Atomically replace all cached issues with a fresh issue list."""
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                pending_keys = {
+                    row["issue_key"]
+                    for row in conn.execute(
+                        "SELECT issue_key FROM sync_outbox "
+                        "WHERE status = 'pending' AND action_type = 'create_issue';"
+                    ).fetchall()
+                    if row["issue_key"]
+                }
+                if pending_keys:
+                    placeholders = ",".join("?" for _ in pending_keys)
+                    conn.execute(
+                        f"DELETE FROM cached_issues WHERE key NOT IN ({placeholders});",
+                        list(pending_keys),
+                    )
+                else:
+                    conn.execute("DELETE FROM cached_issues;")
+                for issue in issues:
+                    self._upsert_issue_unlocked(conn, issue)
+
     def upsert_issue(self, issue: JiraIssue) -> None:
         """Upsert a single issue into the local cache."""
         with self._lock:

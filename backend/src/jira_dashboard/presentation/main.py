@@ -52,8 +52,12 @@ jira_client = create_jira_client(settings)
 storage = SQLiteStorage(settings.sqlite_db_path)
 storage.init_db()
 
-# Seed SQLite cache from FakeJiraClient if empty
-if not storage.get_issues() and isinstance(jira_client, FakeJiraClient):
+# Seed SQLite cache from FakeJiraClient only during testing/simulation mode
+if (
+    os.environ.get("JIRA_USE_FAKE") == "1"
+    and not storage.get_issues()
+    and isinstance(jira_client, FakeJiraClient)
+):
     storage.save_issues(list(jira_client._issues.values()))
     storage.save_board_meta(
         board_id=settings.jira_board_id,
@@ -265,16 +269,22 @@ async def fetch_and_cache_board(force: bool = False) -> BoardResponse:
                 jira_client.get_board_issues(board_id),
                 jira_client.get_board_columns(board_id),
             )
-            storage.save_issues(issues)
-            b_name = (
-                "Engineering Sprint Board"
-                if isinstance(jira_client, FakeJiraClient)
-                else f"{board_id.upper()} Board"
-            )
+            storage.replace_all_issues(issues)
+            is_fake_test = os.environ.get("JIRA_USE_FAKE") == "1"
+            if is_fake_test:
+                b_name = "Engineering Sprint Board"
+                s_name = "Active Sprint 42"
+            else:
+                b_name = (
+                    f"{board_id.upper()} Board"
+                    if board_id and board_id != "engineering-1"
+                    else "Jira Dashboard"
+                )
+                s_name = "Active Issues" if board_id and board_id != "engineering-1" else ""
             storage.save_board_meta(
                 board_id=board_id,
                 board_name=b_name,
-                sprint_name="Active Sprint 42",
+                sprint_name=s_name,
                 jira_url=settings.jira_url or "https://jira.example.com",
                 columns=columns,
             )
@@ -296,18 +306,17 @@ async def fetch_and_cache_board(force: bool = False) -> BoardResponse:
                 f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
             )
 
-        if isinstance(jira_client, FakeJiraClient):
+        is_fake_test = os.environ.get("JIRA_USE_FAKE") == "1"
+        if is_fake_test:
             board_name = "Engineering Sprint Board"
             sprint_name = "Active Sprint 42"
         else:
             board_name = (
                 f"{board_id.upper()} Board"
                 if board_id and board_id != "engineering-1"
-                else "Engineering Sprint Board"
+                else "Jira Dashboard"
             )
-            sprint_name = (
-                "Active Issues" if board_id and board_id != "engineering-1" else "Active Sprint 42"
-            )
+            sprint_name = "Active Issues" if board_id and board_id != "engineering-1" else ""
 
         jira_base_url = (settings.jira_url or "https://jira.example.com").strip().rstrip("/")
         if jira_base_url.endswith("/browse"):

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useId } from 'react';
 import {
   Bold,
   Italic,
@@ -258,7 +258,7 @@ export function renderRichText(markdown: string): React.ReactNode {
 }
 
 export function RichTextEditor({
-  id = 'rich-text-editor',
+  id,
   value,
   onChange,
   placeholder = 'Add details, formatted text, or markdown...',
@@ -267,6 +267,8 @@ export function RichTextEditor({
   className = '',
   defaultTab = 'write',
 }: RichTextEditorProps) {
+  const generatedId = useId();
+  const editorId = id || generatedId;
   const [activeTab, setActiveTab] = useState<'write' | 'preview'>(defaultTab);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -434,7 +436,7 @@ export function RichTextEditor({
       {activeTab === 'write' ? (
         <textarea
           ref={textareaRef}
-          id={id}
+          id={editorId}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}

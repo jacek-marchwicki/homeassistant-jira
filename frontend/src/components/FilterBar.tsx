@@ -223,6 +223,7 @@ export function FilterBar() {
       <div className="relative flex items-center shrink-0 w-28 xs:w-36 sm:w-48 md:w-64 h-7 sm:h-8">
         <Search className="w-3.5 h-3.5 absolute left-2 sm:left-2.5 text-[var(--jira-text-muted)] pointer-events-none" />
         <input
+          id="filter-search-input"
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}

@@ -240,5 +240,29 @@ describe('KanbanBoard component', () => {
       root.unmount();
     });
   });
+
+  it('renders all form controls with unique id attributes across all cards on the board', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<KanbanBoard />);
+    });
+
+    const formElements = container.querySelectorAll('select, input, textarea');
+    expect(formElements.length).toBeGreaterThan(0);
+
+    const ids = Array.from(formElements)
+      .map((el) => el.getAttribute('id'))
+      .filter((id): id is string => Boolean(id));
+
+    expect(ids.length).toBe(formElements.length);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 

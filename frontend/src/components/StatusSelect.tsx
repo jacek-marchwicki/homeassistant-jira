@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { JiraStatusCategory } from '../types/jira.ts';
 import { StatusIcon } from './StatusIcon.tsx';
@@ -22,7 +22,7 @@ export interface StatusSelectProps {
 }
 
 export function StatusSelect({
-  id = 'status-select',
+  id,
   value,
   onChange,
   options,
@@ -32,6 +32,8 @@ export function StatusSelect({
   ariaLabel = 'Status',
   title = 'Change Status',
 }: StatusSelectProps) {
+  const generatedId = useId();
+  const selectId = id || generatedId;
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +91,7 @@ export function StatusSelect({
     >
       {/* Underlying select for native accessibility and automated test compatibility */}
       <select
-        id={id}
+        id={selectId}
         value={value}
         onChange={(e) => {
           const chosen = options.find((opt) => opt.name === e.target.value);

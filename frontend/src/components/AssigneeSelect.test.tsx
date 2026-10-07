@@ -194,4 +194,23 @@ describe('AssigneeSelect component', () => {
 
     expect(container.querySelector('[role="listbox"]')).toBeNull();
   });
+
+  it('generates unique id attribute when id is omitted across multiple instances', async () => {
+    await act(async () => {
+      root.render(
+        <div>
+          <AssigneeSelect value="Samantha Miller" onChange={vi.fn()} />
+          <AssigneeSelect value="" onChange={vi.fn()} />
+        </div>
+      );
+    });
+
+    const inputs = container.querySelectorAll('input[type="text"]');
+    expect(inputs.length).toBeGreaterThanOrEqual(2);
+    const id1 = inputs[0].getAttribute('id');
+    const id2 = inputs[1].getAttribute('id');
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+  });
 });

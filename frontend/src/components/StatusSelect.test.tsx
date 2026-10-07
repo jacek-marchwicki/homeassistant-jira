@@ -122,4 +122,23 @@ describe('StatusSelect component', () => {
 
     expect(handleChange).toHaveBeenCalledWith('Done', 'done');
   });
+
+  it('generates unique id attribute when id is omitted across multiple instances', async () => {
+    await act(async () => {
+      root.render(
+        <div>
+          <StatusSelect value="To Do" onChange={vi.fn()} options={mockOptions} />
+          <StatusSelect value="In Progress" onChange={vi.fn()} options={mockOptions} />
+        </div>
+      );
+    });
+
+    const selects = container.querySelectorAll('select');
+    expect(selects.length).toBe(2);
+    const id1 = selects[0].getAttribute('id');
+    const id2 = selects[1].getAttribute('id');
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+  });
 });

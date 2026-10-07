@@ -97,4 +97,41 @@ describe('BacklogIssueRow component', () => {
       root.unmount();
     });
   });
+
+  it('renders unique id attributes for status selectors across multiple backlog rows', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    const secondIssue: JiraIssue = {
+      ...mockBacklogIssue,
+      id: '11',
+      key: 'PROJ-105',
+    };
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockBacklogIssue.key, secondIssue.key]}>
+            <div>
+              <BacklogIssueRow issue={mockBacklogIssue} />
+              <BacklogIssueRow issue={secondIssue} />
+            </div>
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const selects = container.querySelectorAll('select');
+    expect(selects.length).toBe(2);
+
+    const id1 = selects[0].getAttribute('id');
+    const id2 = selects[1].getAttribute('id');
+    expect(id1).toBe('backlog-status-select-PROJ-104');
+    expect(id2).toBe('backlog-status-select-PROJ-105');
+    expect(id1).not.toBe(id2);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

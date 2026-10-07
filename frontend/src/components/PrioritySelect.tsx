@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { JiraPriority } from '../types/jira.ts';
 import { PriorityIcon } from './PriorityIcon.tsx';
@@ -20,12 +20,14 @@ const PRIORITY_OPTIONS: { value: JiraPriority; label: string }[] = [
 ];
 
 export function PrioritySelect({
-  id = 'priority-select',
+  id,
   value,
   onChange,
   disabled = false,
   className = '',
 }: PrioritySelectProps) {
+  const generatedId = useId();
+  const selectId = id || generatedId;
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -73,7 +75,7 @@ export function PrioritySelect({
     >
       {/* Underlying select for native accessibility and automated test compatibility */}
       <select
-        id={id}
+        id={selectId}
         value={value}
         onChange={(e) => onChange(e.target.value as JiraPriority)}
         className="sr-only"

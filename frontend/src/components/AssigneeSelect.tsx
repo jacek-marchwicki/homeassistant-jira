@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { ChevronDown, Search, Check, UserX, UserPlus } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraUser } from '../types/jira.ts';
@@ -20,13 +20,15 @@ export interface AssigneeSelectProps {
 }
 
 export function AssigneeSelect({
-  id = 'assignee-select',
+  id,
   value,
   onChange,
   options,
   placeholder = 'Unassigned',
   disabled = false,
 }: AssigneeSelectProps) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -140,7 +142,7 @@ export function AssigneeSelect({
     <div ref={containerRef} className="relative w-full" onKeyDown={handleKeyDown}>
       {/* Underlying input for accessibility, form submission, and test query compatibility */}
       <input
-        id={id}
+        id={inputId}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -196,6 +198,7 @@ export function AssigneeSelect({
             <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--jira-text-muted)]" />
             <input
               ref={searchInputRef}
+              id={`${inputId}-search`}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

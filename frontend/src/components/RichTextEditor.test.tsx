@@ -132,4 +132,23 @@ Visit [Google](https://google.com) and check \`inline code\` and *italic*!`;
     const rendered = renderRichText(markdown);
     expect(rendered).toBeDefined();
   });
+
+  it('generates unique id attribute when id is omitted across multiple instances', async () => {
+    await act(async () => {
+      root.render(
+        <div>
+          <RichTextEditor value="Doc 1" onChange={vi.fn()} />
+          <RichTextEditor value="Doc 2" onChange={vi.fn()} />
+        </div>
+      );
+    });
+
+    const textareas = container.querySelectorAll('textarea');
+    expect(textareas.length).toBe(2);
+    const id1 = textareas[0].getAttribute('id');
+    const id2 = textareas[1].getAttribute('id');
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+  });
 });

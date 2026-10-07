@@ -130,6 +130,7 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
 
           {/* Direct Transition Selector (Move to any column or Backlog without dragging) */}
           <StatusSelect
+            id={`status-select-${issue.key}${isDragOverlay ? '-overlay' : ''}`}
             value={currentColumn?.name || issue.status.name}
             onChange={handleStatusSelect}
             options={statusOptions}

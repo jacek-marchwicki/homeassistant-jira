@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 
@@ -23,12 +23,14 @@ const ISSUE_TYPE_OPTIONS: { value: IssueTypeValue; label: string }[] = [
 ];
 
 export function IssueTypeSelect({
-  id = 'issue-type-select',
+  id,
   value,
   onChange,
   disabled = false,
   className = '',
 }: IssueTypeSelectProps) {
+  const generatedId = useId();
+  const selectId = id || generatedId;
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +78,7 @@ export function IssueTypeSelect({
     >
       {/* Underlying select for native accessibility and automated test compatibility */}
       <select
-        id={id}
+        id={selectId}
         value={value}
         onChange={(e) => onChange(e.target.value as IssueTypeValue)}
         className="sr-only"

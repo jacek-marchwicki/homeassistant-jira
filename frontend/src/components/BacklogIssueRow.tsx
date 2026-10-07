@@ -222,6 +222,7 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
 
         {/* Status Dropdown Selector */}
         <StatusSelect
+          id={`backlog-status-select-${issue.key}${isDragOverlay ? '-overlay' : ''}`}
           value={issue.status.name}
           onChange={handleStatusSelect}
           options={statusOptions}

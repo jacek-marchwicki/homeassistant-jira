@@ -77,4 +77,23 @@ describe('PrioritySelect component', () => {
 
     expect(handleChange).toHaveBeenCalledWith('highest');
   });
+
+  it('generates unique id attribute when id is omitted across multiple instances', async () => {
+    await act(async () => {
+      root.render(
+        <div>
+          <PrioritySelect value="medium" onChange={vi.fn()} />
+          <PrioritySelect value="high" onChange={vi.fn()} />
+        </div>
+      );
+    });
+
+    const selects = container.querySelectorAll('select');
+    expect(selects.length).toBe(2);
+    const id1 = selects[0].getAttribute('id');
+    const id2 = selects[1].getAttribute('id');
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+  });
 });

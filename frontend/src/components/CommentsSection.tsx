@@ -279,6 +279,7 @@ export function CommentsSection({
                 {isEditing ? (
                   <div className="mt-2 space-y-2">
                     <textarea
+                      id={`comment-edit-body-${comment.id}`}
                       value={editingBody}
                       onChange={(e) => setEditingBody(e.target.value)}
                       rows={2}
@@ -320,6 +321,7 @@ export function CommentsSection({
       <form onSubmit={handleAddComment} className="mt-2 space-y-2">
         <div className="relative">
           <textarea
+            id={`comment-new-body-${issueKey}`}
             value={newCommentBody}
             onChange={(e) => setNewCommentBody(e.target.value)}
             rows={2}

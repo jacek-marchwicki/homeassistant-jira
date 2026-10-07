@@ -30,9 +30,9 @@ import {
   getColumnForIssue,
   getColumnFromOver,
   isBacklogIssue,
-  isInProgressColumn,
   isIntermediateColumn,
   splitIssuesByBacklog,
+  handleKanbanDragEnd,
 } from '../utils/boardUtils.ts';
 
 export function KanbanBoard() {
@@ -44,6 +44,7 @@ export function KanbanBoard() {
     searchQuery,
     currentUser,
     transitionIssueOptimistic,
+    rankIssueOptimistic,
     moveToBacklog,
   } = useBoardStore();
   const [activeIssue, setActiveIssue] = useState<JiraIssue | null>(null);
@@ -170,49 +171,20 @@ export function KanbanBoard() {
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
     setActiveIssue(null);
     setOverColumnId(null);
 
-    if (!over) return;
-
-    const activeKey = String(active.id);
-    const activeItem = issues.find((i) => i.key === activeKey);
-    if (!activeItem) return;
-
-    const overData = over.data?.current;
-    if (
-      over.id === 'panel-backlog-list' ||
-      overData?.targetType === 'backlog' ||
-      backlogIssues.some((i) => i.key === String(over.id))
-    ) {
-      moveToBacklog(activeKey);
-      return;
-    }
-
-    if (
-      over.id === 'ready-drop-target-inprogress' ||
-      overData?.type === 'InProgressDropTarget' ||
-      overData?.targetType === 'inprogress'
-    ) {
-      const inProgressCol = columns.find((c) => isInProgressColumn(c));
-      const category = inProgressCol?.category ?? 'inprogress';
-      const statusName = inProgressCol?.name ?? 'In Progress';
-      if (activeItem.status?.category !== category) {
-        transitionIssueOptimistic(activeKey, category, statusName);
-      }
-      return;
-    }
-
-    const currentColumn = getColumnForIssue(activeItem, activeColumns);
-    const targetCol = getColumnFromOver(over, displayedColumns, issues);
-
-    if (
-      targetCol &&
-      (currentColumn?.id !== targetCol.id || isBacklogIssue(activeItem, columns))
-    ) {
-      transitionIssueOptimistic(activeKey, targetCol.category, targetCol.name);
-    }
+    handleKanbanDragEnd(event, {
+      issues,
+      columns,
+      displayedColumns,
+      activeColumns,
+      boardIssues,
+      backlogIssues,
+      transitionIssueOptimistic,
+      rankIssueOptimistic,
+      moveToBacklog,
+    });
   };
 
   const handleDragCancel = () => {

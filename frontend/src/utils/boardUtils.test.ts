@@ -23,6 +23,8 @@ import {
   getJiraIssueUrl,
   sortIssuesByRank,
   calculateRankBetween,
+  handleKanbanDragEnd,
+  handleBacklogDragEnd,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -1029,7 +1031,105 @@ describe('boardUtils', () => {
       expect(afterLast > '0|i00002:').toBe(true);
     });
   });
+
+  describe('handleKanbanDragEnd and handleBacklogDragEnd', () => {
+    const readyCol: BoardColumn = { id: 'col-todo', name: 'Ready', category: 'todo', status_ids: ['1'] };
+    const doneCol: BoardColumn = { id: 'col-done', name: 'Done', category: 'done', status_ids: ['3'] };
+    const inProgressCol: BoardColumn = { id: 'col-inprogress', name: 'In Progress', category: 'inprogress', status_ids: ['2'] };
+    const columns = [readyCol, inProgressCol, doneCol];
+
+    it('handleKanbanDragEnd: reorders issues within the same column and invokes rankIssueOptimistic', () => {
+      const issueA: JiraIssue = { ...mockBaseIssue, key: 'A', rank: '0|i00001:', status: { id: '1', name: 'Ready', category: 'todo' } };
+      const issueB: JiraIssue = { ...mockBaseIssue, key: 'B', rank: '0|i00002:', status: { id: '1', name: 'Ready', category: 'todo' } };
+      const issueC: JiraIssue = { ...mockBaseIssue, key: 'C', rank: '0|i00003:', status: { id: '1', name: 'Ready', category: 'todo' } };
+      const issues = [issueA, issueB, issueC];
+
+      const rankIssueOptimistic = vi.fn();
+      const transitionIssueOptimistic = vi.fn();
+      const moveToBacklog = vi.fn();
+
+      // Drag C over A
+      handleKanbanDragEnd(
+        { active: { id: 'C' }, over: { id: 'A', data: { current: {} } } } as any,
+        {
+          issues,
+          columns,
+          displayedColumns: [readyCol, doneCol],
+          activeColumns: columns,
+          boardIssues: issues,
+          backlogIssues: [],
+          transitionIssueOptimistic,
+          rankIssueOptimistic,
+          moveToBacklog,
+        }
+      );
+
+      expect(transitionIssueOptimistic).not.toHaveBeenCalled();
+      expect(rankIssueOptimistic).toHaveBeenCalledWith(
+        'C',
+        'A',
+        undefined,
+        expect.stringMatching(/.+/)
+      );
+    });
+
+    it('handleKanbanDragEnd: transitions and ranks issue when dropped into another column over a card', () => {
+      const issueA: JiraIssue = { ...mockBaseIssue, key: 'A', rank: '0|i00001:', status: { id: '1', name: 'Ready', category: 'todo' } };
+      const issueD: JiraIssue = { ...mockBaseIssue, key: 'D', rank: '0|i00004:', status: { id: '3', name: 'Done', category: 'done' } };
+      const issues = [issueA, issueD];
+
+      const rankIssueOptimistic = vi.fn();
+      const transitionIssueOptimistic = vi.fn();
+      const moveToBacklog = vi.fn();
+
+      // Drag A to Done column over D
+      handleKanbanDragEnd(
+        { active: { id: 'A' }, over: { id: 'D', data: { current: {} } } } as any,
+        {
+          issues,
+          columns,
+          displayedColumns: [readyCol, doneCol],
+          activeColumns: columns,
+          boardIssues: issues,
+          backlogIssues: [],
+          transitionIssueOptimistic,
+          rankIssueOptimistic,
+          moveToBacklog,
+        }
+      );
+
+      expect(transitionIssueOptimistic).toHaveBeenCalledWith('A', 'done', 'Done');
+      expect(rankIssueOptimistic).toHaveBeenCalled();
+    });
+
+    it('handleBacklogDragEnd: reorders issues within backlog list and invokes rankIssueOptimistic', () => {
+      const b1: JiraIssue = { ...mockBaseIssue, key: 'B1', rank: '0|i00001:', status: { id: '0', name: 'Backlog', category: 'todo' } };
+      const b2: JiraIssue = { ...mockBaseIssue, key: 'B2', rank: '0|i00002:', status: { id: '0', name: 'Backlog', category: 'todo' } };
+      const issues = [b1, b2];
+
+      const rankIssueOptimistic = vi.fn();
+      const moveToBoard = vi.fn();
+      const moveToBacklog = vi.fn();
+
+      handleBacklogDragEnd(
+        { active: { id: 'B2' }, over: { id: 'B1', data: { current: {} } } } as any,
+        {
+          issues,
+          boardIssues: [],
+          backlogIssues: [b1, b2],
+          moveToBoard,
+          moveToBacklog,
+          rankIssueOptimistic,
+        }
+      );
+
+      expect(moveToBoard).not.toHaveBeenCalled();
+      expect(moveToBacklog).not.toHaveBeenCalled();
+      expect(rankIssueOptimistic).toHaveBeenCalledWith('B2', 'B1', undefined, expect.any(String));
+    });
+  });
 });
+
 
 
 

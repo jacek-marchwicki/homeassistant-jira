@@ -20,7 +20,7 @@ import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
 import { BacklogIssueRow } from './BacklogIssueRow.tsx';
 import { BacklogList } from './BacklogList.tsx';
-import { filterIssues, splitIssuesByBacklog } from '../utils/boardUtils.ts';
+import { filterIssues, handleBacklogDragEnd, splitIssuesByBacklog } from '../utils/boardUtils.ts';
 
 export function BacklogView() {
   const {
@@ -33,6 +33,7 @@ export function BacklogView() {
     currentUser,
     moveToBoard,
     moveToBacklog,
+    rankIssueOptimistic,
   } = useBoardStore();
 
   const [activeIssue, setActiveIssue] = useState<JiraIssue | null>(null);
@@ -102,43 +103,17 @@ export function BacklogView() {
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
     setActiveIssue(null);
     setOverTarget(null);
 
-    if (!over) return;
-
-    const activeKey = String(active.id);
-    const activeItem = issues.find((i) => i.key === activeKey);
-    if (!activeItem) return;
-
-    // Resolve target section
-    let targetType: 'board' | 'backlog' | null = null;
-    const overData = over.data?.current;
-    if (overData?.targetType) {
-      targetType = overData.targetType as 'board' | 'backlog';
-    } else if (over.id === 'backlog-view-sprint-list') {
-      targetType = 'board';
-    } else if (over.id === 'backlog-view-backlog-list') {
-      targetType = 'backlog';
-    } else {
-      const overIssueKey = String(over.id);
-      if (boardIssues.some((i) => i.key === overIssueKey)) {
-        targetType = 'board';
-      } else if (backlogIssues.some((i) => i.key === overIssueKey)) {
-        targetType = 'backlog';
-      }
-    }
-
-    if (!targetType) return;
-
-    const isCurrentlyBacklog = backlogIssues.some((i) => i.key === activeKey);
-
-    if (targetType === 'board' && isCurrentlyBacklog) {
-      moveToBoard(activeKey);
-    } else if (targetType === 'backlog' && !isCurrentlyBacklog) {
-      moveToBacklog(activeKey);
-    }
+    handleBacklogDragEnd(event, {
+      issues,
+      boardIssues,
+      backlogIssues,
+      moveToBoard,
+      moveToBacklog,
+      rankIssueOptimistic,
+    });
   };
 
   const handleDragCancel = () => {

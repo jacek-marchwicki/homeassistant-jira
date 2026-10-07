@@ -1,3 +1,5 @@
+import type { DragEndEvent } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import { BoardColumn, JiraIssue, JiraStatusCategory } from '../types/jira.ts';
 
 const CATEGORY_COLORS: Record<JiraStatusCategory, string> = {
@@ -724,6 +726,207 @@ export function calculateRankBetween(
 
   return prevRank! + 'i';
 }
+
+export interface KanbanDragEndParams {
+  issues: JiraIssue[];
+  columns: BoardColumn[];
+  displayedColumns: BoardColumn[];
+  activeColumns: BoardColumn[];
+  boardIssues: JiraIssue[];
+  backlogIssues: JiraIssue[];
+  transitionIssueOptimistic: (
+    issueKey: string,
+    category: JiraStatusCategory,
+    targetStatus?: string
+  ) => Promise<void> | void;
+  rankIssueOptimistic: (
+    issueKey: string,
+    rankBeforeKey?: string,
+    rankAfterKey?: string,
+    targetRank?: string
+  ) => Promise<void> | void;
+  moveToBacklog: (issueKey: string) => Promise<void> | void;
+}
+
+export function handleKanbanDragEnd(
+  event: DragEndEvent,
+  params: KanbanDragEndParams
+): void {
+  const { active, over } = event;
+  if (!over) return;
+
+  const activeKey = String(active.id);
+  const activeItem = params.issues.find((i) => i.key === activeKey);
+  if (!activeItem) return;
+
+  const overKey = String(over.id);
+  const overData = over.data?.current;
+
+  // 1. Dropped onto Backlog slide-out / panel
+  if (
+    overKey === 'panel-backlog-list' ||
+    overData?.targetType === 'backlog' ||
+    params.backlogIssues.some((i) => i.key === overKey)
+  ) {
+    params.moveToBacklog(activeKey);
+    const overItem = params.backlogIssues.find((i) => i.key === overKey);
+    if (overItem) {
+      const targetIndex = params.backlogIssues.findIndex((i) => i.key === overKey);
+      const prevItem = targetIndex > 0 ? params.backlogIssues[targetIndex - 1] : null;
+      const nextItem = params.backlogIssues[targetIndex];
+      const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+      params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+    }
+    return;
+  }
+
+  // 2. Dropped onto In Progress drop target
+  if (
+    overKey === 'ready-drop-target-inprogress' ||
+    overData?.type === 'InProgressDropTarget' ||
+    overData?.targetType === 'inprogress'
+  ) {
+    const inProgressCol = params.columns.find((c) => isInProgressColumn(c));
+    const category = inProgressCol?.category ?? 'inprogress';
+    const statusName = inProgressCol?.name ?? 'In Progress';
+    if (activeItem.status?.category !== category) {
+      params.transitionIssueOptimistic(activeKey, category, statusName);
+    }
+    return;
+  }
+
+  // 3. Dropped onto a column or an issue within a column
+  const currentColumn = getColumnForIssue(activeItem, params.activeColumns);
+  const targetCol = getColumnFromOver(over, params.displayedColumns, params.issues);
+  if (!targetCol) return;
+
+  const isChangingColumn =
+    currentColumn?.id !== targetCol.id || isBacklogIssue(activeItem, params.columns);
+  if (isChangingColumn) {
+    params.transitionIssueOptimistic(activeKey, targetCol.category, targetCol.name);
+  }
+
+  const colIssues = filterIssuesForColumn(params.boardIssues, targetCol, params.activeColumns);
+  const overItem = params.issues.find((i) => i.key === overKey);
+
+  if (overItem && overKey !== activeKey) {
+    // Dropped over an issue card in targetCol
+    if (!isChangingColumn) {
+      // Intra-column reorder
+      const oldIndex = colIssues.findIndex((i) => i.key === activeKey);
+      const newIndex = colIssues.findIndex((i) => i.key === overKey);
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const reordered = arrayMove(colIssues, oldIndex, newIndex);
+        const prevItem = newIndex > 0 ? reordered[newIndex - 1] : null;
+        const nextItem = newIndex < reordered.length - 1 ? reordered[newIndex + 1] : null;
+        const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+        params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+      }
+    } else {
+      // Inter-column drop over a specific card
+      const targetIndex = colIssues.findIndex((i) => i.key === overKey);
+      if (targetIndex !== -1) {
+        const prevItem = targetIndex > 0 ? colIssues[targetIndex - 1] : null;
+        const nextItem = colIssues[targetIndex];
+        const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+        params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+      }
+    }
+  } else if (!overItem && isChangingColumn) {
+    // Dropped onto column container itself (e.g. empty column or bottom of column)
+    const lastItem = colIssues[colIssues.length - 1];
+    if (lastItem && lastItem.key !== activeKey) {
+      const targetRank = calculateRankBetween(lastItem.rank, null);
+      params.rankIssueOptimistic(activeKey, undefined, lastItem.key, targetRank);
+    }
+  }
+}
+
+export interface BacklogDragEndParams {
+  issues: JiraIssue[];
+  boardIssues: JiraIssue[];
+  backlogIssues: JiraIssue[];
+  moveToBoard: (issueKey: string) => Promise<void> | void;
+  moveToBacklog: (issueKey: string) => Promise<void> | void;
+  rankIssueOptimistic: (
+    issueKey: string,
+    rankBeforeKey?: string,
+    rankAfterKey?: string,
+    targetRank?: string
+  ) => Promise<void> | void;
+}
+
+export function handleBacklogDragEnd(
+  event: DragEndEvent,
+  params: BacklogDragEndParams
+): void {
+  const { active, over } = event;
+  if (!over) return;
+
+  const activeKey = String(active.id);
+  const activeItem = params.issues.find((i) => i.key === activeKey);
+  if (!activeItem) return;
+
+  const overKey = String(over.id);
+  const overItem = params.issues.find((i) => i.key === overKey);
+
+  // Resolve target section
+  let targetType: 'board' | 'backlog' | null = null;
+  const overData = over.data?.current;
+  if (overData?.targetType) {
+    targetType = overData.targetType as 'board' | 'backlog';
+  } else if (overKey === 'backlog-view-sprint-list') {
+    targetType = 'board';
+  } else if (overKey === 'backlog-view-backlog-list') {
+    targetType = 'backlog';
+  } else if (overItem) {
+    if (params.boardIssues.some((i) => i.key === overKey)) {
+      targetType = 'board';
+    } else if (params.backlogIssues.some((i) => i.key === overKey)) {
+      targetType = 'backlog';
+    }
+  }
+
+  if (!targetType) return;
+
+  const isCurrentlyBacklog = params.backlogIssues.some((i) => i.key === activeKey);
+
+  // Moving across sections
+  if (targetType === 'board' && isCurrentlyBacklog) {
+    params.moveToBoard(activeKey);
+    if (overItem && params.boardIssues.some((i) => i.key === overKey)) {
+      const targetIndex = params.boardIssues.findIndex((i) => i.key === overKey);
+      const prevItem = targetIndex > 0 ? params.boardIssues[targetIndex - 1] : null;
+      const nextItem = params.boardIssues[targetIndex];
+      const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+      params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+    }
+  } else if (targetType === 'backlog' && !isCurrentlyBacklog) {
+    params.moveToBacklog(activeKey);
+    if (overItem && params.backlogIssues.some((i) => i.key === overKey)) {
+      const targetIndex = params.backlogIssues.findIndex((i) => i.key === overKey);
+      const prevItem = targetIndex > 0 ? params.backlogIssues[targetIndex - 1] : null;
+      const nextItem = params.backlogIssues[targetIndex];
+      const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+      params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+    }
+  } else {
+    // Intra-list reordering (same section)
+    const currentList = isCurrentlyBacklog ? params.backlogIssues : params.boardIssues;
+    if (overItem && overKey !== activeKey) {
+      const oldIndex = currentList.findIndex((i) => i.key === activeKey);
+      const newIndex = currentList.findIndex((i) => i.key === overKey);
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const reordered = arrayMove(currentList, oldIndex, newIndex);
+        const prevItem = newIndex > 0 ? reordered[newIndex - 1] : null;
+        const nextItem = newIndex < reordered.length - 1 ? reordered[newIndex + 1] : null;
+        const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+        params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+      }
+    }
+  }
+}
+
 
 
 

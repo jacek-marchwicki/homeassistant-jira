@@ -256,3 +256,44 @@ def test_sync_worker_create_issue_remaps_temp_key() -> None:
         assert storage.get_issue(created_key) is not None
 
     asyncio.run(_test())
+
+
+def test_sync_worker_processes_rank_issue() -> None:
+    async def _test() -> None:
+        storage = SQLiteStorage(":memory:")
+        storage.init_db()
+        fake_jira = FakeJiraClient()
+        fake_jira.reset()
+
+        broadcast_events: list[dict[str, Any]] = []
+
+        async def mock_broadcast(msg: dict[str, Any]) -> None:
+            broadcast_events.append(msg)
+
+        worker = JiraSyncWorker(storage, fake_jira, ws_broadcast_func=mock_broadcast)
+
+        remote_issue = await fake_jira.get_issue("PROJ-101")
+        assert remote_issue is not None
+        storage.upsert_issue(remote_issue)
+
+        outbox_id = storage.enqueue_outbox(
+            client_mutation_id="mut-r1",
+            action_type="rank_issue",
+            issue_key="PROJ-101",
+            payload={"rank_after_key": "PROJ-98"},
+            base_updated_at=remote_issue.updated_at,
+        )
+
+        processed = await worker.process_next_pending()
+        assert processed is True
+
+        item = storage.get_outbox_item(outbox_id)
+        assert item is not None
+        assert item["status"] == "completed"
+
+        # Check that issue was ranked and event broadcast
+        ranked = await fake_jira.get_issue("PROJ-101")
+        assert ranked is not None
+        assert any(e["event"] in ("issue_ranked", "issue_updated") for e in broadcast_events)
+
+    asyncio.run(_test())

@@ -187,6 +187,14 @@ class TransitionRequest(BaseModel):
     target_status: str | None = None
 
 
+class RankIssueRequest(BaseModel):
+    """Payload to rank an issue relative to other issues or set its rank."""
+
+    rank_before_key: str | None = None
+    rank_after_key: str | None = None
+    rank: str | None = None
+
+
 class IssueUpdateRequest(BaseModel):
     """Payload to update an existing issue."""
 
@@ -532,6 +540,93 @@ async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
             "issue_key": updated_issue.key,
             "status_category": updated_issue.status.category.value,
             "status_name": updated_issue.status.name,
+            "issue": updated_issue.model_dump(),
+        }
+    )
+
+    # 4. Trigger async outbox processing without blocking response
+    asyncio.create_task(sync_worker.process_next_pending())
+
+    return updated_issue
+
+
+@app.put("/api/issues/{key}/rank", response_model=JiraIssue)
+@app.post("/api/issues/{key}/rank", response_model=JiraIssue)
+async def rank_issue(key: str, request: RankIssueRequest) -> JiraIssue:
+    """Rank an issue locally immediately, enqueue outbox sync to Jira, and broadcast delta."""
+    current_issue = storage.get_issue(key)
+    if current_issue is None and _cached_board_response is not None:
+        current_issue = next((i for i in _cached_board_response.issues if i.key == key), None)
+    if current_issue is None and isinstance(jira_client, FakeJiraClient):
+        current_issue = jira_client._issues.get(key)
+    if current_issue is None:
+        raise HTTPException(status_code=404, detail=f"Issue {key} not found")
+
+    orig_updated_at = current_issue.updated_at
+
+    new_rank = request.rank
+    if not new_rank:
+        if request.rank_after_key:
+            after_issue = storage.get_issue(request.rank_after_key) or (
+                jira_client._issues.get(request.rank_after_key)
+                if isinstance(jira_client, FakeJiraClient)
+                else None
+            )
+            base_r = after_issue.rank if after_issue and after_issue.rank else "0|i00001:"
+            new_rank = f"{base_r}m"
+        elif request.rank_before_key:
+            before_issue = storage.get_issue(request.rank_before_key) or (
+                jira_client._issues.get(request.rank_before_key)
+                if isinstance(jira_client, FakeJiraClient)
+                else None
+            )
+            base_r = before_issue.rank if before_issue and before_issue.rank else "0|i00002:"
+            new_rank = f"{base_r[:-1]}a:" if len(base_r) > 2 else "0|i00000:"
+        else:
+            new_rank = f"0|i{int(time.time()) % 100000:05d}:"
+
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    updated_issue = current_issue.model_copy(update={"rank": new_rank, "updated_at": now_iso})
+
+    # 1. Immediate local persistence
+    storage.upsert_issue(updated_issue)
+    _cached_issue_state[updated_issue.key] = (
+        f"{updated_issue.status.category.value}:{updated_issue.summary}:{updated_issue.updated_at}"
+    )
+    if _cached_board_response is not None:
+        updated_list = [
+            updated_issue if x.key == updated_issue.key else x
+            for x in _cached_board_response.issues
+        ]
+        updated_list.sort(
+            key=lambda x: (
+                0 if (x.rank is not None and x.rank != "") else 1,
+                x.rank or "",
+                x.updated_at or "",
+            )
+        )
+        _cached_board_response.issues = updated_list
+
+    # 2. Enqueue outbox action
+    mutation_id = str(uuid.uuid4())
+    storage.enqueue_outbox(
+        client_mutation_id=mutation_id,
+        action_type="rank_issue",
+        issue_key=key,
+        payload={
+            "rank_before_key": request.rank_before_key,
+            "rank_after_key": request.rank_after_key,
+            "rank": new_rank,
+        },
+        base_updated_at=orig_updated_at,
+    )
+
+    # 3. Broadcast real-time delta via WebSockets
+    await ws_hub.broadcast(
+        {
+            "event": "issue_ranked",
+            "issue_key": updated_issue.key,
+            "rank": updated_issue.rank,
             "issue": updated_issue.model_dump(),
         }
     )

@@ -85,6 +85,10 @@ class JiraSyncWorker:
                 await self._process_update(outbox_id, issue_key, payload, base_updated_at)
                 return True
 
+            if action_type == "rank_issue":
+                await self._process_rank(outbox_id, issue_key, payload, base_updated_at)
+                return True
+
             # Unknown action type - mark failed
             self.storage.update_outbox_status(
                 outbox_id, "failed", error_message=f"Unknown action type: {action_type}"
@@ -286,6 +290,31 @@ class JiraSyncWorker:
                 "status_category": updated.status.category.value,
                 "status_name": updated.status.name,
                 "issue": updated.model_dump(),
+            }
+        )
+
+    async def _process_rank(
+        self,
+        outbox_id: int,
+        issue_key: str,
+        payload: dict[str, Any],
+        base_updated_at: str | None = None,
+    ) -> None:
+        ranked = await self.jira_client.rank_issue(
+            issue_key=issue_key,
+            rank_before_key=payload.get("rank_before_key"),
+            rank_after_key=payload.get("rank_after_key"),
+            target_rank=payload.get("rank"),
+        )
+        self.storage.upsert_issue(ranked)
+        self.storage.update_outbox_status(outbox_id, "completed")
+
+        await self._broadcast(
+            {
+                "event": "issue_ranked",
+                "issue_key": ranked.key,
+                "rank": ranked.rank,
+                "issue": ranked.model_dump(),
             }
         )
 

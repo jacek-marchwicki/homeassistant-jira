@@ -193,6 +193,17 @@ class TestPresentationApi(unittest.TestCase):
         updated_issue = next(i for i in board_after["issues"] if i["key"] == "PROJ-101")
         self.assertEqual(updated_issue["status"]["category"], "done")
 
+    def test_rank_issue_endpoint(self) -> None:
+        """Verify PUT /api/issues/{key}/rank updates issue rank and orders board."""
+        res = self.client.put(
+            "/api/issues/PROJ-101/rank",
+            json={"rank_after_key": "PROJ-98"},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["key"], "PROJ-101")
+        self.assertIsNotNone(data["rank"])
+
 
 if __name__ == "__main__":
     unittest.main()

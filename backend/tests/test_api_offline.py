@@ -120,6 +120,32 @@ class TestOfflinePresentationApi(unittest.TestCase):
         board = self.client.get("/api/board").json()
         self.assertTrue(any(i["key"] == created["key"] for i in board["issues"]))
 
+    def test_rank_issue_offline_and_enqueues_outbox(self) -> None:
+        """When Jira is offline (503), ranking must succeed immediately and queue outbox."""
+        self.client.post(
+            "/api/test/simulate-error",
+            json={
+                "enable": True,
+                "status_code": 503,
+                "message": "Jira Offline",
+                "target": "all",
+            },
+        )
+        response = self.client.put(
+            "/api/issues/PROJ-101/rank",
+            json={"rank_after_key": "PROJ-98", "rank": "0|i00003:"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["key"], "PROJ-101")
+        self.assertEqual(data["rank"], "0|i00003:")
+
+        # Outbox must contain rank_issue
+        pending = storage.get_pending_outbox()
+        self.assertTrue(
+            any(p["action_type"] == "rank_issue" and p["issue_key"] == "PROJ-101" for p in pending)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

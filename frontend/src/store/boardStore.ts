@@ -720,7 +720,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       const payload: Record<string, any> = {};
       if (rankBeforeKey !== undefined) payload.rank_before_key = rankBeforeKey;
       if (rankAfterKey !== undefined) payload.rank_after_key = rankAfterKey;
-      if (targetRank !== undefined) payload.target_rank = targetRank;
+      if (targetRank !== undefined) {
+        payload.target_rank = targetRank;
+        payload.rank = targetRank;
+      }
 
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/rank`), {
         method: 'PUT',
@@ -779,6 +782,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             rank_before_key: rankBeforeKey,
             rank_after_key: rankAfterKey,
             target_rank: targetRank,
+            rank: targetRank,
           },
           createdAt: Date.now(),
         };

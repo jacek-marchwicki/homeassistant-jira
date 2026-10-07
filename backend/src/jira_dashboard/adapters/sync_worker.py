@@ -304,7 +304,7 @@ class JiraSyncWorker:
             issue_key=issue_key,
             rank_before_key=payload.get("rank_before_key"),
             rank_after_key=payload.get("rank_after_key"),
-            target_rank=payload.get("rank"),
+            target_rank=payload.get("rank") or payload.get("target_rank"),
         )
         self.storage.upsert_issue(ranked)
         self.storage.update_outbox_status(outbox_id, "completed")

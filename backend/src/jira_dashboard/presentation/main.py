@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -193,6 +194,7 @@ class RankIssueRequest(BaseModel):
     rank_before_key: str | None = None
     rank_after_key: str | None = None
     rank: str | None = None
+    target_rank: str | None = None
 
 
 class IssueUpdateRequest(BaseModel):
@@ -564,7 +566,7 @@ async def rank_issue(key: str, request: RankIssueRequest) -> JiraIssue:
 
     orig_updated_at = current_issue.updated_at
 
-    new_rank = request.rank
+    new_rank = request.rank or request.target_rank
     if not new_rank:
         if request.rank_after_key:
             after_issue = storage.get_issue(request.rank_after_key) or (
@@ -581,7 +583,15 @@ async def rank_issue(key: str, request: RankIssueRequest) -> JiraIssue:
                 else None
             )
             base_r = before_issue.rank if before_issue and before_issue.rank else "0|i00002:"
-            new_rank = f"{base_r[:-1]}a:" if len(base_r) > 2 else "0|i00000:"
+            match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
+            if match:
+                num = int(match.group(2))
+                if num > 0:
+                    new_rank = f"{match.group(1)}{num - 1:05d}{match.group(3)}"
+                else:
+                    new_rank = f"{base_r[:-1]}0:"
+            else:
+                new_rank = "0|00000:"
         else:
             new_rank = f"0|i{int(time.time()) % 100000:05d}:"
 

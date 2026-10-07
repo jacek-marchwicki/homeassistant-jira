@@ -883,5 +883,88 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       fullPage: true,
     });
   });
+
+  test('Capture Board Drag-and-Drop Rank Reordering Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const cardTodo = page.locator('[data-testid="issue-card-PROJ-101"]');
+    const cardDone = page.locator('[data-testid="issue-card-PROJ-72"]');
+    await expect(cardTodo).toBeVisible();
+    await expect(cardDone).toBeVisible();
+
+    const boxTodo = await cardTodo.boundingBox();
+    const boxDone = await cardDone.boundingBox();
+    expect(boxTodo).not.toBeNull();
+    expect(boxDone).not.toBeNull();
+
+    const rankPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues/PROJ-101/rank') && res.status() === 200
+    );
+
+    // Drag PROJ-101 directly onto PROJ-72 in the Done column
+    await page.mouse.move(boxTodo!.x + boxTodo!.width / 2, boxTodo!.y + boxTodo!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(boxDone!.x + boxDone!.width / 2, boxDone!.y + boxDone!.height / 2, { steps: 10 });
+    await page.mouse.up();
+
+    await rankPromise;
+    await page.waitForTimeout(300);
+
+    // Verify PROJ-101 is now in the Done column positioned above PROJ-72
+    const newBoxTodo = await cardTodo.boundingBox();
+    const newBoxDone = await cardDone.boundingBox();
+    expect(newBoxTodo).not.toBeNull();
+    expect(newBoxDone).not.toBeNull();
+    expect(newBoxTodo!.y).toBeLessThan(newBoxDone!.y);
+
+    await expect(page).toHaveScreenshot('board-rank-reordered.png', {
+      fullPage: true,
+    });
+  });
+
+  test('Capture Backlog View Drag-and-Drop Rank Reordering Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const backlogBtn = page.locator('header button[aria-label="Backlog View"]');
+    await backlogBtn.click();
+    await expect(page.getByRole('heading', { name: /Active Sprint/ })).toBeVisible();
+
+    const row1 = page.locator('[data-testid="backlog-row-PROJ-101"]');
+    const row2 = page.locator('[data-testid="backlog-row-PROJ-85"]');
+    await expect(row1).toBeVisible();
+    await expect(row2).toBeVisible();
+
+    const handle2 = page.locator('[aria-label="Drag handle for PROJ-85"]');
+    await expect(handle2).toBeVisible();
+
+    const box1 = await row1.boundingBox();
+    const box2 = await row2.boundingBox();
+    const handleBox2 = await handle2.boundingBox();
+    expect(box1).not.toBeNull();
+    expect(box2).not.toBeNull();
+    expect(handleBox2).not.toBeNull();
+    expect(box1!.y).toBeLessThan(box2!.y);
+
+    const rankPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues/PROJ-85/rank') && res.status() === 200
+    );
+
+    // Drag handle2 directly onto the center of row1
+    await page.mouse.move(handleBox2!.x + handleBox2!.width / 2, handleBox2!.y + handleBox2!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box1!.x + box1!.width / 2, box1!.y + box1!.height / 2, { steps: 10 });
+    await page.mouse.up();
+
+    await rankPromise;
+    await page.waitForTimeout(300);
+
+    const newBox1 = await row1.boundingBox();
+    const newBox2 = await row2.boundingBox();
+    expect(newBox2!.y).toBeLessThan(newBox1!.y);
+
+    await expect(page).toHaveScreenshot('backlog-rank-reordered.png', {
+      fullPage: true,
+    });
+  });
 });
 

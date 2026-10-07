@@ -79,6 +79,7 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
       style={style}
       {...attributes}
       {...listeners}
+      data-testid={`issue-card-${issue.key}`}
       className={`group relative p-3 rounded-lg bg-[var(--jira-surface-elevated)] border transition-all shadow-sm cursor-grab active:cursor-grabbing select-none touch-manipulation ${
         issue._optimisticState === 'pending'
           ? 'border-[var(--jira-primary)] ring-2 ring-[var(--jira-primary)]/30 animate-pulse'

@@ -7,11 +7,14 @@ from jira_dashboard.adapters.jira_client import (
     JiraClientProtocol,
 )
 from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
+from jira_dashboard.adapters.storage import SQLiteStorage
 
 __all__ = [
     "FakeJiraClient",
     "JiraAPIError",
     "JiraClientProtocol",
     "JiraCloudClient",
+    "SQLiteStorage",
     "create_jira_client",
 ]
+

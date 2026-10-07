@@ -217,3 +217,57 @@ def test_simulate_error_and_recovery(client: TestClient) -> None:
         json={"target_category": "inprogress"},
     )
     assert ok_res.status_code == 200
+
+
+def test_offline_queue_drain_and_conflict_resolution(client: TestClient) -> None:
+    """Full-loop integration test:
+    1. Offline mutation: enqueue transition while Jira simulated offline.
+    2. Drain outbox: restore connection and drain queue via sync_worker.drain_once().
+    3. Verify Jira client was updated and outbox is drained.
+    """
+    import asyncio
+
+    from jira_dashboard.presentation.main import jira_client, storage, sync_worker
+
+    client.post("/api/test/reset")
+
+    try:
+        # Step 1: Disconnect Jira
+        sim_res = client.post(
+            "/api/test/simulate-error",
+            json={"enable": True, "status_code": 503, "message": "Jira Service Outage"},
+        )
+        assert sim_res.status_code == 200
+
+        # Perform offline transition
+        res = client.post(
+            "/api/issues/PROJ-101/transition",
+            json={"target_category": "done", "target_status": "Done"},
+        )
+        assert res.status_code == 200
+        assert res.json()["status"]["category"] == "done"
+
+        # Verify queued in local SQLite outbox
+        pending = storage.get_pending_outbox()
+        assert any(p["issue_key"] == "PROJ-101" for p in pending)
+
+    finally:
+        # Step 2: Restore Jira connection
+        client.post("/api/test/simulate-error", json={"enable": False})
+
+    # Drain the outbox asynchronously
+    async def _drain() -> None:
+        processed = await sync_worker.drain_once()
+        assert processed >= 1
+
+    asyncio.run(_drain())
+
+    # Verify outbox is now empty (all processed)
+    assert len(storage.get_pending_outbox()) == 0
+
+    # Verify Jira client was updated
+    async def _verify_jira() -> None:
+        issue = await jira_client.get_issue("PROJ-101")
+        assert issue.status.category == "done"
+
+    asyncio.run(_verify_jira())

@@ -437,6 +437,13 @@ class SQLiteStorage:
                 "updated_at": r["updated_at"],
             }
 
+    def clear_outbox(self) -> None:
+        """Clear all entries from sync_outbox (primarily for testing resets)."""
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                conn.execute("DELETE FROM sync_outbox;")
+
     def update_outbox_status(
         self,
         outbox_id: int,

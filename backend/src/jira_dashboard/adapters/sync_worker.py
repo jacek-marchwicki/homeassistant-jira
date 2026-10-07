@@ -43,6 +43,16 @@ class JiraSyncWorker:
             except Exception as exc:
                 logger.warning("Failed to broadcast WebSocket event from sync worker: %s", exc)
 
+    async def drain_once(self) -> int:
+        """Process all currently pending outbox items until empty or error.
+
+        Returns the total number of items processed.
+        """
+        count = 0
+        while await self.process_next_pending():
+            count += 1
+        return count
+
     async def process_next_pending(self) -> bool:
         """Process the oldest pending item from the outbox.
 

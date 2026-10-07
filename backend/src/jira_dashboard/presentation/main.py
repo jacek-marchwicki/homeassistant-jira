@@ -875,6 +875,7 @@ def reset_test_state() -> dict[str, Any]:
         _cached_board_response = None
         _board_cache_timestamp = 0.0
         storage.rebuild_schema_preserving_outbox()
+        storage.clear_outbox()
         storage.save_issues(list(jira_client._issues.values()))
         storage.save_board_meta(
             board_id=settings.jira_board_id,

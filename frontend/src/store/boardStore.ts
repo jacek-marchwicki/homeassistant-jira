@@ -8,7 +8,7 @@ import {
 } from '../types/jira.ts';
 import { applyTheme, getInitialTheme, ThemeMode } from '../tokens/themeBridge.ts';
 import { getApiUrl } from '../utils/paths.ts';
-import { sortIssuesByRank } from '../utils/boardUtils.ts';
+import { calculateRankBetween, sortIssuesByRank } from '../utils/boardUtils.ts';
 
 const CATEGORY_TITLES: Record<JiraStatusCategory, string> = {
   todo: 'To Do',
@@ -470,14 +470,20 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
     let newAssignee = originalIssue.assignee;
     if (updates.assignee_name !== undefined) {
-      if (updates.assignee_name.trim() === '') {
+      if (!updates.assignee_name || updates.assignee_name.trim() === '') {
         newAssignee = null;
       } else {
         newAssignee = {
-          accountId: originalIssue.assignee?.accountId || 'usr-1',
+          accountId: (updates.assignee_account_id ?? originalIssue.assignee?.accountId) || 'usr-1',
           displayName: updates.assignee_name.trim(),
+          avatarUrl: originalIssue.assignee?.avatarUrl,
         };
       }
+    } else if (updates.assignee_account_id !== undefined && originalIssue.assignee) {
+      newAssignee = {
+        ...originalIssue.assignee,
+        accountId: updates.assignee_account_id ?? undefined,
+      };
     }
 
     const updatedIssues = issues.map((item) => {
@@ -585,10 +591,36 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   },
 
   createIssueOptimistic: async (payload: IssueCreatePayload) => {
+    const { columns, issues } = get();
+
     // 1. Instant Optimistic State Mutation (< 50ms)
     const tempKey = `TEMP-${Date.now()}`;
     const targetCategory = payload.status_category || 'todo';
     const targetStatusName = payload.status_name || CATEGORY_TITLES[targetCategory] || 'To Do';
+
+    const targetCol = columns.find(
+      (c) =>
+        (payload.status_name && c.name.trim().toLowerCase() === payload.status_name.trim().toLowerCase()) ||
+        c.category === targetCategory
+    );
+    const targetStatusId =
+      payload.status_id || targetCol?.status_ids?.[0] || targetCol?.id || `col-${targetCategory}`;
+
+    // Calculate highest rank so new task appears at the top of the list
+    const rankedIssues = issues.filter((i) => Boolean(i.rank));
+    let topRank: string = '0|i00001:';
+    if (rankedIssues.length > 0) {
+      const sortedRanks = rankedIssues.map((i) => i.rank!).sort();
+      topRank = calculateRankBetween(null, sortedRanks[0]);
+    }
+
+    const newAssignee = payload.assignee_name?.trim()
+      ? {
+          accountId: payload.assignee_account_id || 'usr-1',
+          displayName: payload.assignee_name.trim(),
+        }
+      : null;
+
     const tempIssue: JiraIssue = {
       id: tempKey,
       key: tempKey,
@@ -597,22 +629,28 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       issue_type: payload.issue_type || 'task',
       priority: payload.priority || 'medium',
       status: {
-        id: `col-${targetCategory}`,
+        id: targetStatusId,
         name: targetStatusName,
         category: targetCategory,
       },
-      assignee: payload.assignee_name?.trim()
-        ? { accountId: 'usr-1', displayName: payload.assignee_name.trim() }
-        : null,
+      assignee: newAssignee,
       story_points: payload.story_points,
       due_date: payload.due_date,
       start_date: payload.start_date,
       recreate_after: payload.recreate_after,
+      rank: topRank,
       _optimisticState: 'pending',
     };
 
+    const finalPayload: IssueCreatePayload = {
+      ...payload,
+      status_id: targetStatusId,
+      rank: topRank,
+      target_rank: topRank,
+    };
+
     set((state) => ({
-      issues: [tempIssue, ...state.issues],
+      issues: sortIssuesByRank([tempIssue, ...state.issues]),
       isCreateModalOpen: false,
     }));
     persistCurrentBoardState(get);
@@ -622,7 +660,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       const res = await fetch(getApiUrl('/api/issues'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(finalPayload),
       });
 
       if (!res.ok) {
@@ -630,24 +668,34 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       }
 
       const created: JiraIssue = await res.json();
+      const finalCreated: JiraIssue = {
+        ...created,
+        rank: created.rank || topRank,
+        _optimisticState: 'synced',
+      };
+
       set((state) => {
         const withoutTemp = state.issues.filter((item) => item.key !== tempKey);
-        const alreadyHasCreated = withoutTemp.some((item) => item.key === created.key);
+        const alreadyHasCreated = withoutTemp.some((item) => item.key === finalCreated.key);
         if (alreadyHasCreated) {
           return {
-            issues: withoutTemp.map((item) =>
-              item.key === created.key ? { ...created, _optimisticState: 'synced' } : item
+            issues: sortIssuesByRank(
+              withoutTemp.map((item) =>
+                item.key === finalCreated.key ? finalCreated : item
+              )
             ),
           };
         }
         return {
-          issues: state.issues.map((item) =>
-            item.key === tempKey ? { ...created, _optimisticState: 'synced' } : item
+          issues: sortIssuesByRank(
+            state.issues.map((item) =>
+              item.key === tempKey ? finalCreated : item
+            )
           ),
         };
       });
       persistCurrentBoardState(get);
-      return created;
+      return finalCreated;
     } catch (err) {
       if (err instanceof ServerRejectionError) {
         // 3. Graceful Rollback on Server Rejection
@@ -668,7 +716,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           action: 'create_issue',
           issueKey: tempKey,
-          payload: { ...payload },
+          payload: { ...finalPayload },
           createdAt: Date.now(),
         };
         const updatedOutbox = [...get().offlineOutbox, outboxItem];
@@ -931,7 +979,29 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
     if (msg.event === 'issue_created' && msg.issue) {
       const incomingIssue = msg.issue as JiraIssue;
+      const tempKey = typeof msg.temp_key === 'string' ? msg.temp_key : null;
       set((state) => {
+        let tempIndex = -1;
+        if (tempKey) {
+          tempIndex = state.issues.findIndex((i) => i.key === tempKey);
+        }
+        if (tempIndex === -1) {
+          tempIndex = state.issues.findIndex(
+            (i) =>
+              (i.key.startsWith('TEMP-') || i.key.includes('-TEMP-')) &&
+              i.summary === incomingIssue.summary
+          );
+        }
+
+        if (tempIndex !== -1) {
+          const updatedList = [...state.issues];
+          updatedList[tempIndex] = { ...incomingIssue, _optimisticState: 'synced' };
+          const deduped = updatedList.filter(
+            (item, idx) => idx === tempIndex || item.key !== incomingIssue.key
+          );
+          return { issues: sortIssuesByRank(deduped) };
+        }
+
         const exists = state.issues.some((i) => i.key === incomingIssue.key);
         if (exists) {
           return {
@@ -941,15 +1011,6 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
               )
             ),
           };
-        }
-        // If an optimistic temp issue with matching summary exists, replace it
-        const tempIndex = state.issues.findIndex(
-          (i) => i.key.startsWith('TEMP-') && i.summary === incomingIssue.summary
-        );
-        if (tempIndex !== -1) {
-          const updatedList = [...state.issues];
-          updatedList[tempIndex] = { ...incomingIssue, _optimisticState: 'synced' };
-          return { issues: sortIssuesByRank(updatedList) };
         }
         return { issues: sortIssuesByRank([incomingIssue, ...state.issues]) };
       });

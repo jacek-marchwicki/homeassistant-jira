@@ -43,6 +43,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
   const [priority, setPriority] = useState<JiraPriority>('medium');
   const [statusName, setStatusName] = useState('');
   const [assigneeName, setAssigneeName] = useState('');
+  const [assigneeAccountId, setAssigneeAccountId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [startDate, setStartDate] = useState('');
   const [recreateAfter, setRecreateAfter] = useState('');
@@ -66,6 +67,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
       setAssigneeName(
         issue.assignee?.displayName || issue.assignee?.display_name || ''
       );
+      setAssigneeAccountId(issue.assignee?.accountId || '');
       setDueDate(issue.due_date ?? issue.dueDate ?? '');
       setStartDate(issue.start_date ?? issue.startDate ?? '');
       setRecreateAfter(issue.recreate_after ?? issue.recreateAfter ?? '');
@@ -102,9 +104,11 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
       description: description.trim() || null,
       issue_type: issueType,
       priority,
+      status_id: chosenStatus?.id,
       status_name: statusName || issue.status.name,
       status_category: chosenStatus?.category || issue.status.category,
       assignee_name: assigneeName,
+      assignee_account_id: assigneeAccountId.trim() ? assigneeAccountId.trim() : undefined,
       story_points: issue.story_points ?? issue.storyPoints,
       due_date: dueDate.trim() || null,
       start_date: startDate.trim() || null,
@@ -262,6 +266,10 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
                 id="edit-assignee"
                 value={assigneeName}
                 onChange={setAssigneeName}
+                onSelectOption={(opt) => {
+                  setAssigneeName(opt?.displayName || '');
+                  setAssigneeAccountId(opt?.accountId || '');
+                }}
               />
             </div>
           </div>

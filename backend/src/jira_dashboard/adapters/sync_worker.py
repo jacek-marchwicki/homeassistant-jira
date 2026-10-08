@@ -139,6 +139,7 @@ class JiraSyncWorker:
             priority=priority,
             status_category=status_category,
             status_name=payload.get("status_name"),
+            status_id=payload.get("status_id"),
             assignee_name=payload.get("assignee_name"),
             assignee_account_id=payload.get("assignee_account_id"),
             story_points=payload.get("story_points"),
@@ -147,10 +148,23 @@ class JiraSyncWorker:
             recreate_after=payload.get("recreate_after"),
             board_id=payload.get("board_id"),
             project_key=payload.get("project_key"),
+            rank=payload.get("rank") or payload.get("target_rank"),
         )
 
+        rank_to_set = payload.get("rank") or payload.get("target_rank")
+        if rank_to_set and not real_issue.rank:
+            try:
+                real_issue = await self.jira_client.rank_issue(
+                    real_issue.key, target_rank=rank_to_set
+                )
+            except Exception as rank_exc:
+                logger.debug(
+                    "Ranking after creation for %s skipped/failed: %s", real_issue.key, rank_exc
+                )
+                real_issue = real_issue.model_copy(update={"rank": rank_to_set})
+
         # Remove temporary issue from SQLite if key changed
-        if temp_key.startswith("TEMP-") and temp_key != real_issue.key:
+        if ("-TEMP-" in temp_key or temp_key.startswith("TEMP-")) and temp_key != real_issue.key:
             self.storage.delete_issue(temp_key)
 
         self.storage.upsert_issue(real_issue)

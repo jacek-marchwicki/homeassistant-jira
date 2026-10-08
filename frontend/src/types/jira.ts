@@ -100,13 +100,17 @@ export interface IssueUpdatePayload {
   description?: string | null;
   issue_type?: JiraIssueType;
   priority?: JiraPriority;
+  status_id?: string;
   status_category?: JiraStatusCategory;
   status_name?: string;
-  assignee_name?: string;
+  assignee_name?: string | null;
+  assignee_account_id?: string | null;
   story_points?: number;
   due_date?: string | null;
   start_date?: string | null;
   recreate_after?: string | null;
+  rank?: string;
+  target_rank?: string;
 }
 
 export interface IssueCreatePayload {
@@ -114,14 +118,18 @@ export interface IssueCreatePayload {
   description?: string | null;
   issue_type?: JiraIssueType;
   priority?: JiraPriority;
+  status_id?: string;
   status_category?: JiraStatusCategory;
   status_name?: string;
-  assignee_name?: string;
+  assignee_name?: string | null;
+  assignee_account_id?: string | null;
   story_points?: number;
   due_date?: string | null;
   start_date?: string | null;
   recreate_after?: string | null;
   project_key?: string;
+  rank?: string;
+  target_rank?: string;
 }
 
 

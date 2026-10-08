@@ -14,6 +14,7 @@ export interface AssigneeSelectProps {
   id?: string;
   value: string;
   onChange: (value: string) => void;
+  onSelectOption?: (option: AssigneeOption | null) => void;
   options?: AssigneeOption[];
   placeholder?: string;
   disabled?: boolean;
@@ -23,6 +24,7 @@ export function AssigneeSelect({
   id,
   value,
   onChange,
+  onSelectOption,
   options,
   placeholder = 'Unassigned',
   disabled = false,
@@ -128,7 +130,25 @@ export function AssigneeSelect({
 
   const handleSelect = (displayName: string) => {
     onChange(displayName);
+    if (onSelectOption) {
+      const matched = suggestions.find(
+        (s) => s.displayName.trim().toLowerCase() === displayName.trim().toLowerCase()
+      );
+      onSelectOption(matched || (displayName ? { displayName } : null));
+    }
     setIsOpen(false);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (filteredSuggestions.length > 0) {
+        handleSelect(filteredSuggestions[0].displayName);
+      } else if (searchQuery.trim()) {
+        handleSelect(searchQuery.trim());
+      }
+    }
   };
 
   const selectedUser: JiraUser | null = value.trim()
@@ -202,6 +222,7 @@ export function AssigneeSelect({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Search assignees..."
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] placeholder-[var(--jira-text-muted)] focus:outline-none focus:border-[var(--jira-primary)]"
             />
@@ -211,6 +232,8 @@ export function AssigneeSelect({
           <div className="space-y-0.5">
             <button
               type="button"
+              role="option"
+              aria-selected={!value}
               onClick={() => handleSelect('')}
               className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
                 !value
@@ -239,6 +262,8 @@ export function AssigneeSelect({
                 <button
                   key={item.displayName}
                   type="button"
+                  role="option"
+                  aria-selected={isSelected}
                   onClick={() => handleSelect(item.displayName)}
                   className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
                     isSelected

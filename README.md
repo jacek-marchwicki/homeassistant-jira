@@ -1,7 +1,7 @@
 # Home Assistant Jira Dashboard
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Status: Phase 5 Complete](https://img.shields.io/badge/Status-Phase%205%20Complete-green.svg)](#roadmap)
+[![Status: Phase 5.5 Complete](https://img.shields.io/badge/Status-Phase%205.5%20Complete-green.svg)](#roadmap)
 [![Add to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fjacek-marchwicki%2Fhomeassistant-jira)
 
 A high-performance, real-time Jira dashboard built for **Home Assistant** and **standalone web environments**. Designed from the ground up for ambient wall displays, desk workflows, and mobile devices, providing instant UI feedback and live multi-client synchronization.
@@ -421,6 +421,21 @@ This file defines coding standards, testing requirements, architectural boundari
     - **Jira Cloud & Data Center API Adapter with Test Double**: Implemented `rank_issue` across Jira client adapters via the Jira Agile REST API (`/rest/agile/1.0/issue/{key}/rank`) supporting `rankBeforeIssue` and `rankAfterIssue` semantics, accompanied by `FakeJiraClient` deterministic test double support for offline testing.
     - **Real-Time WebSocket Synchronization**: State deltas are broadcast immediately over WebSockets as `issue_ranked` events, instantly reflecting rank adjustments across all connected wallboards, desktop displays, and mobile devices.
     - **Comprehensive Test Coverage & Visual Regression Snapshots**: Backed by 100% unit test coverage across LexoRank mathematics, optimistic Zustand mutations, SQLite persistence, and outbox workers, plus automated Playwright visual regression screenshots (`board-rank-reordered.png`, `backlog-rank-reordered.png`).
+- [x] **Phase 5.5: Issue Creation Field Fidelity, Top-Rank Placement, Assignee Management & Persistent PWA Experience**
+  - [x] **Issue Creation Field Fidelity & Backlog Misclassification Resolution**:
+    - Guaranteed 100% fidelity across all fields during issue creation (`summary`, `issue_type`, `priority`, `status_category`, `status_name`, `status_id`, `assignee`, `story_points`, `due_date`, `start_date`, `recreate_after`).
+    - Resolved a bug where newly created tasks selecting active column statuses (e.g. "Ready" / "To Do") were erroneously classified as Backlog issues; refined `isBacklogIssue` heuristics and status mapping to prioritize active board column assignments over general category heuristics.
+  - [x] **Top-Rank Placement for Newly Created Tasks**:
+    - Newly created tasks automatically receive the highest priority LexoRank (calculated via fractional midpoint algorithm `calculateRankBetween(null, minRank)`) and are placed immediately at the top of their respective column/list in both Kanban and Backlog views with sub-50ms optimistic latency.
+  - [x] **Full-Fidelity Assignee Editing, Search & Unassignment**:
+    - Fixed assignee updates in the Edit Issue dialog with seamless account ID tracking (`assignee_account_id`), keyboard-accessible search filtering, and full support for unassigning tasks (`assignee = null`) across frontend state, SQLite local storage, and Jira Cloud API synchronization (`fields["assignee"] = None`).
+  - [x] **Persistent Mobile Install Prompt Dismissal**:
+    - Upgraded mobile PWA install banner dismissal persistence from ephemeral session storage to `localStorage` (with session fallback), ensuring that once dismissed, the banner remains hidden across future browser sessions and device restarts.
+  - [x] **Resilient Offline Outbox Queuing & Key Reconciliation**:
+    - Offline issue creation generates temporary local items (`PROJ-TEMP-<timestamp>`), immediately renders them at the top rank, persists complete creation payloads to the SQLite outbox, and reconciles temporary IDs to permanent Jira keys upon background sync without card duplication.
+    - Offline assignee mutations and unassignments are enqueued and safely drained upon network restoration.
+  - [x] **Automated Screenshot Regression Test Coverage**:
+    - Added comprehensive visual regression test cases covering the Edit Issue assignee search dropdown (`component-modal-edit-assignee-picker.png`), newly created top-ranked issues (`board-newly-created-issue-top-ranked.png`), and persistent mobile install banner dismissal (`mobile-install-banner-dismissed-persistent.png`), verified across all 39 Playwright visual snapshots.
 
 ---
 

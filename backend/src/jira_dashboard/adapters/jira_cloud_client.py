@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -736,7 +737,7 @@ class JiraCloudClient(JiraClientProtocol):
                     issue_type=IssueType.TASK,
                     priority=Priority.MEDIUM,
                     status=STATUS_MAP.get(fallback_cat, STATUS_MAP[StatusCategory.DONE]),
-                    updated_at="2026-10-05T00:00:00Z",
+                    updated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 )
             return updated
         except httpx.RequestError as exc:
@@ -844,7 +845,13 @@ class JiraCloudClient(JiraClientProtocol):
             fields["issuetype"] = {"name": issue_type.value.capitalize()}
         if due_date is not None:
             fields["duedate"] = due_date if due_date else None
-        if assignee_account_id is not None:
+        if start_date is not None:
+            fields["customfield_10015"] = start_date if start_date else None
+        if story_points is not None:
+            fields["customfield_10016"] = story_points
+        if assignee_name is not None and assignee_name.strip() == "":
+            fields["assignee"] = None
+        elif assignee_account_id is not None:
             fields["assignee"] = {"accountId": assignee_account_id} if assignee_account_id else None
         if recreate_after is not None:
             fields["customfield_10027"] = recreate_after if recreate_after else None
@@ -878,6 +885,7 @@ class JiraCloudClient(JiraClientProtocol):
         priority: Priority = Priority.MEDIUM,
         status_category: StatusCategory = StatusCategory.TODO,
         status_name: str | None = None,
+        status_id: str | None = None,
         assignee_name: str | None = None,
         assignee_account_id: str | None = None,
         story_points: float | None = None,
@@ -886,6 +894,7 @@ class JiraCloudClient(JiraClientProtocol):
         recreate_after: str | None = None,
         board_id: str | None = None,
         project_key: str | None = None,
+        rank: str | None = None,
     ) -> JiraIssue:
         """Create a new issue via Jira Cloud REST API."""
         proj = project_key
@@ -915,6 +924,10 @@ class JiraCloudClient(JiraClientProtocol):
             }
         if due_date:
             fields["duedate"] = due_date
+        if start_date:
+            fields["customfield_10015"] = start_date
+        if story_points is not None:
+            fields["customfield_10016"] = story_points
         if assignee_account_id:
             fields["assignee"] = {"accountId": assignee_account_id}
         if recreate_after:
@@ -940,9 +953,17 @@ class JiraCloudClient(JiraClientProtocol):
             except Exception as exc:
                 logger.warning("Issue %s created but transition failed: %s", issue_key, exc)
 
+        if rank:
+            try:
+                await self.rank_issue(issue_key, target_rank=rank)
+            except Exception as rank_exc:
+                logger.debug("Ranking issue %s on Jira Cloud failed: %s", issue_key, rank_exc)
+
         created_issue = await self.get_issue(issue_key)
         if not created_issue:
             raise JiraAPIError(f"Issue {issue_key} not found after creation", status_code=404)
+        if rank and not created_issue.rank:
+            created_issue = created_issue.model_copy(update={"rank": rank})
         return created_issue
 
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:

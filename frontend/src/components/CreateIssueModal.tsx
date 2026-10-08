@@ -31,6 +31,7 @@ export function CreateIssueModal({
   const [priority, setPriority] = useState<JiraPriority>('medium');
   const [statusName, setStatusName] = useState('');
   const [assigneeName, setAssigneeName] = useState('');
+  const [assigneeAccountId, setAssigneeAccountId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [startDate, setStartDate] = useState('');
   const [recreateAfter, setRecreateAfter] = useState('');
@@ -52,6 +53,7 @@ export function CreateIssueModal({
         (statusOptions.length > 0 ? statusOptions[0].name : 'To Do');
       setStatusName(initialStatus);
       setAssigneeName('');
+      setAssigneeAccountId('');
       setDueDate('');
       setStartDate('');
       setRecreateAfter('');
@@ -88,9 +90,11 @@ export function CreateIssueModal({
       description: description.trim() || undefined,
       issue_type: issueType,
       priority,
+      status_id: chosenStatus?.id,
       status_name: statusName || chosenStatus?.name || 'To Do',
       status_category: chosenStatus?.category || defaultStatusCategory || 'todo',
       assignee_name: assigneeName.trim() ? assigneeName.trim() : undefined,
+      assignee_account_id: assigneeAccountId.trim() ? assigneeAccountId.trim() : undefined,
       due_date: dueDate.trim() || null,
       start_date: startDate.trim() || null,
       recreate_after: recreateAfter.trim() || null,
@@ -234,6 +238,10 @@ export function CreateIssueModal({
                 id="create-assignee"
                 value={assigneeName}
                 onChange={setAssigneeName}
+                onSelectOption={(opt) => {
+                  setAssigneeName(opt?.displayName || '');
+                  setAssigneeAccountId(opt?.accountId || '');
+                }}
               />
             </div>
           </div>

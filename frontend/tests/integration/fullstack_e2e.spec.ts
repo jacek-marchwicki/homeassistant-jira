@@ -110,6 +110,15 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const proj98Article = page.locator('article', { hasText: 'PROJ-98' });
     await expect(proj98Article).toBeVisible();
 
+    // Intercept transition request to simulate Jira rejection
+    await page.route('**/api/issues/PROJ-98/transition', async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Jira Cloud service unavailable' }),
+      });
+    });
+
     // Attempt to transition PROJ-98 to "Done"
     const doneButton = proj98Article.getByTitle('Quick Action: Mark as Done');
     await doneButton.click();
@@ -120,6 +129,8 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
 
     // PROJ-98 should NOT be struck through (reverted back to In Progress)
     await expect(proj98Article.locator('p')).not.toHaveClass(/line-through/);
+
+    await page.unroute('**/api/issues/PROJ-98/transition');
 
     // Reset error simulation
     await page.request.post('/api/test/simulate-error', {
@@ -164,7 +175,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
     await expect(proj101Article).toBeVisible();
 
-    const statusSelect = proj101Article.locator('select#status-select');
+    const statusSelect = proj101Article.locator('select[id^="status-select"]');
     await expect(statusSelect).toHaveValue('To Do');
 
     // Intercept transition request

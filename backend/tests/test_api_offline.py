@@ -120,6 +120,91 @@ class TestOfflinePresentationApi(unittest.TestCase):
         board = self.client.get("/api/board").json()
         self.assertTrue(any(i["key"] == created["key"] for i in board["issues"]))
 
+    def test_create_issue_offline_with_status_and_assignee_ranks_highest(self) -> None:
+        """When offline, creating an issue with custom status and assignee preserves all fields
+        and ranks highest."""
+        self.client.post(
+            "/api/test/simulate-error",
+            json={
+                "enable": True,
+                "status_code": 503,
+                "message": "Jira Unreachable (Offline)",
+                "target": "all",
+            },
+        )
+
+        board_before = self.client.get("/api/board").json()
+        ranked_before = [i["rank"] for i in board_before["issues"] if i.get("rank")]
+        min_rank_before = min(ranked_before) if ranked_before else None
+
+        response = self.client.post(
+            "/api/issues",
+            json={
+                "summary": "Urgent Offline Task",
+                "issue_type": "task",
+                "priority": "high",
+                "status_category": "todo",
+                "status_name": "Ready",
+                "status_id": "col-todo",
+                "assignee_name": "Jacek Marchwicki",
+                "assignee_account_id": "usr-1",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        created = response.json()
+        self.assertEqual(created["summary"], "Urgent Offline Task")
+        self.assertEqual(created["status"]["name"], "Ready")
+        self.assertEqual(created["status"]["id"], "col-todo")
+        self.assertIsNotNone(created["assignee"])
+        self.assertEqual(created["assignee"]["display_name"], "Jacek Marchwicki")
+        self.assertEqual(created["assignee"]["account_id"], "usr-1")
+
+        if min_rank_before:
+            self.assertIsNotNone(created.get("rank"))
+            self.assertLess(created["rank"], min_rank_before)
+
+        # Verify board contains newly created issue at index 0 (top rank)
+        board_after = self.client.get("/api/board").json()
+        self.assertEqual(board_after["issues"][0]["key"], created["key"])
+
+        # Storage outbox must contain all fields in payload
+        pending = storage.get_pending_outbox()
+        outbox_entry = next(
+            p
+            for p in pending
+            if p["action_type"] == "create_issue" and p["issue_key"] == created["key"]
+        )
+        self.assertEqual(outbox_entry["payload"]["status_name"], "Ready")
+        self.assertEqual(outbox_entry["payload"]["status_id"], "col-todo")
+        self.assertEqual(outbox_entry["payload"]["assignee_name"], "Jacek Marchwicki")
+        self.assertEqual(outbox_entry["payload"]["assignee_account_id"], "usr-1")
+        self.assertIsNotNone(outbox_entry["payload"].get("rank"))
+
+    def test_update_assignee_unassign_offline(self) -> None:
+        """When offline, setting assignee_name to empty string unassigns the ticket."""
+        self.client.post(
+            "/api/test/simulate-error",
+            json={
+                "enable": True,
+                "status_code": 503,
+                "message": "Jira Unreachable (Offline)",
+                "target": "all",
+            },
+        )
+
+        response = self.client.patch(
+            "/api/issues/PROJ-101",
+            json={"assignee_name": ""},
+        )
+        self.assertEqual(response.status_code, 200)
+        updated = response.json()
+        self.assertIsNone(updated["assignee"])
+
+        # Check board response
+        board = self.client.get("/api/board").json()
+        target = next(i for i in board["issues"] if i["key"] == "PROJ-101")
+        self.assertIsNone(target["assignee"])
+
     def test_rank_issue_offline_and_enqueues_outbox(self) -> None:
         """When Jira is offline (503), ranking must succeed immediately and queue outbox."""
         self.client.post(

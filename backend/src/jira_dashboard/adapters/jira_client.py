@@ -7,6 +7,8 @@ and local simulation.
 
 from __future__ import annotations
 
+import re
+from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from jira_dashboard.domain import (
@@ -236,6 +238,7 @@ class JiraClientProtocol(Protocol):
         priority: Priority = Priority.MEDIUM,
         status_category: StatusCategory = StatusCategory.TODO,
         status_name: str | None = None,
+        status_id: str | None = None,
         assignee_name: str | None = None,
         assignee_account_id: str | None = None,
         story_points: float | None = None,
@@ -244,6 +247,7 @@ class JiraClientProtocol(Protocol):
         recreate_after: str | None = None,
         board_id: str | None = None,
         project_key: str | None = None,
+        rank: str | None = None,
     ) -> JiraIssue:
         """Create a new Jira issue."""
         ...
@@ -306,9 +310,11 @@ class FakeJiraClient:
         else:
             seed = []
 
-        self._issues: dict[str, JiraIssue] = {
-            issue.key: issue.model_copy(deep=True) for issue in seed
-        }
+        self._issues = {issue.key: issue.model_copy(deep=True) for issue in seed}
+        if "PROJ-72" in self._issues:
+            self._issues["PROJ-72"] = self._issues["PROJ-72"].model_copy(
+                update={"updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            )
         self._comments: dict[str, list[JiraComment]] = (
             {k: [c.model_copy(deep=True) for c in v] for k, v in DEFAULT_SEED_COMMENTS.items()}
             if os.environ.get("JIRA_USE_FAKE") == "1"
@@ -326,6 +332,10 @@ class FakeJiraClient:
 
         seed = DEFAULT_SEED_ISSUES if os.environ.get("JIRA_USE_FAKE") == "1" else []
         self._issues = {issue.key: issue.model_copy(deep=True) for issue in seed}
+        if "PROJ-72" in self._issues:
+            self._issues["PROJ-72"] = self._issues["PROJ-72"].model_copy(
+                update={"updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            )
         self._comments = (
             {k: [c.model_copy(deep=True) for c in v] for k, v in DEFAULT_SEED_COMMENTS.items()}
             if os.environ.get("JIRA_USE_FAKE") == "1"
@@ -411,9 +421,8 @@ class FakeJiraClient:
             )
 
         # Update in-memory issue
-        updated_issue = issue.model_copy(
-            update={"status": new_status, "updated_at": "2026-10-05T00:00:00Z"}
-        )
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        updated_issue = issue.model_copy(update={"status": new_status, "updated_at": now_iso})
         self._issues[issue_key] = updated_issue
         return updated_issue
 
@@ -452,10 +461,11 @@ class FakeJiraClient:
 
         pos = issue_list.index(issue)
         new_rank = target_rank or f"0|i{pos + 1:05d}:"
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         updated_issue = issue.model_copy(
             update={
                 "rank": new_rank,
-                "updated_at": "2026-10-05T00:00:00Z",
+                "updated_at": now_iso,
             }
         )
         issue_list[pos] = updated_issue
@@ -521,6 +531,12 @@ class FakeJiraClient:
                     or (issue.assignee.account_id if issue.assignee else "usr-1"),
                     display_name=assignee_name.strip(),
                 )
+        elif assignee_account_id is not None and issue.assignee:
+            new_assignee = JiraUser(
+                account_id=assignee_account_id,
+                display_name=issue.assignee.display_name,
+                avatar_url=issue.assignee.avatar_url,
+            )
 
         new_story_points = story_points if story_points is not None else issue.story_points
         new_due_date = due_date if due_date is not None else issue.due_date
@@ -540,7 +556,7 @@ class FakeJiraClient:
             due_date=new_due_date,
             start_date=new_start_date,
             recreate_after=new_recreate_after,
-            updated_at="2026-10-05T00:00:00Z",
+            updated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         )
         self._issues[issue_key] = updated_issue
         return updated_issue
@@ -553,6 +569,7 @@ class FakeJiraClient:
         priority: Priority = Priority.MEDIUM,
         status_category: StatusCategory = StatusCategory.TODO,
         status_name: str | None = None,
+        status_id: str | None = None,
         assignee_name: str | None = None,
         assignee_account_id: str | None = None,
         story_points: float | None = None,
@@ -561,6 +578,7 @@ class FakeJiraClient:
         recreate_after: str | None = None,
         board_id: str | None = None,
         project_key: str | None = None,
+        rank: str | None = None,
     ) -> JiraIssue:
         """Create a new issue in memory."""
         if self.simulate_transition_failure or self.simulate_failure:
@@ -596,7 +614,8 @@ class FakeJiraClient:
                     matched_cat = c
                     break
 
-        status = JiraStatus(id=f"col-{matched_cat.value}", name=matched_name, category=matched_cat)
+        status_id_val = status_id or f"col-{matched_cat.value}"
+        status = JiraStatus(id=status_id_val, name=matched_name, category=matched_cat)
 
         assignee = None
         if assignee_name and assignee_name.strip():
@@ -604,6 +623,26 @@ class FakeJiraClient:
                 account_id=assignee_account_id or "usr-1",
                 display_name=assignee_name.strip(),
             )
+
+        # Highest rank calculation
+        rank_val = rank
+        if not rank_val:
+            ranked = [i.rank for i in self._issues.values() if i.rank]
+            if ranked:
+                ranked.sort()
+                base_r = ranked[0]
+                match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
+                if match:
+                    num = int(match.group(2))
+                    rank_val = (
+                        f"{match.group(1)}{num - 1:05d}{match.group(3)}"
+                        if num > 0
+                        else f"{base_r[:-1]}0:"
+                    )
+                else:
+                    rank_val = "0|00000:"
+            else:
+                rank_val = "0|i00001:"
 
         new_issue = JiraIssue(
             id=str(next_num),
@@ -619,8 +658,9 @@ class FakeJiraClient:
             due_date=due_date,
             start_date=start_date,
             recreate_after=recreate_after,
-            created_at="2026-10-05T00:00:00Z",
-            updated_at="2026-10-05T00:00:00Z",
+            rank=rank_val,
+            created_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            updated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         )
         self._issues[new_key] = new_issue
         return new_issue
@@ -668,8 +708,9 @@ class FakeJiraClient:
         )
         raw_created_at = fields.get("created") or fields.get("created_at")
         raw_updated_at = fields.get("updated") or fields.get("updated_at")
-        created_at = str(raw_created_at) if raw_created_at is not None else "2026-10-05T00:00:00Z"
-        updated_at = str(raw_updated_at) if raw_updated_at is not None else "2026-10-05T00:00:00Z"
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        created_at = str(raw_created_at) if raw_created_at is not None else now_iso
+        updated_at = str(raw_updated_at) if raw_updated_at is not None else now_iso
 
         # If issue already exists, update its status & summary
         existing = self._issues.get(issue_key)

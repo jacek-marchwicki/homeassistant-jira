@@ -966,5 +966,85 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       fullPage: true,
     });
   });
+
+  test('Capture Edit Issue Modal with Assignee Picker Open Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
+    await editButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    const assigneePicker = modal.locator('[role="combobox"][aria-label="Assignee"]');
+    await assigneePicker.click();
+
+    const listbox = modal.locator('[role="listbox"]');
+    await expect(listbox).toBeVisible();
+
+    await expect(modal.locator('> div')).toHaveScreenshot('component-modal-edit-assignee-picker.png');
+  });
+
+  test('Capture Newly Created Issue with Status and Assignee at Highest Rank Top of List Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // Switch to All Issues filter so issues assigned to any user are visible
+    const allIssuesBtn = page.getByRole('button', { name: /all issues/i });
+    await allIssuesBtn.click();
+
+    const createButton = page.getByRole('button', { name: 'Create Issue' });
+    await createButton.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    await page.locator('#create-summary').fill('Urgent Hotfix Top Priority Task');
+
+    // Select status "To Do"
+    const statusPicker = modal.locator('[role="combobox"][aria-label="Status"]');
+    await statusPicker.click();
+    await modal.locator('[role="option"]').filter({ hasText: 'To Do' }).click();
+
+    // Select assignee "Alex Lead"
+    const assigneePicker = modal.locator('[role="combobox"][aria-label="Assignee"]');
+    await assigneePicker.click();
+    await modal.locator('[role="option"]').filter({ hasText: 'Alex Lead' }).click();
+
+    // Submit form
+    const submitBtn = modal.locator('button[type="submit"]');
+    await submitBtn.click();
+    await expect(modal).not.toBeVisible();
+
+    // Verify the newly created card is displayed at the top of the Ready/To Do column (above PROJ-101)
+    const readyColumn = page.getByTestId('column-col-todo');
+    await expect(readyColumn).toBeVisible();
+    const otherSection = readyColumn.locator('[data-testid="ready-section-other"]');
+    const firstCard = otherSection.locator('article').first();
+    await expect(firstCard).toContainText('Urgent Hotfix Top Priority Task');
+    await expect(firstCard).toContainText('AL');
+
+    await expect(page).toHaveScreenshot('board-newly-created-issue-top-ranked.png', {
+      fullPage: true,
+    });
+  });
+
+  test('Capture Mobile Install Banner Dismissed State Persistence Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    const banner = page.locator('div[role="banner"][aria-label="Install Jira Dashboard"]');
+    await expect(banner).toBeVisible();
+
+    const dismissBtn = banner.locator('button[aria-label="Dismiss install banner"]');
+    await dismissBtn.click();
+    await expect(banner).not.toBeVisible();
+
+    // Reload page and verify banner remains dismissed from localStorage
+    await page.reload();
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+    await expect(banner).not.toBeVisible();
+
+    await expect(page).toHaveScreenshot('mobile-install-banner-dismissed-persistent.png', {
+      fullPage: true,
+    });
+  });
 });
 

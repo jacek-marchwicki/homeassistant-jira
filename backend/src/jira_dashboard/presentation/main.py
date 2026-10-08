@@ -122,7 +122,30 @@ class WebSocketHub:
 
 
 ws_hub = WebSocketHub()
-sync_worker = JiraSyncWorker(storage, jira_client, ws_broadcast_func=ws_hub.broadcast)
+
+
+async def _sync_broadcast(event_data: dict[str, Any]) -> None:
+    global _cached_board_response
+    if _cached_board_response is not None:
+        temp_key = event_data.get("temp_key")
+        real_issue_dict = event_data.get("issue")
+        if temp_key and real_issue_dict:
+            real_issue = JiraIssue.model_validate(real_issue_dict)
+            _cached_issue_state.pop(temp_key, None)
+            _cached_board_response.issues = [
+                real_issue if x.key == temp_key else x for x in _cached_board_response.issues
+            ]
+            seen: set[str] = set()
+            deduped: list[JiraIssue] = []
+            for item in _cached_board_response.issues:
+                if item.key not in seen:
+                    seen.add(item.key)
+                    deduped.append(item)
+            _cached_board_response.issues = deduped
+    await ws_hub.broadcast(event_data)
+
+
+sync_worker = JiraSyncWorker(storage, jira_client, ws_broadcast_func=_sync_broadcast)
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +227,7 @@ class IssueUpdateRequest(BaseModel):
     description: str | None = None
     issue_type: IssueType | None = None
     priority: Priority | None = None
+    status_id: str | None = None
     status_category: StatusCategory | None = None
     status_name: str | None = None
     assignee_name: str | None = None
@@ -212,6 +236,8 @@ class IssueUpdateRequest(BaseModel):
     due_date: str | None = None
     start_date: str | None = None
     recreate_after: str | None = None
+    rank: str | None = None
+    target_rank: str | None = None
 
 
 class IssueCreateRequest(BaseModel):
@@ -221,6 +247,7 @@ class IssueCreateRequest(BaseModel):
     description: str | None = None
     issue_type: IssueType = IssueType.TASK
     priority: Priority = Priority.MEDIUM
+    status_id: str | None = None
     status_category: StatusCategory = StatusCategory.TODO
     status_name: str | None = None
     assignee_name: str | None = None
@@ -231,6 +258,8 @@ class IssueCreateRequest(BaseModel):
     recreate_after: str | None = None
     board_id: str | None = None
     project_key: str | None = None
+    rank: str | None = None
+    target_rank: str | None = None
 
 
 class BoardResponse(BaseModel):
@@ -670,10 +699,11 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
     new_priority = request.priority if request.priority is not None else current_issue.priority
 
     new_status = current_issue.status
-    if request.status_name or request.status_category:
+    if request.status_name or request.status_category or request.status_id:
         target_cat = request.status_category or current_issue.status.category
         target_name = request.status_name or current_issue.status.name
-        new_status = JiraStatus(id=target_name, name=target_name, category=target_cat)
+        target_id = request.status_id or current_issue.status.id
+        new_status = JiraStatus(id=target_id, name=target_name, category=target_cat)
 
     new_assignee = current_issue.assignee
     if request.assignee_name is not None:
@@ -685,6 +715,12 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
                 or (current_issue.assignee.account_id if current_issue.assignee else "usr-1"),
                 display_name=request.assignee_name.strip(),
             )
+    elif request.assignee_account_id is not None and current_issue.assignee:
+        new_assignee = JiraUser(
+            account_id=request.assignee_account_id,
+            display_name=current_issue.assignee.display_name,
+            avatar_url=current_issue.assignee.avatar_url,
+        )
 
     new_story_points = (
         request.story_points if request.story_points is not None else current_issue.story_points
@@ -769,7 +805,8 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
 
     target_cat = request.status_category or StatusCategory.TODO
     target_name = request.status_name or target_cat.value.replace("_", " ").title()
-    status = JiraStatus(id=target_name, name=target_name, category=target_cat)
+    target_id = request.status_id or target_name
+    status = JiraStatus(id=target_id, name=target_name, category=target_cat)
 
     assignee = None
     if request.assignee_name and request.assignee_name.strip():
@@ -777,6 +814,30 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
             account_id=request.assignee_account_id or "usr-1",
             display_name=request.assignee_name.strip(),
         )
+
+    # Compute highest rank so new task appears at the top of the list
+    new_rank = request.rank or request.target_rank
+    if not new_rank:
+        existing = storage.get_issues()
+        if not existing and _cached_board_response:
+            existing = _cached_board_response.issues
+        if not existing and isinstance(jira_client, FakeJiraClient):
+            existing = list(jira_client._issues.values())
+        ranked = [i.rank for i in existing if i.rank]
+        if ranked:
+            ranked.sort()
+            base_r = ranked[0]
+            match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
+            if match:
+                num = int(match.group(2))
+                if num > 0:
+                    new_rank = f"{match.group(1)}{num - 1:05d}{match.group(3)}"
+                else:
+                    new_rank = f"{base_r[:-1]}0:"
+            else:
+                new_rank = "0|00000:"
+        else:
+            new_rank = "0|i00001:"
 
     jira_base_url = (settings.jira_url or "https://jira.example.com").strip().rstrip("/")
     created_issue = JiraIssue(
@@ -792,6 +853,7 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
         due_date=request.due_date,
         start_date=request.start_date,
         recreate_after=request.recreate_after,
+        rank=new_rank,
         url=f"{jira_base_url}/browse/{temp_key}",
         created_at=now_iso,
         updated_at=now_iso,
@@ -806,14 +868,33 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
         _cached_board_response.issues = [created_issue] + [
             x for x in _cached_board_response.issues if x.key != created_issue.key
         ]
+        _cached_board_response.issues.sort(
+            key=lambda x: (
+                0 if (x.rank is not None and x.rank != "") else 1,
+                x.rank or "",
+                -(
+                    int(time.mktime(time.strptime(x.updated_at, "%Y-%m-%dT%H:%M:%SZ")))
+                    if x.updated_at and "T" in x.updated_at
+                    else 0
+                ),
+            )
+        )
 
     # 2. Enqueue outbox action
     mutation_id = str(uuid.uuid4())
+    payload = request.model_dump(exclude_unset=True)
+    payload["rank"] = new_rank
+    payload["target_rank"] = new_rank
+    payload["status_id"] = target_id
+    if assignee:
+        payload["assignee_name"] = assignee.display_name
+        payload["assignee_account_id"] = assignee.account_id
+
     storage.enqueue_outbox(
         client_mutation_id=mutation_id,
         action_type="create_issue",
         issue_key=temp_key,
-        payload=request.model_dump(exclude_unset=True),
+        payload=payload,
         base_updated_at=None,
     )
 

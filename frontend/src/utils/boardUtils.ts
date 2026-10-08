@@ -141,6 +141,17 @@ export function isBacklogIssue(issue: JiraIssue, columns?: BoardColumn[]): boole
         issue.status?.id &&
         backlogCol.status_ids.includes(String(issue.status.id))
       ) {
+        // If an active (non-backlog) column also matches this status name or ID,
+        // prefer the active board column
+        const activeMatch = columns.find(
+          (c) =>
+            c.name.trim().toLowerCase() !== 'backlog' &&
+            ((c.status_ids && issue.status?.id && c.status_ids.includes(String(issue.status.id))) ||
+              (statusName && c.name.trim().toLowerCase() === statusName))
+        );
+        if (activeMatch && statusName && statusName !== 'backlog') {
+          return false;
+        }
         return true;
       }
     }

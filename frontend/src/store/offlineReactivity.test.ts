@@ -109,4 +109,170 @@ describe('Cross-View & Filter Offline Reactivity', () => {
     expect(useBoardStore.getState().syncStatus).toBe('offline');
     expect(useBoardStore.getState().pendingSyncCount).toBe(1);
   });
+
+  it('creating an issue while offline preserves all fields, ranks highest, and syncs upon reconnection', async () => {
+    // 1. Initial issues on board with existing ranks
+    const existingIssue1: JiraIssue = {
+      id: '101',
+      key: 'PROJ-101',
+      summary: 'Existing Card 1',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      rank: '0|i00005:',
+      issue_type: 'task',
+      priority: 'medium',
+    };
+    const existingIssue2: JiraIssue = {
+      id: '102',
+      key: 'PROJ-102',
+      summary: 'Existing Card 2',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      rank: '0|i00008:',
+      issue_type: 'task',
+      priority: 'low',
+    };
+    useBoardStore.setState({
+      issues: [existingIssue1, existingIssue2],
+      columns: testColumns,
+      offlineOutbox: [],
+      syncStatus: 'synced',
+      pendingSyncCount: 0,
+    });
+
+    // 2. Offline network
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    // 3. Create issue with specific status "To Do", assignee, and story points
+    const created = await useBoardStore.getState().createIssueOptimistic({
+      summary: 'Urgent Offline Created Task',
+      issue_type: 'task',
+      priority: 'highest',
+      status_category: 'todo',
+      status_name: 'To Do',
+      status_id: 'col-todo',
+      assignee_name: 'Alex Lead',
+      assignee_account_id: 'usr-alex',
+      story_points: 5,
+    });
+
+    expect(created).not.toBeNull();
+    const storeIssues = useBoardStore.getState().issues;
+    expect(storeIssues.length).toBe(3);
+
+    // Newly created issue must be at top (index 0) with rank < '0|i00005:'
+    expect(storeIssues[0].key).toBe(created!.key);
+    expect(storeIssues[0].summary).toBe('Urgent Offline Created Task');
+    expect(storeIssues[0].status.id).toBe('col-todo');
+    expect(storeIssues[0].status.name).toBe('To Do');
+    expect(storeIssues[0].status.category).toBe('todo');
+    expect(storeIssues[0].assignee?.displayName).toBe('Alex Lead');
+    expect(storeIssues[0].assignee?.accountId).toBe('usr-alex');
+    expect(storeIssues[0].rank! < '0|i00005:').toBe(true);
+
+    // Verify it is not classified as backlog
+    const split = splitIssuesByBacklog(storeIssues, testColumns);
+    expect(split.boardIssues.some((i) => i.key === created!.key)).toBe(true);
+    expect(split.backlogIssues.some((i) => i.key === created!.key)).toBe(false);
+
+    // Verify outbox contains create_issue action with complete payload
+    const outbox = useBoardStore.getState().offlineOutbox;
+    expect(outbox.length).toBe(1);
+    expect(outbox[0].action).toBe('create_issue');
+    expect(outbox[0].issueKey).toBe(created!.key);
+    expect(outbox[0].payload).toMatchObject({
+      summary: 'Urgent Offline Created Task',
+      status_id: 'col-todo',
+      status_name: 'To Do',
+      status_category: 'todo',
+      assignee_name: 'Alex Lead',
+      assignee_account_id: 'usr-alex',
+    });
+    expect(outbox[0].payload.rank).toBe(storeIssues[0].rank);
+
+    // 4. Simulate reconnection & flush outbox
+    const syncedRemoteIssue: JiraIssue = {
+      id: '205',
+      key: 'PROJ-205',
+      summary: 'Urgent Offline Created Task',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      assignee: { accountId: 'usr-alex', displayName: 'Alex Lead' },
+      priority: 'highest',
+      issue_type: 'task',
+      rank: storeIssues[0].rank,
+      story_points: 5,
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => syncedRemoteIssue,
+    } as Response);
+
+    await useBoardStore.getState().flushOfflineQueue();
+
+    // Outbox should be drained
+    expect(useBoardStore.getState().offlineOutbox.length).toBe(0);
+    expect(useBoardStore.getState().syncStatus).toBe('synced');
+
+    // Temp issue key remapped to real PROJ-205
+    const finalIssues = useBoardStore.getState().issues;
+    expect(finalIssues.some((i) => i.key === created!.key)).toBe(false);
+    expect(finalIssues.some((i) => i.key === 'PROJ-205')).toBe(true);
+    expect(finalIssues[0].key).toBe('PROJ-205');
+  });
+
+  it('updating and unassigning assignee while offline is queued in outbox and synced', async () => {
+    // 1. Setup issue on board
+    const initialIssue: JiraIssue = {
+      id: '101',
+      key: 'PROJ-101',
+      summary: 'Task to edit assignee',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      assignee: { accountId: 'usr-jacek', displayName: 'Jacek Marchwicki' },
+      rank: '0|i00001:',
+      issue_type: 'task',
+      priority: 'medium',
+    };
+    useBoardStore.setState({
+      issues: [initialIssue],
+      columns: testColumns,
+      offlineOutbox: [],
+      syncStatus: 'synced',
+    });
+
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    // 2. Change assignee to Alex Lead while offline
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-101', {
+      assignee_name: 'Alex Lead',
+      assignee_account_id: 'usr-alex',
+    });
+
+    let currentIssues = useBoardStore.getState().issues;
+    expect(currentIssues[0].assignee?.displayName).toBe('Alex Lead');
+    expect(currentIssues[0].assignee?.accountId).toBe('usr-alex');
+
+    let outbox = useBoardStore.getState().offlineOutbox;
+    expect(outbox.length).toBe(1);
+    expect(outbox[0].action).toBe('update_issue');
+    expect(outbox[0].payload).toEqual({
+      assignee_name: 'Alex Lead',
+      assignee_account_id: 'usr-alex',
+    });
+
+    // 3. Unassign assignee while offline
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-101', {
+      assignee_name: '',
+      assignee_account_id: null,
+    });
+
+    currentIssues = useBoardStore.getState().issues;
+    expect(currentIssues[0].assignee).toBeNull();
+
+    outbox = useBoardStore.getState().offlineOutbox;
+    expect(outbox.length).toBe(2);
+    expect(outbox[1].action).toBe('update_issue');
+    expect(outbox[1].payload).toEqual({
+      assignee_name: '',
+      assignee_account_id: null,
+    });
+  });
 });

@@ -11,6 +11,7 @@ describe('MobileInstallBanner component', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    localStorage.clear();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -57,7 +58,7 @@ describe('MobileInstallBanner component', () => {
     expect(handleInstall).toHaveBeenCalledTimes(1);
   });
 
-  it('dismisses banner and sets sessionStorage when dismiss button is clicked', async () => {
+  it('dismisses banner and sets localStorage when dismiss button is clicked', async () => {
     await act(async () => {
       root.render(<MobileInstallBanner canInstall={true} onInstall={vi.fn()} />);
     });
@@ -70,11 +71,11 @@ describe('MobileInstallBanner component', () => {
     });
 
     expect(container.innerHTML).toBe('');
-    expect(sessionStorage.getItem('jira_pwa_banner_dismissed')).toBe('1');
+    expect(localStorage.getItem('jira_pwa_banner_dismissed')).toBe('1');
   });
 
-  it('remains hidden on mount if previously dismissed in sessionStorage', async () => {
-    sessionStorage.setItem('jira_pwa_banner_dismissed', '1');
+  it('remains hidden on mount if previously dismissed in localStorage', async () => {
+    localStorage.setItem('jira_pwa_banner_dismissed', '1');
 
     await act(async () => {
       root.render(<MobileInstallBanner canInstall={true} onInstall={vi.fn()} />);

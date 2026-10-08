@@ -16,7 +16,8 @@ export function MobileInstallBanner({
 
   useEffect(() => {
     try {
-      const dismissed = sessionStorage.getItem(STORAGE_KEY);
+      const dismissed =
+        localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
       if (!dismissed) {
         setIsDismissed(false);
       }
@@ -32,6 +33,7 @@ export function MobileInstallBanner({
   const handleDismiss = () => {
     setIsDismissed(true);
     try {
+      localStorage.setItem(STORAGE_KEY, '1');
       sessionStorage.setItem(STORAGE_KEY, '1');
     } catch {
       // ignore storage error

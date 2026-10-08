@@ -246,7 +246,13 @@ class JiraCloudClient(JiraClientProtocol):
             body = response.json()
             error_messages = body.get("errorMessages", [])
             errors = body.get("errors", {})
-            msg = "; ".join(error_messages) if error_messages else str(errors or response.text)
+            gateway_msg = body.get("message")
+            if error_messages:
+                msg = "; ".join(error_messages)
+            elif gateway_msg:
+                msg = str(gateway_msg)
+            else:
+                msg = str(errors or response.text)
         except Exception:
             msg = response.text or f"HTTP {status} from Jira"
 
@@ -733,6 +739,31 @@ class JiraCloudClient(JiraClientProtocol):
                 "/rest/agile/1.0/issue/rank",
                 json=rank_payload,
             )
+            # If 401 with "scope does not match" on gateway (api.atlassian.com),
+            # attempt direct site URL fallback if available (Basic Auth API tokens)
+            if (
+                res.status_code == 401
+                and "scope does not match" in res.text.lower()
+                and self.jira_browse_url
+                and "api.atlassian.com" not in self.jira_browse_url
+            ):
+                direct_url = f"{self.jira_browse_url.rstrip('/')}/rest/agile/1.0/issue/rank"
+                logger.info(
+                    "Gateway returned 401 scope mismatch for %s; retrying directly on %s",
+                    issue_key,
+                    direct_url,
+                )
+                try:
+                    direct_res = await self._client.request(
+                        "PUT",
+                        direct_url,
+                        json=rank_payload,
+                    )
+                    if direct_res.is_success or direct_res.status_code != 401:
+                        res = direct_res
+                except Exception as direct_exc:
+                    logger.debug("Direct rank fallback to %s failed: %s", direct_url, direct_exc)
+
             self._handle_response_errors(res)
         except Exception as exc:
             logger.warning("Failed to call Jira Agile rank API for issue %s: %s", issue_key, exc)

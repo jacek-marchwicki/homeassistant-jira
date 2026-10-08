@@ -103,12 +103,24 @@ class JiraSyncWorker:
                 issue_key,
                 exc,
             )
-            self.storage.update_outbox_status(
-                outbox_id,
-                "pending",
-                error_message=str(exc),
-                increment_retry=True,
-            )
+            is_unrecoverable = False
+            if isinstance(exc, JiraAPIError):
+                if exc.status_code in (401, 403) and "scope does not match" in str(exc).lower():
+                    is_unrecoverable = True
+
+            if is_unrecoverable:
+                self.storage.update_outbox_status(
+                    outbox_id,
+                    "failed",
+                    error_message=f"Missing Jira OAuth scope ('write:issue:jira-software'): {exc}",
+                )
+            else:
+                self.storage.update_outbox_status(
+                    outbox_id,
+                    "pending",
+                    error_message=str(exc),
+                    increment_retry=True,
+                )
             return False
 
     async def _process_create(self, outbox_id: int, temp_key: str, payload: dict[str, Any]) -> None:

@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from jira_dashboard.adapters import FakeJiraClient
+from jira_dashboard.adapters.jira_client import JiraAPIError
 from jira_dashboard.adapters.storage import SQLiteStorage
 from jira_dashboard.adapters.sync_worker import JiraSyncWorker
 from jira_dashboard.domain import (
@@ -295,5 +296,40 @@ def test_sync_worker_processes_rank_issue() -> None:
         ranked = await fake_jira.get_issue("PROJ-101")
         assert ranked is not None
         assert any(e["event"] in ("issue_ranked", "issue_updated") for e in broadcast_events)
+
+    asyncio.run(_test())
+
+
+def test_sync_worker_rank_issue_permanent_scope_error() -> None:
+    """Verify that permanent 401 scope errors are marked as failed, not retried indefinitely."""
+
+    async def _test() -> None:
+        storage = SQLiteStorage(":memory:")
+        storage.init_db()
+        fake_jira = FakeJiraClient()
+        fake_jira.reset()
+
+        class ScopeFailingJira(FakeJiraClient):
+            async def rank_issue(self, *args: Any, **kwargs: Any) -> Any:
+                raise JiraAPIError("Jira Unauthorized (401): scope does not match", status_code=401)
+
+        failing_jira = ScopeFailingJira()
+        worker = JiraSyncWorker(storage, failing_jira)
+
+        outbox_id = storage.enqueue_outbox(
+            client_mutation_id="mut-scope-err",
+            action_type="rank_issue",
+            issue_key="PROJ-101",
+            payload={"rank_after_key": "PROJ-98"},
+        )
+
+        processed = await worker.process_next_pending()
+        assert processed is False
+
+        item = storage.get_outbox_item(outbox_id)
+        assert item is not None
+        # Must be marked failed, not pending
+        assert item["status"] == "failed"
+        assert "write:issue:jira-software" in item["error_message"]
 
     asyncio.run(_test())

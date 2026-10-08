@@ -794,3 +794,72 @@ def test_jira_cloud_client_rank_issue() -> None:
         await client.close()
 
     asyncio.run(_test())
+
+
+def test_jira_cloud_client_rank_issue_fallback_on_gateway_scope_mismatch() -> None:
+    """Verify rank_issue retries on direct browse URL when gateway returns 401 scope mismatch."""
+
+    async def _test() -> None:
+        captured_requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured_requests.append(request)
+            url_str = str(request.url)
+            # 1. Gateway request returns 401 scope mismatch
+            if "api.atlassian.com" in url_str and "/rest/agile/1.0/issue/rank" in url_str:
+                return httpx.Response(
+                    401, json={"code": 401, "message": "Unauthorized; scope does not match"}
+                )
+            # 2. Direct tenant site fallback succeeds
+            if "example.atlassian.net" in url_str and "/rest/agile/1.0/issue/rank" in url_str:
+                return httpx.Response(204)
+            # Issue detail lookup
+            if "/rest/api/3/issue/PROJ-101" in url_str:
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "101",
+                        "key": "PROJ-101",
+                        "fields": {
+                            "summary": "Task 101",
+                            "issuetype": {"name": "Task"},
+                            "priority": {"name": "High"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                            "customfield_10019": "0|i00005:",
+                            "created": "2026-10-01T09:00:00Z",
+                            "updated": "2026-10-04T22:30:00Z",
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        settings = JiraDashboardSettings(
+            jira_url="https://example.atlassian.net",
+            jira_email="user@example.com",
+            jira_api_token="ATATT3xFtest",
+            jira_board_id="PROJ",
+        )
+        transport = httpx.MockTransport(handler)
+        # Mock client whose base_url is the gateway URL
+        http_client = httpx.AsyncClient(
+            transport=transport, base_url="https://api.atlassian.com/ex/jira/cloud-123"
+        )
+        client = JiraCloudClient(settings, http_client=http_client)
+        client.jira_browse_url = "https://example.atlassian.net"
+
+        updated = await client.rank_issue("PROJ-101", rank_before_key="PROJ-102")
+        assert updated.key == "PROJ-101"
+        assert updated.rank == "0|i00005:"
+
+        # Verify that both the gateway request and direct site request occurred
+        urls = [str(r.url) for r in captured_requests]
+        assert any("api.atlassian.com" in u and "/rest/agile/1.0/issue/rank" in u for u in urls)
+        assert any("example.atlassian.net" in u and "/rest/agile/1.0/issue/rank" in u for u in urls)
+
+        await client.close()
+
+    asyncio.run(_test())

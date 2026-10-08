@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from datetime import datetime, timezone
 from enum import Enum
 
 from pydantic import BaseModel
@@ -108,3 +110,51 @@ class JiraIssue(BaseModel):
     def is_blocked(self) -> bool:
         """Return True if issue is marked as BLOCKED."""
         return self.status.category == StatusCategory.BLOCKED
+
+    def updated_at_epoch(self) -> float:
+        """Return updated_at parsed into UTC epoch timestamp seconds."""
+        return parse_iso_timestamp(self.updated_at)
+
+
+def parse_iso_timestamp(ts: str | None) -> float:
+    """Parse an ISO 8601 timestamp string into epoch seconds (float).
+
+    Robustly handles:
+    - Jira Cloud numeric timezone offsets (+0200, +02:00, -0500, -05:00)
+    - Standard UTC suffixes (Z or z)
+    - Fractional seconds (.045)
+    - Naive or date-only strings (assumed UTC)
+    - Missing, empty, or unparseable values (returns 0.0)
+    """
+    if not ts or not isinstance(ts, str):
+        return 0.0
+    s = ts.strip()
+    if not s:
+        return 0.0
+    if s.endswith("Z") or s.endswith("z"):
+        s = s[:-1] + "+00:00"
+    else:
+        # Match trailing +HHMM or -HHMM without colon and format as +HH:MM for Python 3.9
+        match = re.search(r"([+-])(\d{2})(\d{2})$", s)
+        if match:
+            s = s[: match.start()] + match.group(1) + match.group(2) + ":" + match.group(3)
+    try:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        return 0.0
+
+
+def issue_sort_key(issue: JiraIssue) -> tuple[int, str, float, str]:
+    """Sort key for deterministic issue ordering across board views.
+
+    Ranked issues come first (sorted ascending by LexoRank).
+    Unranked issues come after, sorted descending by updated_at, then ascending by key.
+    """
+    has_rank = 0 if (issue.rank is not None and issue.rank != "") else 1
+    rank_str = issue.rank or ""
+    # Negative epoch for descending updated_at order
+    updated_epoch = -parse_iso_timestamp(issue.updated_at)
+    return (has_rank, rank_str, updated_epoch, issue.key or "")

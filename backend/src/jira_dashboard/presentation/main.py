@@ -40,6 +40,7 @@ from jira_dashboard.domain import (
     JiraUser,
     Priority,
     StatusCategory,
+    issue_sort_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -637,13 +638,7 @@ async def rank_issue(key: str, request: RankIssueRequest) -> JiraIssue:
             updated_issue if x.key == updated_issue.key else x
             for x in _cached_board_response.issues
         ]
-        updated_list.sort(
-            key=lambda x: (
-                0 if (x.rank is not None and x.rank != "") else 1,
-                x.rank or "",
-                x.updated_at or "",
-            )
-        )
+        updated_list.sort(key=issue_sort_key)
         _cached_board_response.issues = updated_list
 
     # 2. Enqueue outbox action
@@ -868,17 +863,7 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
         _cached_board_response.issues = [created_issue] + [
             x for x in _cached_board_response.issues if x.key != created_issue.key
         ]
-        _cached_board_response.issues.sort(
-            key=lambda x: (
-                0 if (x.rank is not None and x.rank != "") else 1,
-                x.rank or "",
-                -(
-                    int(time.mktime(time.strptime(x.updated_at, "%Y-%m-%dT%H:%M:%SZ")))
-                    if x.updated_at and "T" in x.updated_at
-                    else 0
-                ),
-            )
-        )
+        _cached_board_response.issues.sort(key=issue_sort_key)
 
     # 2. Enqueue outbox action
     mutation_id = str(uuid.uuid4())

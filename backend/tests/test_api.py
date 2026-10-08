@@ -108,6 +108,37 @@ class TestPresentationApi(unittest.TestCase):
         self.assertEqual(data["story_points"], 3.0)
         self.assertEqual(data["recreate_after"], "1 month")
 
+    def test_create_issue_when_board_has_jira_cloud_timezone_offset_timestamp(self) -> None:
+        """Verify POST /api/issues does not crash when board contains Jira Cloud timestamps
+        with numeric timezone offsets (e.g. 2026-10-08T16:25:43.045+0200)."""
+        from jira_dashboard.domain import IssueType, JiraIssue, JiraStatus, Priority, StatusCategory
+        from jira_dashboard.presentation import main as main_module
+
+        # Ensure board is loaded into cache
+        self.client.get("/api/board")
+        self.assertIsNotNone(main_module._cached_board_response)
+
+        jira_cloud_issue = JiraIssue(
+            id="105",
+            key="PROJ-105",
+            summary="Issue with Jira Cloud ISO timestamp",
+            issue_type=IssueType.TASK,
+            priority=Priority.MEDIUM,
+            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            updated_at="2026-10-08T16:25:43.045+0200",
+        )
+        main_module._cached_board_response.issues.append(jira_cloud_issue)
+
+        response = self.client.post(
+            "/api/issues",
+            json={
+                "summary": "Ticket created after Jira Cloud sync",
+                "issue_type": "task",
+                "priority": "medium",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+
     def test_comments_crud_lifecycle(self) -> None:
         """Verify viewing, adding, updating, and deleting comments on an issue."""
         # 1. View comments

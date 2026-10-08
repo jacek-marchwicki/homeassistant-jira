@@ -18,6 +18,7 @@ from jira_dashboard.domain import (
     IssueType,
     Priority,
     StatusCategory,
+    parse_iso_timestamp,
 )
 
 logger = logging.getLogger(__name__)
@@ -196,7 +197,11 @@ class JiraSyncWorker:
             return
 
         # Conflict check: remote updated_at is newer than base_updated_at
-        if base_updated_at and remote.updated_at and remote.updated_at > base_updated_at:
+        if (
+            base_updated_at
+            and remote.updated_at
+            and parse_iso_timestamp(remote.updated_at) > parse_iso_timestamp(base_updated_at)
+        ):
             logger.info(
                 "Conflict detected on %s: remote (%s) > base (%s). Remote wins.",
                 issue_key,
@@ -259,7 +264,11 @@ class JiraSyncWorker:
             return
 
         # Conflict check: remote updated_at is newer than base_updated_at
-        if base_updated_at and remote.updated_at and remote.updated_at > base_updated_at:
+        if (
+            base_updated_at
+            and remote.updated_at
+            and parse_iso_timestamp(remote.updated_at) > parse_iso_timestamp(base_updated_at)
+        ):
             logger.info(
                 "Conflict detected on %s: remote (%s) > base (%s). Remote wins.",
                 issue_key,

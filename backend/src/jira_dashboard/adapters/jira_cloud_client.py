@@ -7,6 +7,7 @@ and webhook parsing.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -173,6 +174,20 @@ class JiraCloudClient(JiraClientProtocol):
             logger.debug("Failed to discover Atlassian cloudId from %s: %s", site_url, exc)
         return None
 
+    @staticmethod
+    def _format_request_error(exc: Exception) -> str:
+        """Format an httpx exception into a descriptive error string."""
+        err_msg = str(exc).strip()
+        if err_msg:
+            return f"{type(exc).__name__}: {err_msg}"
+        return type(exc).__name__
+
+    def _get_gateway_lock(self) -> asyncio.Lock:
+        """Lazily initialize asyncio.Lock bound to active event loop."""
+        if getattr(self, "_gateway_lock", None) is None:
+            self._gateway_lock = asyncio.Lock()
+        return self._gateway_lock
+
     async def _send_request(self, method: str, url: str, **kwargs) -> httpx.Response:
         """Execute an HTTP request, automatically resolving Atlassian Cloud Gateway if needed."""
         # 1. Proactively resolve Atlassian Cloud Gateway if scoped token (ATATT...)
@@ -186,25 +201,28 @@ class JiraCloudClient(JiraClientProtocol):
                 self.settings.jira_api_token and self.settings.jira_api_token.startswith("ATATT")
             )
         ):
-            self._gateway_resolved = True
-            cloud_id = await self._discover_cloud_id(str(self._client.base_url))
-            if cloud_id:
-                gateway_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
-                logger.info(
-                    "Detected Atlassian scoped token; resolved Cloud ID %s; base URL: %s",
-                    cloud_id,
-                    gateway_url,
-                )
-                self.base_url = gateway_url
-                headers = dict(self._client.headers)
-                auth = self._client.auth
-                await self._client.aclose()
-                self._client = httpx.AsyncClient(
-                    base_url=gateway_url,
-                    headers=headers,
-                    auth=auth,
-                    timeout=15.0,
-                )
+            async with self._get_gateway_lock():
+                if not getattr(self, "_gateway_resolved", False):
+                    cloud_id = await self._discover_cloud_id(str(self._client.base_url))
+                    if cloud_id:
+                        gateway_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
+                        logger.info(
+                            "Detected Atlassian scoped token; resolved Cloud ID %s; base URL: %s",
+                            cloud_id,
+                            gateway_url,
+                        )
+                        self.base_url = gateway_url
+                        headers = dict(self._client.headers)
+                        auth = self._client.auth
+                        old_client = self._client
+                        self._client = httpx.AsyncClient(
+                            base_url=gateway_url,
+                            headers=headers,
+                            auth=auth,
+                            timeout=15.0,
+                        )
+                        asyncio.create_task(old_client.aclose())
+                    self._gateway_resolved = True
 
         res = await self._client.request(method, url, **kwargs)
 
@@ -215,25 +233,28 @@ class JiraCloudClient(JiraClientProtocol):
             and ".atlassian.net" in str(self._client.base_url)
             and "api.atlassian.com" not in str(self._client.base_url)
         ):
-            cloud_id = await self._discover_cloud_id(str(self._client.base_url))
-            if cloud_id:
-                gateway_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
-                logger.info(
-                    "Resolved Atlassian Cloud ID %s on 401; switching base URL to gateway %s",
-                    cloud_id,
-                    gateway_url,
-                )
-                self.base_url = gateway_url
-                headers = dict(self._client.headers)
-                auth = self._client.auth
-                await self._client.aclose()
-                self._client = httpx.AsyncClient(
-                    base_url=gateway_url,
-                    headers=headers,
-                    auth=auth,
-                    timeout=15.0,
-                )
-                res = await self._client.request(method, url, **kwargs)
+            async with self._get_gateway_lock():
+                if ".atlassian.net" in str(self._client.base_url):
+                    cloud_id = await self._discover_cloud_id(str(self._client.base_url))
+                    if cloud_id:
+                        gateway_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
+                        logger.info(
+                            "Resolved Atlassian Cloud ID %s on 401; switching to gateway %s",
+                            cloud_id,
+                            gateway_url,
+                        )
+                        self.base_url = gateway_url
+                        headers = dict(self._client.headers)
+                        auth = self._client.auth
+                        old_client = self._client
+                        self._client = httpx.AsyncClient(
+                            base_url=gateway_url,
+                            headers=headers,
+                            auth=auth,
+                            timeout=15.0,
+                        )
+                        asyncio.create_task(old_client.aclose())
+                        res = await self._client.request(method, url, **kwargs)
         return res
 
     def _handle_response_errors(self, response: httpx.Response) -> None:
@@ -555,7 +576,9 @@ class JiraCloudClient(JiraClientProtocol):
 
             return [self._parse_issue(issue) for issue in issues_raw]
         except httpx.RequestError as exc:
-            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
 
     async def get_board_columns(
         self, board_id: str, issues: list[JiraIssue] | None = None
@@ -633,7 +656,9 @@ class JiraCloudClient(JiraClientProtocol):
             self._handle_response_errors(res)
             return self._parse_issue(res.json())
         except httpx.RequestError as exc:
-            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
 
     async def transition_issue(
         self,
@@ -715,7 +740,9 @@ class JiraCloudClient(JiraClientProtocol):
                 )
             return updated
         except httpx.RequestError as exc:
-            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
 
     async def rank_issue(
         self,
@@ -829,7 +856,9 @@ class JiraCloudClient(JiraClientProtocol):
                 )
                 self._handle_response_errors(res)
             except httpx.RequestError as exc:
-                raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+                raise JiraAPIError(
+                    f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+                ) from exc
 
         if status_name or status_category:
             await self.transition_issue(
@@ -899,7 +928,9 @@ class JiraCloudClient(JiraClientProtocol):
             if not issue_key:
                 raise JiraAPIError("Jira response missing issue key", status_code=500)
         except httpx.RequestError as exc:
-            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
 
         if status_name or (status_category and status_category != StatusCategory.TODO):
             try:
@@ -1004,7 +1035,9 @@ class JiraCloudClient(JiraClientProtocol):
                     break
             return [self._parse_comment(c) for c in comments_raw]
         except httpx.RequestError as exc:
-            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
 
     async def add_comment(
         self, issue_key: str, body: str, author_name: str | None = None
@@ -1029,7 +1062,9 @@ class JiraCloudClient(JiraClientProtocol):
             self._handle_response_errors(res)
             return self._parse_comment(res.json())
         except httpx.RequestError as exc:
-            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
 
     async def update_comment(self, issue_key: str, comment_id: str, body: str) -> JiraComment:
         """Update an existing comment via Jira Cloud REST API."""
@@ -1052,7 +1087,9 @@ class JiraCloudClient(JiraClientProtocol):
             self._handle_response_errors(res)
             return self._parse_comment(res.json())
         except httpx.RequestError as exc:
-            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
 
     async def delete_comment(self, issue_key: str, comment_id: str) -> bool:
         """Delete an existing comment via Jira Cloud REST API."""
@@ -1065,4 +1102,6 @@ class JiraCloudClient(JiraClientProtocol):
             self._handle_response_errors(res)
             return True
         except httpx.RequestError as exc:
-            raise JiraAPIError(f"Failed to connect to Jira: {exc}", status_code=503) from exc
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc

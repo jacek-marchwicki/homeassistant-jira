@@ -863,3 +863,29 @@ def test_jira_cloud_client_rank_issue_fallback_on_gateway_scope_mismatch() -> No
         await client.close()
 
     asyncio.run(_test())
+
+
+def test_format_request_error() -> None:
+    """Verify _format_request_error formats exceptions gracefully."""
+    empty_err = httpx.ConnectError("")
+    assert JiraCloudClient._format_request_error(empty_err) == "ConnectError"
+
+    msg_err = httpx.ConnectError("Connection refused")
+    assert JiraCloudClient._format_request_error(msg_err) == "ConnectError: Connection refused"
+
+
+def test_request_error_empty_string_does_not_produce_empty_message() -> None:
+    """Verify httpx.RequestError with empty str(exc) does not produce empty error message."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("")
+
+        client = create_mock_client(handler)
+        with pytest.raises(JiraAPIError) as exc_info:
+            await client.get_board_issues("board-123")
+        assert exc_info.value.status_code == 503
+        assert str(exc_info.value) == "Failed to connect to Jira: ConnectError"
+        await client.close()
+
+    asyncio.run(_test())

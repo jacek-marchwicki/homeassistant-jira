@@ -36,29 +36,39 @@ export function AssigneeSelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { issues, currentUser } = useBoardStore();
+  const { issues, currentUser, availableUsers } = useBoardStore();
 
-  // Aggregate suggested assignees from store issues and current user
+  // Aggregate suggested assignees from available users, store issues, and current user
   const suggestions: AssigneeOption[] = useMemo(() => {
     const map = new Map<string, AssigneeOption>();
 
-    if (currentUser && currentUser.trim()) {
-      map.set(currentUser.trim().toLowerCase(), {
-        displayName: currentUser.trim(),
-        accountId: 'current-user',
-      });
+    // 1. From backend availableUsers (has real Jira accountId)
+    if (availableUsers) {
+      for (const u of availableUsers) {
+        const name = u.displayName || u.display_name;
+        if (name && name.trim()) {
+          const key = name.trim().toLowerCase();
+          map.set(key, {
+            displayName: name.trim(),
+            accountId: u.accountId || u.account_id,
+            avatarUrl: u.avatarUrl || u.avatar_url,
+          });
+        }
+      }
     }
 
-    // Extract unique assignees from current board issues
+    // 2. Extract unique assignees from current board issues
     for (const issue of issues) {
       if (issue.assignee) {
         const name = issue.assignee.displayName || issue.assignee.display_name;
         if (name && name.trim()) {
           const key = name.trim().toLowerCase();
-          if (!map.has(key)) {
+          const existing = map.get(key);
+          const realAccId = issue.assignee.accountId || issue.assignee.account_id;
+          if (!existing || (!existing.accountId && realAccId)) {
             map.set(key, {
               displayName: name.trim(),
-              accountId: issue.assignee.accountId,
+              accountId: realAccId,
               avatarUrl: issue.assignee.avatarUrl || issue.assignee.avatar_url,
             });
           }
@@ -66,7 +76,18 @@ export function AssigneeSelect({
       }
     }
 
-    // Include custom options if provided
+    // 3. Current user from settings (if not already found, add without dummy 'current-user')
+    if (currentUser && currentUser.trim()) {
+      const key = currentUser.trim().toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          displayName: currentUser.trim(),
+          accountId: undefined,
+        });
+      }
+    }
+
+    // 4. Include custom options if provided
     if (options) {
       for (const opt of options) {
         if (opt.displayName && opt.displayName.trim()) {
@@ -76,7 +97,7 @@ export function AssigneeSelect({
     }
 
     return Array.from(map.values());
-  }, [issues, options, currentUser]);
+  }, [issues, options, currentUser, availableUsers]);
 
   // Filtered suggestions based on search query
   const filteredSuggestions = useMemo(() => {

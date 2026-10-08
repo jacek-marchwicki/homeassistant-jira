@@ -139,6 +139,15 @@ class TestPresentationApi(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 201)
 
+    def test_get_users_endpoint(self) -> None:
+        """Verify GET /api/users returns list of assignable and known users."""
+        response = self.client.get("/api/users")
+        self.assertEqual(response.status_code, 200)
+        users = response.json()
+        self.assertIsInstance(users, list)
+        self.assertGreater(len(users), 0)
+        self.assertTrue(any(u["display_name"] == "Jacek Marchwicki" for u in users))
+
     def test_comments_crud_lifecycle(self) -> None:
         """Verify viewing, adding, updating, and deleting comments on an issue."""
         # 1. View comments

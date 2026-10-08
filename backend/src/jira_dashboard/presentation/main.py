@@ -498,6 +498,33 @@ async def get_board(refresh: bool = Query(default=False)) -> BoardResponse:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
+@app.get("/api/users", response_model=list[JiraUser])
+async def get_users() -> list[JiraUser]:
+    """Fetch assignable and known Jira users."""
+    users_map: dict[str, JiraUser] = {}
+    known_issues = storage.get_issues()
+    if not known_issues and _cached_board_response:
+        known_issues = _cached_board_response.issues
+    for issue in known_issues:
+        if issue.assignee and issue.assignee.account_id:
+            users_map[issue.assignee.account_id] = issue.assignee
+
+    try:
+        proj = None
+        if _cached_board_response and _cached_board_response.issues:
+            first_key = _cached_board_response.issues[0].key
+            if "-" in first_key:
+                proj = first_key.split("-")[0]
+        client_users = await jira_client.get_assignable_users(project_key=proj)
+        for u in client_users:
+            if u.account_id:
+                users_map[u.account_id] = u
+    except Exception as exc:
+        logger.debug("Failed fetching client users: %s", exc)
+
+    return list(users_map.values())
+
+
 @app.post("/api/issues/{key}/transition", response_model=JiraIssue)
 async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
     """Transition an issue locally immediately, enqueue outbox sync to Jira, and broadcast delta."""
@@ -704,12 +731,29 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
     if request.assignee_name is not None:
         if request.assignee_name.strip() == "":
             new_assignee = None
+            payload["assignee_name"] = ""
+            payload["assignee_account_id"] = None
         else:
+            acc_id = request.assignee_account_id
+            if not acc_id:
+                clean_name = request.assignee_name.strip().lower()
+                existing_issues = storage.get_issues()
+                if not existing_issues and _cached_board_response:
+                    existing_issues = _cached_board_response.issues
+                for ex in existing_issues:
+                    if ex.assignee and ex.assignee.display_name.strip().lower() == clean_name:
+                        if ex.assignee.account_id:
+                            acc_id = ex.assignee.account_id
+                            break
+            fallback_id = current_issue.assignee.account_id if current_issue.assignee else "usr-1"
             new_assignee = JiraUser(
-                account_id=request.assignee_account_id
-                or (current_issue.assignee.account_id if current_issue.assignee else "usr-1"),
+                account_id=acc_id or fallback_id,
                 display_name=request.assignee_name.strip(),
             )
+            if acc_id:
+                payload["assignee_account_id"] = acc_id
+            else:
+                payload.pop("assignee_account_id", None)
     elif request.assignee_account_id is not None and current_issue.assignee:
         new_assignee = JiraUser(
             account_id=request.assignee_account_id,
@@ -804,9 +848,20 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     status = JiraStatus(id=target_id, name=target_name, category=target_cat)
 
     assignee = None
+    acc_id = request.assignee_account_id
     if request.assignee_name and request.assignee_name.strip():
+        if not acc_id:
+            clean_name = request.assignee_name.strip().lower()
+            existing_issues = storage.get_issues()
+            if not existing_issues and _cached_board_response:
+                existing_issues = _cached_board_response.issues
+            for ex in existing_issues:
+                if ex.assignee and ex.assignee.display_name.strip().lower() == clean_name:
+                    if ex.assignee.account_id:
+                        acc_id = ex.assignee.account_id
+                        break
         assignee = JiraUser(
-            account_id=request.assignee_account_id or "usr-1",
+            account_id=acc_id or "usr-1",
             display_name=request.assignee_name.strip(),
         )
 
@@ -873,7 +928,10 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     payload["status_id"] = target_id
     if assignee:
         payload["assignee_name"] = assignee.display_name
-        payload["assignee_account_id"] = assignee.account_id
+        if acc_id:
+            payload["assignee_account_id"] = acc_id
+        else:
+            payload.pop("assignee_account_id", None)
 
     storage.enqueue_outbox(
         client_mutation_id=mutation_id,

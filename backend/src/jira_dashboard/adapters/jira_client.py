@@ -284,6 +284,12 @@ class JiraClientProtocol(Protocol):
         """Parse and apply an incoming Jira webhook payload."""
         ...
 
+    async def get_assignable_users(
+        self, board_id: str | None = None, project_key: str | None = None
+    ) -> list[JiraUser]:
+        """Fetch assignable Jira users for a project or board."""
+        ...
+
 
 class JiraAPIError(Exception):
     """Exception raised when Jira operations fail."""
@@ -664,6 +670,19 @@ class FakeJiraClient:
         )
         self._issues[new_key] = new_issue
         return new_issue
+
+    async def get_assignable_users(
+        self, board_id: str | None = None, project_key: str | None = None
+    ) -> list[JiraUser]:
+        """Fetch assignable users from known issues and defaults."""
+        users_map: dict[str, JiraUser] = {}
+        for issue in self._issues.values():
+            if issue.assignee:
+                users_map[issue.assignee.account_id] = issue.assignee
+        if not users_map:
+            users_map["usr-1"] = JiraUser(account_id="usr-1", display_name="Jacek Marchwicki")
+            users_map["usr-2"] = JiraUser(account_id="usr-2", display_name="Alex Lead")
+        return list(users_map.values())
 
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:
         """Parse incoming Jira Cloud webhook and update internal state.

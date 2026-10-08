@@ -213,4 +213,51 @@ describe('AssigneeSelect component', () => {
     expect(id2).toBeTruthy();
     expect(id1).not.toBe(id2);
   });
+
+  it('includes users from availableUsers and passes real accountId to onSelectOption', async () => {
+    useBoardStore.setState({
+      availableUsers: [
+        {
+          accountId: '712020:real-cloud-user',
+          displayName: 'Jacek Marchwicki',
+        },
+      ],
+    });
+
+    const handleChange = vi.fn();
+    const handleSelectOption = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <AssigneeSelect
+          value=""
+          onChange={handleChange}
+          onSelectOption={handleSelectOption}
+        />
+      );
+    });
+
+    const combobox = container.querySelector('[role="combobox"]') as HTMLDivElement;
+    await act(async () => {
+      combobox.click();
+    });
+
+    const jacekBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Jacek Marchwicki')
+    );
+    expect(jacekBtn).toBeDefined();
+
+    await act(async () => {
+      jacekBtn?.click();
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('Jacek Marchwicki');
+    expect(handleSelectOption).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: 'Jacek Marchwicki',
+        accountId: '712020:real-cloud-user',
+      })
+    );
+  });
 });
+

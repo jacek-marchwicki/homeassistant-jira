@@ -889,3 +889,202 @@ def test_request_error_empty_string_does_not_produce_empty_message() -> None:
         await client.close()
 
     asyncio.run(_test())
+
+
+def test_create_issue_resolves_placeholder_assignee_via_myself() -> None:
+    """Verify JiraCloudClient resolves 'current-user' or 'usr-1' placeholders
+    via /rest/api/3/myself."""
+
+    async def _test() -> None:
+        created_payload = None
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal created_payload
+            url = str(request.url)
+            if request.method == "GET" and "/rest/api/3/myself" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "accountId": "712020:myself-id",
+                        "displayName": "Jacek Marchwicki",
+                        "emailAddress": "jacek@example.com",
+                    },
+                )
+            if request.method == "POST" and "/rest/api/3/issue" in url:
+                import json
+
+                created_payload = json.loads(request.content)
+                return httpx.Response(201, json={"id": "3001", "key": "DEV-3001"})
+            if request.method == "GET" and "/rest/api/3/issue/DEV-3001" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "3001",
+                        "key": "DEV-3001",
+                        "fields": {
+                            "summary": "Assigned to me",
+                            "priority": {"name": "Medium"},
+                            "issuetype": {"name": "Task"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                            "assignee": {
+                                "accountId": "712020:myself-id",
+                                "displayName": "Jacek Marchwicki",
+                            },
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        created = await client.create_issue(
+            summary="Assigned to me",
+            assignee_name="Jacek Marchwicki",
+            assignee_account_id="current-user",
+            board_id="DEV",
+        )
+        assert created.key == "DEV-3001"
+        assert created_payload is not None
+        assert created_payload["fields"]["assignee"] == {"accountId": "712020:myself-id"}
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_create_issue_resolves_assignee_name_via_search() -> None:
+    """Verify JiraCloudClient searches for assignee by name when account ID is not known."""
+
+    async def _test() -> None:
+        created_payload = None
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal created_payload
+            url = str(request.url)
+            if request.method == "GET" and "/rest/api/3/myself" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "accountId": "712020:myself-id",
+                        "displayName": "Jacek Marchwicki",
+                    },
+                )
+            if request.method == "GET" and "/rest/api/3/user/assignable/search" in url:
+                return httpx.Response(
+                    200,
+                    json=[
+                        {
+                            "accountId": "sarah-cloud-id",
+                            "displayName": "Sarah Connor",
+                        }
+                    ],
+                )
+            if request.method == "POST" and "/rest/api/3/issue" in url:
+                import json
+
+                created_payload = json.loads(request.content)
+                return httpx.Response(201, json={"id": "3002", "key": "DEV-3002"})
+            if request.method == "GET" and "/rest/api/3/issue/DEV-3002" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "3002",
+                        "key": "DEV-3002",
+                        "fields": {
+                            "summary": "Assigned to Sarah",
+                            "priority": {"name": "Medium"},
+                            "issuetype": {"name": "Task"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        created = await client.create_issue(
+            summary="Assigned to Sarah",
+            assignee_name="Sarah Connor",
+            assignee_account_id=None,
+            board_id="DEV",
+        )
+        assert created.key == "DEV-3002"
+        assert created_payload is not None
+        assert created_payload["fields"]["assignee"] == {"accountId": "sarah-cloud-id"}
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_create_issue_retries_without_assignee_when_jira_returns_400_for_assignee() -> None:
+    """Verify JiraCloudClient retries unassigned if Jira Cloud returns 400
+    invalid assignee error."""
+
+    async def _test() -> None:
+        attempts = 0
+        payloads = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            url = str(request.url)
+            if request.method == "GET" and "/rest/api/3/myself" in url:
+                return httpx.Response(500)
+            if request.method == "GET" and "/rest/api/3/user" in url:
+                return httpx.Response(404)
+            if request.method == "POST" and "/rest/api/3/issue" in url:
+                import json
+
+                attempts += 1
+                body = json.loads(request.content)
+                payloads.append(body)
+                if attempts == 1 and "assignee" in body.get("fields", {}):
+                    # Jira Cloud error response for invalid user
+                    return httpx.Response(
+                        400,
+                        json={
+                            "errorMessages": [],
+                            "errors": {"assignee": "Please select a valid user."},
+                        },
+                    )
+                return httpx.Response(201, json={"id": "3003", "key": "DEV-3003"})
+            if request.method == "GET" and "/rest/api/3/issue/DEV-3003" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "3003",
+                        "key": "DEV-3003",
+                        "fields": {
+                            "summary": "Fallback Issue",
+                            "priority": {"name": "Medium"},
+                            "issuetype": {"name": "Task"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        created = await client.create_issue(
+            summary="Fallback Issue",
+            assignee_name="Invalid Unknown Person",
+            assignee_account_id="bogus-id",
+            board_id="DEV",
+        )
+        assert created.key == "DEV-3003"
+        assert attempts == 2
+        # First attempt sent assignee
+        assert "assignee" in payloads[0]["fields"]
+        # Second attempt retried without assignee
+        assert "assignee" not in payloads[1]["fields"]
+        await client.close()
+
+    asyncio.run(_test())

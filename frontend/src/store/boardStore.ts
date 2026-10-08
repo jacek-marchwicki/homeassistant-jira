@@ -5,6 +5,7 @@ import {
   IssueUpdatePayload,
   JiraIssue,
   JiraStatusCategory,
+  JiraUser,
 } from '../types/jira.ts';
 import { applyTheme, getInitialTheme, ThemeMode } from '../tokens/themeBridge.ts';
 import { getApiUrl } from '../utils/paths.ts';
@@ -134,6 +135,7 @@ export interface BoardStoreState {
   offlineOutbox: OfflineOutboxItem[];
   syncStatus: 'synced' | 'syncing' | 'offline';
   pendingSyncCount: number;
+  availableUsers: JiraUser[];
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
@@ -151,6 +153,7 @@ export interface BoardStoreState {
   moveToBacklog: (issueKey: string) => Promise<void>;
   moveToBoard: (issueKey: string) => Promise<void>;
   loadBoard: () => Promise<void>;
+  fetchUsers: () => Promise<void>;
   transitionIssueOptimistic: (
     issueKey: string,
     targetCategory: JiraStatusCategory,
@@ -203,6 +206,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   offlineOutbox: initialOutbox,
   syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
   pendingSyncCount: initialOutbox.length,
+  availableUsers: [],
 
   setCurrentUser: (userName: string) => {
     const trimmed = userName.trim();
@@ -316,6 +320,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           isLoading: false,
           isSyncing: false,
         });
+        get().fetchUsers().catch(() => {});
       } else {
         const err = await res.json().catch(() => ({}));
         set({
@@ -330,6 +335,20 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         isLoading: false,
         isSyncing: false,
       });
+    }
+  },
+
+  fetchUsers: async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/users'));
+      if (res.ok) {
+        const users: JiraUser[] = await res.json();
+        if (Array.isArray(users)) {
+          set({ availableUsers: users });
+        }
+      }
+    } catch {
+      // offline / quiet ignore
     }
   },
 
@@ -473,10 +492,22 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       if (!updates.assignee_name || updates.assignee_name.trim() === '') {
         newAssignee = null;
       } else {
+        const matchingUser = get().availableUsers?.find(
+          (u) =>
+            (u.displayName || u.display_name)?.toLowerCase() ===
+            updates.assignee_name?.trim().toLowerCase()
+        );
         newAssignee = {
-          accountId: (updates.assignee_account_id ?? originalIssue.assignee?.accountId) || 'usr-1',
+          accountId:
+            updates.assignee_account_id ??
+            matchingUser?.accountId ??
+            matchingUser?.account_id ??
+            originalIssue.assignee?.accountId,
           displayName: updates.assignee_name.trim(),
-          avatarUrl: originalIssue.assignee?.avatarUrl,
+          avatarUrl:
+            matchingUser?.avatarUrl ||
+            matchingUser?.avatar_url ||
+            originalIssue.assignee?.avatarUrl,
         };
       }
     } else if (updates.assignee_account_id !== undefined && originalIssue.assignee) {
@@ -614,10 +645,22 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       topRank = calculateRankBetween(null, sortedRanks[0]);
     }
 
+    const matchingUser = get().availableUsers?.find(
+      (u) =>
+        (u.displayName || u.display_name)?.toLowerCase() ===
+        payload.assignee_name?.trim().toLowerCase()
+    );
+    const resolvedAccountId =
+      payload.assignee_account_id ||
+      matchingUser?.accountId ||
+      matchingUser?.account_id ||
+      undefined;
+
     const newAssignee = payload.assignee_name?.trim()
       ? {
-          accountId: payload.assignee_account_id || 'usr-1',
+          accountId: resolvedAccountId || 'usr-1',
           displayName: payload.assignee_name.trim(),
+          avatarUrl: matchingUser?.avatarUrl || matchingUser?.avatar_url,
         }
       : null;
 
@@ -644,6 +687,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
     const finalPayload: IssueCreatePayload = {
       ...payload,
+      assignee_account_id: resolvedAccountId || payload.assignee_account_id || undefined,
       status_id: targetStatusId,
       rank: topRank,
       target_rank: topRank,

@@ -158,6 +158,8 @@ class JiraCloudClient(JiraClientProtocol):
                 timeout=15.0,
             )
         )
+        self._myself_user: JiraUser | None = None
+        self._user_cache: dict[str, JiraUser] = {}
 
     async def close(self) -> None:
         """Close underlying HTTP client connection pool."""
@@ -340,6 +342,9 @@ class JiraCloudClient(JiraClientProtocol):
                 display_name=display_name,
                 avatar_url=avatar_url,
             )
+            if account_id and display_name and not account_id.startswith("usr-"):
+                self._user_cache[display_name.strip().lower()] = assignee
+                self._user_cache[account_id] = assignee
 
         # Story points (heuristic over common Jira custom fields)
         story_points: float | None = None
@@ -804,6 +809,157 @@ class JiraCloudClient(JiraClientProtocol):
             updated = updated.model_copy(update={"rank": target_rank})
         return updated
 
+    async def get_myself(self) -> JiraUser | None:
+        """Fetch current authenticated Jira user from /rest/api/3/myself."""
+        if self._myself_user is not None:
+            return self._myself_user
+        try:
+            res = await self._send_request("GET", "/rest/api/3/myself")
+            if res.status_code == 200:
+                data = res.json()
+                acc_id = data.get("accountId")
+                disp_name = data.get("displayName") or "Me"
+                avatar_urls = data.get("avatarUrls") or {}
+                avatar_url = (
+                    avatar_urls.get("48x48") or avatar_urls.get("32x32") or avatar_urls.get("24x24")
+                )
+                if acc_id:
+                    user = JiraUser(
+                        account_id=acc_id,
+                        display_name=disp_name,
+                        avatar_url=avatar_url,
+                    )
+                    self._myself_user = user
+                    self._user_cache[disp_name.strip().lower()] = user
+                    self._user_cache[acc_id] = user
+                    return user
+        except Exception as exc:
+            logger.debug("Failed to fetch /rest/api/3/myself: %s", exc)
+        return None
+
+    async def search_users(self, query: str = "", project_key: str | None = None) -> list[JiraUser]:
+        """Search Jira users by query string or project assignable users."""
+        results: list[JiraUser] = []
+        if project_key:
+            try:
+                res = await self._send_request(
+                    "GET",
+                    "/rest/api/3/user/assignable/search",
+                    params={"project": project_key, "query": query},
+                )
+                if res.status_code == 200:
+                    for u in res.json():
+                        acc_id = u.get("accountId")
+                        disp_name = u.get("displayName") or "Unknown"
+                        avatar_urls = u.get("avatarUrls") or {}
+                        avatar_url = avatar_urls.get("48x48") or avatar_urls.get("32x32")
+                        if acc_id:
+                            user = JiraUser(
+                                account_id=acc_id,
+                                display_name=disp_name,
+                                avatar_url=avatar_url,
+                            )
+                            results.append(user)
+                            self._user_cache[disp_name.strip().lower()] = user
+                            self._user_cache[acc_id] = user
+            except Exception as exc:
+                logger.debug("Assignable user search failed for %s: %s", query, exc)
+
+        if not results and query:
+            try:
+                res = await self._send_request(
+                    "GET",
+                    "/rest/api/3/user/search",
+                    params={"query": query},
+                )
+                if res.status_code == 200:
+                    for u in res.json():
+                        acc_id = u.get("accountId")
+                        disp_name = u.get("displayName") or "Unknown"
+                        avatar_urls = u.get("avatarUrls") or {}
+                        avatar_url = avatar_urls.get("48x48") or avatar_urls.get("32x32")
+                        if acc_id:
+                            user = JiraUser(
+                                account_id=acc_id,
+                                display_name=disp_name,
+                                avatar_url=avatar_url,
+                            )
+                            results.append(user)
+                            self._user_cache[disp_name.strip().lower()] = user
+                            self._user_cache[acc_id] = user
+            except Exception as exc:
+                logger.debug("General user search failed for %s: %s", query, exc)
+
+        return results
+
+    async def resolve_assignee_account_id(
+        self,
+        assignee_name: str | None = None,
+        assignee_account_id: str | None = None,
+        project_key: str | None = None,
+    ) -> str | None:
+        """Resolve a valid Jira Cloud accountId from account_id or display name.
+
+        Avoids sending dummy or placeholder IDs like 'current-user' or 'usr-1' to Jira Cloud.
+        """
+        is_placeholder = (
+            not assignee_account_id
+            or assignee_account_id in ("usr-1", "current-user", "unassigned")
+            or assignee_account_id.startswith("usr-")
+        )
+        if assignee_account_id and not is_placeholder:
+            return assignee_account_id
+
+        if assignee_account_id == "current-user":
+            myself = await self.get_myself()
+            if myself:
+                return myself.account_id
+
+        clean_name = assignee_name.strip() if assignee_name else None
+        if clean_name:
+            myself = await self.get_myself()
+            if myself and myself.display_name.strip().lower() == clean_name.lower():
+                return myself.account_id
+
+            if clean_name.lower() in self._user_cache:
+                return self._user_cache[clean_name.lower()].account_id
+
+            found = await self.search_users(query=clean_name, project_key=project_key)
+            for u in found:
+                if u.display_name.strip().lower() == clean_name.lower():
+                    return u.account_id
+            if found:
+                return found[0].account_id
+
+        return None
+
+    async def get_assignable_users(
+        self, board_id: str | None = None, project_key: str | None = None
+    ) -> list[JiraUser]:
+        """Fetch assignable Jira users for a project or board."""
+        proj = project_key
+        if not proj and board_id and not board_id.isdigit():
+            proj = board_id.split("-")[0].upper()
+        if not proj and self.settings.jira_board_id and not self.settings.jira_board_id.isdigit():
+            proj = self.settings.jira_board_id.split("-")[0].upper()
+
+        users_map: dict[str, JiraUser] = {}
+        myself = await self.get_myself()
+        if myself:
+            users_map[myself.account_id] = myself
+
+        for u in self._user_cache.values():
+            users_map[u.account_id] = u
+
+        try:
+            cloud_users = await self.search_users(query="", project_key=proj)
+            for u in cloud_users:
+                users_map[u.account_id] = u
+        except Exception as exc:
+            logger.debug("Failed fetching cloud assignable users: %s", exc)
+
+        return list(users_map.values())
+
     async def update_issue(
         self,
         issue_key: str,
@@ -851,8 +1007,21 @@ class JiraCloudClient(JiraClientProtocol):
             fields["customfield_10016"] = story_points
         if assignee_name is not None and assignee_name.strip() == "":
             fields["assignee"] = None
-        elif assignee_account_id is not None:
-            fields["assignee"] = {"accountId": assignee_account_id} if assignee_account_id else None
+        elif assignee_account_id or assignee_name:
+            proj_key = issue_key.split("-")[0] if "-" in issue_key else None
+            resolved_acc_id = await self.resolve_assignee_account_id(
+                assignee_name=assignee_name,
+                assignee_account_id=assignee_account_id,
+                project_key=proj_key,
+            )
+            if resolved_acc_id:
+                fields["assignee"] = {"accountId": resolved_acc_id}
+            elif (
+                assignee_account_id
+                and not assignee_account_id.startswith("usr-")
+                and assignee_account_id != "current-user"
+            ):
+                fields["assignee"] = {"accountId": assignee_account_id}
         if recreate_after is not None:
             fields["customfield_10027"] = recreate_after if recreate_after else None
 
@@ -862,6 +1031,21 @@ class JiraCloudClient(JiraClientProtocol):
                     "PUT", f"/rest/api/3/issue/{issue_key}", json={"fields": fields}
                 )
                 self._handle_response_errors(res)
+            except JiraAPIError as api_err:
+                if "assignee" in fields and "assignee" in str(api_err):
+                    logger.warning(
+                        "Jira rejected assignee update on %s (%s). Retrying without assignee.",
+                        issue_key,
+                        api_err,
+                    )
+                    fields.pop("assignee", None)
+                    if fields:
+                        res = await self._send_request(
+                            "PUT", f"/rest/api/3/issue/{issue_key}", json={"fields": fields}
+                        )
+                        self._handle_response_errors(res)
+                else:
+                    raise
             except httpx.RequestError as exc:
                 raise JiraAPIError(
                     f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
@@ -928,8 +1112,20 @@ class JiraCloudClient(JiraClientProtocol):
             fields["customfield_10015"] = start_date
         if story_points is not None:
             fields["customfield_10016"] = story_points
-        if assignee_account_id:
-            fields["assignee"] = {"accountId": assignee_account_id}
+        if assignee_account_id or assignee_name:
+            resolved_acc_id = await self.resolve_assignee_account_id(
+                assignee_name=assignee_name,
+                assignee_account_id=assignee_account_id,
+                project_key=proj,
+            )
+            if resolved_acc_id:
+                fields["assignee"] = {"accountId": resolved_acc_id}
+            elif (
+                assignee_account_id
+                and not assignee_account_id.startswith("usr-")
+                and assignee_account_id != "current-user"
+            ):
+                fields["assignee"] = {"accountId": assignee_account_id}
         if recreate_after:
             fields["customfield_10027"] = recreate_after
 
@@ -940,6 +1136,24 @@ class JiraCloudClient(JiraClientProtocol):
             issue_key = created_data.get("key")
             if not issue_key:
                 raise JiraAPIError("Jira response missing issue key", status_code=500)
+        except JiraAPIError as api_err:
+            if "assignee" in fields and "assignee" in str(api_err):
+                logger.warning(
+                    "Jira rejected assignee '%s' (%s). Retrying creation unassigned.",
+                    assignee_name or assignee_account_id,
+                    api_err,
+                )
+                fields.pop("assignee", None)
+                res = await self._send_request("POST", "/rest/api/3/issue", json={"fields": fields})
+                self._handle_response_errors(res)
+                created_data = res.json()
+                issue_key = created_data.get("key")
+                if not issue_key:
+                    raise JiraAPIError(
+                        "Jira response missing issue key", status_code=500
+                    ) from api_err
+            else:
+                raise
         except httpx.RequestError as exc:
             raise JiraAPIError(
                 f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503

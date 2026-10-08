@@ -248,6 +248,7 @@ class JiraClientProtocol(Protocol):
         board_id: str | None = None,
         project_key: str | None = None,
         rank: str | None = None,
+        rank_before_key: str | None = None,
     ) -> JiraIssue:
         """Create a new Jira issue."""
         ...
@@ -585,6 +586,7 @@ class FakeJiraClient:
         board_id: str | None = None,
         project_key: str | None = None,
         rank: str | None = None,
+        rank_before_key: str | None = None,
     ) -> JiraIssue:
         """Create a new issue in memory."""
         if self.simulate_transition_failure or self.simulate_failure:
@@ -632,6 +634,20 @@ class FakeJiraClient:
 
         # Highest rank calculation
         rank_val = rank
+        if not rank_val and rank_before_key and rank_before_key in self._issues:
+            target_issue = self._issues[rank_before_key]
+            if target_issue.rank:
+                base_r = target_issue.rank
+                match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
+                if match:
+                    num = int(match.group(2))
+                    rank_val = (
+                        f"{match.group(1)}{num - 1:05d}{match.group(3)}"
+                        if num > 0
+                        else f"{base_r[:-1]}0:"
+                    )
+                else:
+                    rank_val = "0|00000:"
         if not rank_val:
             ranked = [i.rank for i in self._issues.values() if i.rank]
             if ranked:

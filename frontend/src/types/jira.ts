@@ -130,6 +130,7 @@ export interface IssueCreatePayload {
   project_key?: string;
   rank?: string;
   target_rank?: string;
+  rank_before_key?: string | null;
 }
 
 

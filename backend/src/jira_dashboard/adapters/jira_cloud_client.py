@@ -766,47 +766,53 @@ class JiraCloudClient(JiraClientProtocol):
         elif rank_after_key:
             rank_payload["rankAfterIssue"] = rank_after_key
 
-        try:
-            res = await self._send_request(
-                "PUT",
-                "/rest/agile/1.0/issue/rank",
-                json=rank_payload,
-            )
-            # If 401 with "scope does not match" on gateway (api.atlassian.com),
-            # attempt direct site URL fallback if available (Basic Auth API tokens)
-            if (
-                res.status_code == 401
-                and "scope does not match" in res.text.lower()
-                and self.jira_browse_url
-                and "api.atlassian.com" not in self.jira_browse_url
-            ):
-                direct_url = f"{self.jira_browse_url.rstrip('/')}/rest/agile/1.0/issue/rank"
-                logger.info(
-                    "Gateway returned 401 scope mismatch for %s; retrying directly on %s",
-                    issue_key,
-                    direct_url,
+        if rank_before_key or rank_after_key:
+            try:
+                res = await self._send_request(
+                    "PUT",
+                    "/rest/agile/1.0/issue/rank",
+                    json=rank_payload,
                 )
-                try:
-                    direct_res = await self._client.request(
-                        "PUT",
+                # If 401 with "scope does not match" on gateway (api.atlassian.com),
+                # attempt direct site URL fallback if available (Basic Auth API tokens)
+                if (
+                    res.status_code == 401
+                    and "scope does not match" in res.text.lower()
+                    and self.jira_browse_url
+                    and "api.atlassian.com" not in self.jira_browse_url
+                ):
+                    direct_url = f"{self.jira_browse_url.rstrip('/')}/rest/agile/1.0/issue/rank"
+                    logger.info(
+                        "Gateway returned 401 scope mismatch for %s; retrying directly on %s",
+                        issue_key,
                         direct_url,
-                        json=rank_payload,
                     )
-                    if direct_res.is_success or direct_res.status_code != 401:
-                        res = direct_res
-                except Exception as direct_exc:
-                    logger.debug("Direct rank fallback to %s failed: %s", direct_url, direct_exc)
+                    try:
+                        direct_res = await self._client.request(
+                            "PUT",
+                            direct_url,
+                            json=rank_payload,
+                        )
+                        if direct_res.is_success or direct_res.status_code != 401:
+                            res = direct_res
+                    except Exception as direct_exc:
+                        logger.debug(
+                            "Direct rank fallback to %s failed: %s", direct_url, direct_exc
+                        )
 
-            self._handle_response_errors(res)
-        except Exception as exc:
-            logger.warning("Failed to call Jira Agile rank API for issue %s: %s", issue_key, exc)
-            raise
+                self._handle_response_errors(res)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to call Jira Agile rank API for issue %s: %s", issue_key, exc
+                )
+                raise
 
         updated = await self.get_issue(issue_key)
         if updated is None:
             raise JiraAPIError(f"Issue {issue_key} not found after ranking", status_code=404)
-        if target_rank and not updated.rank:
-            updated = updated.model_copy(update={"rank": target_rank})
+        if target_rank:
+            if not updated.rank or updated.rank > target_rank:
+                updated = updated.model_copy(update={"rank": target_rank})
         return updated
 
     async def get_myself(self) -> JiraUser | None:
@@ -1079,6 +1085,7 @@ class JiraCloudClient(JiraClientProtocol):
         board_id: str | None = None,
         project_key: str | None = None,
         rank: str | None = None,
+        rank_before_key: str | None = None,
     ) -> JiraIssue:
         """Create a new issue via Jira Cloud REST API."""
         proj = project_key
@@ -1167,17 +1174,22 @@ class JiraCloudClient(JiraClientProtocol):
             except Exception as exc:
                 logger.warning("Issue %s created but transition failed: %s", issue_key, exc)
 
-        if rank:
+        if rank or rank_before_key:
             try:
-                await self.rank_issue(issue_key, target_rank=rank)
+                await self.rank_issue(
+                    issue_key,
+                    rank_before_key=rank_before_key,
+                    target_rank=rank,
+                )
             except Exception as rank_exc:
                 logger.debug("Ranking issue %s on Jira Cloud failed: %s", issue_key, rank_exc)
 
         created_issue = await self.get_issue(issue_key)
         if not created_issue:
             raise JiraAPIError(f"Issue {issue_key} not found after creation", status_code=404)
-        if rank and not created_issue.rank:
-            created_issue = created_issue.model_copy(update={"rank": rank})
+        if rank:
+            if not created_issue.rank or created_issue.rank > rank:
+                created_issue = created_issue.model_copy(update={"rank": rank})
         return created_issue
 
     async def process_webhook(self, payload: dict[str, Any]) -> JiraIssue | None:

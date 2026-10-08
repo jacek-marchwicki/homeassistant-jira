@@ -259,6 +259,90 @@ def test_sync_worker_create_issue_remaps_temp_key() -> None:
     asyncio.run(_test())
 
 
+def test_sync_worker_create_issue_preserves_top_rank_and_passes_rank_before_key() -> None:
+    async def _test() -> None:
+        storage = SQLiteStorage(":memory:")
+        storage.init_db()
+
+        created_call_kwargs: dict[str, Any] = {}
+        ranked_call_kwargs: dict[str, Any] = {}
+
+        class StubJiraClient(FakeJiraClient):
+            async def create_issue(self, **kwargs: Any) -> JiraIssue:
+                nonlocal created_call_kwargs
+                created_call_kwargs = kwargs
+                # Simulate Jira Cloud assigning its default bottom rank
+                issue = await super().create_issue(**kwargs)
+                return issue.model_copy(update={"rank": "0|i00099:"})
+
+            async def rank_issue(
+                self,
+                issue_key: str,
+                rank_before_key: str | None = None,
+                rank_after_key: str | None = None,
+                target_rank: str | None = None,
+            ) -> JiraIssue:
+                nonlocal ranked_call_kwargs
+                ranked_call_kwargs = {
+                    "issue_key": issue_key,
+                    "rank_before_key": rank_before_key,
+                    "target_rank": target_rank,
+                }
+                issue = await super().rank_issue(
+                    issue_key,
+                    rank_before_key=rank_before_key,
+                    rank_after_key=rank_after_key,
+                    target_rank=target_rank,
+                )
+                return issue.model_copy(update={"rank": target_rank or "0|i00000:"})
+
+        stub_jira = StubJiraClient()
+        stub_jira.reset()
+
+        broadcast_events: list[dict[str, Any]] = []
+
+        async def mock_broadcast(msg: dict[str, Any]) -> None:
+            broadcast_events.append(msg)
+
+        worker = JiraSyncWorker(storage, stub_jira, ws_broadcast_func=mock_broadcast)
+
+        storage.enqueue_outbox(
+            client_mutation_id="mut-create-top-rank",
+            action_type="create_issue",
+            issue_key="TEMP-111",
+            payload={
+                "summary": "Urgent Top Rank Task",
+                "issue_type": "task",
+                "priority": "high",
+                "status_category": "todo",
+                "rank": "0|i00000:",
+                "target_rank": "0|i00000:",
+                "rank_before_key": "PROJ-101",
+            },
+            base_updated_at=None,
+        )
+
+        processed = await worker.process_next_pending()
+        assert processed is True
+
+        assert created_call_kwargs.get("rank_before_key") == "PROJ-101"
+        assert created_call_kwargs.get("rank") == "0|i00000:"
+
+        # Rank API was invoked to place before PROJ-101
+        assert ranked_call_kwargs.get("rank_before_key") == "PROJ-101"
+        assert ranked_call_kwargs.get("target_rank") == "0|i00000:"
+
+        # SQLite issue has top rank
+        assert len(broadcast_events) == 1
+        created_key = broadcast_events[0]["issue_key"]
+        stored = storage.get_issue(created_key)
+        assert stored is not None
+        assert stored.rank == "0|i00000:"
+        assert broadcast_events[0]["issue"]["rank"] == "0|i00000:"
+
+    asyncio.run(_test())
+
+
 def test_sync_worker_processes_rank_issue() -> None:
     async def _test() -> None:
         storage = SQLiteStorage(":memory:")

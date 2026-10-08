@@ -425,8 +425,9 @@ This file defines coding standards, testing requirements, architectural boundari
   - [x] **Issue Creation Field Fidelity & Backlog Misclassification Resolution**:
     - Guaranteed 100% fidelity across all fields during issue creation (`summary`, `issue_type`, `priority`, `status_category`, `status_name`, `status_id`, `assignee`, `story_points`, `due_date`, `start_date`, `recreate_after`).
     - Resolved a bug where newly created tasks selecting active column statuses (e.g. "Ready" / "To Do") were erroneously classified as Backlog issues; refined `isBacklogIssue` heuristics and status mapping to prioritize active board column assignments over general category heuristics.
-  - [x] **Top-Rank Placement for Newly Created Tasks**:
+  - [x] **Top-Rank Placement for Newly Created Tasks & Jira Sync Reconciliation**:
     - Newly created tasks automatically receive the highest priority LexoRank (calculated via fractional midpoint algorithm `calculateRankBetween(null, minRank)`) and are placed immediately at the top of their respective column/list in both Kanban and Backlog views with sub-50ms optimistic latency.
+    - Preserved top-rank position after Jira Cloud synchronization: relative ranking (`rankBeforeIssue` targeting the top existing board issue) is automatically calculated and dispatched via the Jira Agile REST API, and post-creation reconciliation guards on backend adapters, SQLite storage, and frontend stores prevent Jira Cloud's default bottom-rank assignment from displacing newly created issues to the bottom.
   - [x] **Full-Fidelity Assignee Editing, Search & Unassignment**:
     - Fixed assignee updates in the Edit Issue dialog with seamless account ID tracking (`assignee_account_id`), keyboard-accessible search filtering, and full support for unassigning tasks (`assignee = null`) across frontend state, SQLite local storage, and Jira Cloud API synchronization (`fields["assignee"] = None`).
   - [x] **Persistent Mobile Install Prompt Dismissal**:

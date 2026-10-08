@@ -143,6 +143,7 @@ async def _sync_broadcast(event_data: dict[str, Any]) -> None:
                     seen.add(item.key)
                     deduped.append(item)
             _cached_board_response.issues = deduped
+            _cached_board_response.issues.sort(key=issue_sort_key)
     await ws_hub.broadcast(event_data)
 
 
@@ -261,6 +262,7 @@ class IssueCreateRequest(BaseModel):
     project_key: str | None = None
     rank: str | None = None
     target_rank: str | None = None
+    rank_before_key: str | None = None
 
 
 class BoardResponse(BaseModel):
@@ -866,13 +868,23 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
         )
 
     # Compute highest rank so new task appears at the top of the list
+    existing = storage.get_issues()
+    if not existing and _cached_board_response:
+        existing = _cached_board_response.issues
+    if not existing and isinstance(jira_client, FakeJiraClient):
+        existing = list(jira_client._issues.values())
+
+    rank_before_key = request.rank_before_key
+    if not rank_before_key and existing:
+        real_issues = [
+            i for i in existing if not i.key.startswith("TEMP-") and "-TEMP-" not in i.key
+        ]
+        if real_issues:
+            real_issues.sort(key=issue_sort_key)
+            rank_before_key = real_issues[0].key
+
     new_rank = request.rank or request.target_rank
     if not new_rank:
-        existing = storage.get_issues()
-        if not existing and _cached_board_response:
-            existing = _cached_board_response.issues
-        if not existing and isinstance(jira_client, FakeJiraClient):
-            existing = list(jira_client._issues.values())
         ranked = [i.rank for i in existing if i.rank]
         if ranked:
             ranked.sort()
@@ -926,6 +938,8 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     payload["rank"] = new_rank
     payload["target_rank"] = new_rank
     payload["status_id"] = target_id
+    if rank_before_key:
+        payload["rank_before_key"] = rank_before_key
     if assignee:
         payload["assignee_name"] = assignee.display_name
         if acc_id:

@@ -640,9 +640,16 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     // Calculate highest rank so new task appears at the top of the list
     const rankedIssues = issues.filter((i) => Boolean(i.rank));
     let topRank: string = '0|i00001:';
+    let topIssueKey: string | null = null;
     if (rankedIssues.length > 0) {
-      const sortedRanks = rankedIssues.map((i) => i.rank!).sort();
-      topRank = calculateRankBetween(null, sortedRanks[0]);
+      const sortedRanks = [...rankedIssues].sort((a, b) => (a.rank! < b.rank! ? -1 : 1));
+      topRank = calculateRankBetween(null, sortedRanks[0].rank);
+      const topReal = sortedRanks.find(
+        (i) => !i.key.startsWith('TEMP-') && !i.key.includes('-TEMP-')
+      );
+      if (topReal) {
+        topIssueKey = topReal.key;
+      }
     }
 
     const matchingUser = get().availableUsers?.find(
@@ -691,6 +698,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       status_id: targetStatusId,
       rank: topRank,
       target_rank: topRank,
+      rank_before_key: payload.rank_before_key || topIssueKey,
     };
 
     set((state) => ({
@@ -712,9 +720,13 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       }
 
       const created: JiraIssue = await res.json();
+      let createdRank = created.rank;
+      if (!createdRank || (topRank && createdRank > topRank)) {
+        createdRank = topRank;
+      }
       const finalCreated: JiraIssue = {
         ...created,
-        rank: created.rank || topRank,
+        rank: createdRank,
         _optimisticState: 'synced',
       };
 
@@ -1038,8 +1050,17 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         }
 
         if (tempIndex !== -1) {
+          const tempIssue = state.issues[tempIndex];
+          let finalRank = incomingIssue.rank;
+          if (!finalRank || (tempIssue.rank && finalRank > tempIssue.rank)) {
+            finalRank = tempIssue.rank;
+          }
           const updatedList = [...state.issues];
-          updatedList[tempIndex] = { ...incomingIssue, _optimisticState: 'synced' };
+          updatedList[tempIndex] = {
+            ...incomingIssue,
+            rank: finalRank,
+            _optimisticState: 'synced',
+          };
           const deduped = updatedList.filter(
             (item, idx) => idx === tempIndex || item.key !== incomingIssue.key
           );

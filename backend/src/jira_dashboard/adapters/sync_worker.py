@@ -133,6 +133,9 @@ class JiraSyncWorker:
             else StatusCategory.TODO
         )
 
+        rank_to_set = payload.get("rank") or payload.get("target_rank")
+        rank_before_key = payload.get("rank_before_key")
+
         real_issue = await self.jira_client.create_issue(
             summary=payload.get("summary", "New Issue"),
             description=payload.get("description"),
@@ -149,19 +152,23 @@ class JiraSyncWorker:
             recreate_after=payload.get("recreate_after"),
             board_id=payload.get("board_id"),
             project_key=payload.get("project_key"),
-            rank=payload.get("rank") or payload.get("target_rank"),
+            rank=rank_to_set,
+            rank_before_key=rank_before_key,
         )
 
-        rank_to_set = payload.get("rank") or payload.get("target_rank")
-        if rank_to_set and not real_issue.rank:
-            try:
-                real_issue = await self.jira_client.rank_issue(
-                    real_issue.key, target_rank=rank_to_set
-                )
-            except Exception as rank_exc:
-                logger.debug(
-                    "Ranking after creation for %s skipped/failed: %s", real_issue.key, rank_exc
-                )
+        if rank_to_set and (not real_issue.rank or real_issue.rank > rank_to_set):
+            if rank_before_key:
+                try:
+                    real_issue = await self.jira_client.rank_issue(
+                        real_issue.key,
+                        rank_before_key=rank_before_key,
+                        target_rank=rank_to_set,
+                    )
+                except Exception as rank_exc:
+                    logger.debug(
+                        "Ranking after creation for %s skipped/failed: %s", real_issue.key, rank_exc
+                    )
+            if not real_issue.rank or real_issue.rank > rank_to_set:
                 real_issue = real_issue.model_copy(update={"rank": rank_to_set})
 
         # Remove temporary issue from SQLite if key changed

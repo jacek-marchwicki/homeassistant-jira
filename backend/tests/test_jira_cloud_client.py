@@ -1088,3 +1088,60 @@ def test_create_issue_retries_without_assignee_when_jira_returns_400_for_assigne
         await client.close()
 
     asyncio.run(_test())
+
+
+def test_create_issue_ranks_before_key_and_preserves_top_rank() -> None:
+    """Verify create_issue ranks relative to rank_before_key and enforces top rank."""
+
+    async def _test() -> None:
+        rank_payload = None
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal rank_payload
+            url = str(request.url)
+            if request.method == "POST" and "/rest/api/3/issue" in url:
+                return httpx.Response(201, json={"id": "2001", "key": "DEV-2001"})
+            if request.method == "PUT" and "/rest/agile/1.0/issue/rank" in url:
+                import json
+
+                rank_payload = json.loads(request.content)
+                return httpx.Response(204)
+            if request.method == "GET" and "/rest/api/3/issue/DEV-2001" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "2001",
+                        "key": "DEV-2001",
+                        "fields": {
+                            "summary": "Top Ranked Issue",
+                            "priority": {"name": "High"},
+                            "issuetype": {"name": "Task"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                            "customfield_10019": "0|i00099:",  # Jira default bottom rank
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        created = await client.create_issue(
+            summary="Top Ranked Issue",
+            board_id="DEV",
+            rank="0|i00000:",
+            rank_before_key="DEV-100",
+        )
+        assert created.key == "DEV-2001"
+        # Agile rank API called with rankBeforeIssue
+        assert rank_payload is not None
+        assert rank_payload["issues"] == ["DEV-2001"]
+        assert rank_payload["rankBeforeIssue"] == "DEV-100"
+        # Even though Jira returned bottom rank '0|i00099:',
+        # client preserves requested top rank '0|i00000:'
+        assert created.rank == "0|i00000:"
+        await client.close()
+
+    asyncio.run(_test())

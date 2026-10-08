@@ -244,6 +244,44 @@ class TestPresentationApi(unittest.TestCase):
         self.assertEqual(data["key"], "PROJ-101")
         self.assertIsNotNone(data["rank"])
 
+    def test_create_issue_enqueues_rank_before_key_matching_top_issue(self) -> None:
+        """Verify POST /api/issues automatically computes rank_before_key from the top issue."""
+        import json
+
+        from jira_dashboard.presentation import main as main_module
+
+        # Ensure board is loaded
+        board = self.client.get("/api/board").json()
+        real_issues = [
+            i
+            for i in board["issues"]
+            if not i["key"].startswith("TEMP-") and "-TEMP-" not in i["key"]
+        ]
+        top_key = real_issues[0]["key"] if real_issues else None
+
+        res = self.client.post(
+            "/api/issues",
+            json={
+                "summary": "Auto ranked issue",
+                "issue_type": "task",
+                "priority": "medium",
+            },
+        )
+        self.assertEqual(res.status_code, 201)
+        created = res.json()
+
+        conn = main_module.storage._get_connection()
+        cur = conn.execute(
+            "SELECT * FROM sync_outbox WHERE action_type = 'create_issue' AND issue_key = ?;",
+            (created["key"],),
+        )
+        row = cur.fetchone()
+        self.assertIsNotNone(row)
+        payload = json.loads(row["payload_json"])
+        if top_key:
+            self.assertEqual(payload.get("rank_before_key"), top_key)
+        self.assertEqual(payload.get("rank"), created.get("rank"))
+
 
 if __name__ == "__main__":
     unittest.main()

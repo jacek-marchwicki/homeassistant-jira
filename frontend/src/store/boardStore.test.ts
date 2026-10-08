@@ -372,6 +372,58 @@ describe('Zustand BoardStore', () => {
     expect(issue?.summary).toBe('Created over WS');
   });
 
+  it('keeps created issue at the top after WebSocket reconciliation even if Jira assigned bottom rank', () => {
+    const existingTop: JiraIssue = {
+      id: '101',
+      key: 'PROJ-101',
+      summary: 'Existing Top Issue',
+      priority: 'medium',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      rank: '0|i00001:',
+    };
+    const existingBottom: JiraIssue = {
+      id: '102',
+      key: 'PROJ-102',
+      summary: 'Existing Bottom Issue',
+      priority: 'medium',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      rank: '0|i00005:',
+    };
+    const tempIssue: JiraIssue = {
+      id: 'TEMP-999',
+      key: 'TEMP-999',
+      summary: 'Newly Created Task',
+      priority: 'high',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      rank: '0|i00000:', // Calculated top rank
+      _optimisticState: 'pending',
+    };
+
+    useBoardStore.setState({
+      issues: [tempIssue, existingTop, existingBottom],
+    });
+
+    // Jira responds via WebSocket with real key DEV-2001, but default bottom rank '0|i00099:'
+    useBoardStore.getState().handleWsMessage({
+      event: 'issue_created',
+      temp_key: 'TEMP-999',
+      issue: {
+        id: '2001',
+        key: 'DEV-2001',
+        summary: 'Newly Created Task',
+        priority: 'high',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        rank: '0|i00099:', // Jira bottom rank
+      },
+    });
+
+    const issues = useBoardStore.getState().issues;
+    expect(issues[0].key).toBe('DEV-2001');
+    expect(issues[0].summary).toBe('Newly Created Task');
+    expect(issues[0]._optimisticState).toBe('synced');
+    expect(issues[0].rank).toBe('0|i00000:'); // Preserves top rank over Jira default bottom rank
+  });
+
   it('loadBoard uses SWR background sync (isSyncing) when existing issues are present', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

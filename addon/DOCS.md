@@ -55,3 +55,6 @@ polling_interval_seconds: 60
 2. Click **Start**.
 3. Click **Open Web UI** or click **Jira** in the left Home Assistant navigation sidebar.
 4. The dashboard will load directly within the Home Assistant interface, styled to match your active Home Assistant theme.
+
+> [!NOTE]
+> The add-on is configured with `panel_admin: false`, making the Jira sidebar entry visible to all Home Assistant users (including non-administrator accounts) when **Show in sidebar** is enabled.

@@ -51,6 +51,7 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
     assert config["ingress_port"] == 8000
     assert config["panel_icon"] == "mdi:jira"
     assert config["panel_title"] == "Jira"
+    assert config["panel_admin"] is False
 
     # Options & Schema alignment
     options = config.get("options", {})

@@ -16,6 +16,7 @@ ingress: true
 ingress_port: 8000
 panel_icon: "mdi:jira"
 panel_title: "Jira"
+panel_admin: false
 options:
   jira_url: "https://your-domain.atlassian.net"
   jira_email: "user@example.com"

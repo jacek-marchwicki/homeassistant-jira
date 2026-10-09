@@ -1,5 +1,5 @@
 name: "Jira Dashboard"
-version: "0.2.0"
+version: "0.2.1"
 slug: "jira_dashboard"
 description: "Real-time, responsive Jira Dashboard with Optimistic UI and Home Assistant Ingress support"
 url: "https://github.com/jacek-marchwicki/homeassistant-jira"

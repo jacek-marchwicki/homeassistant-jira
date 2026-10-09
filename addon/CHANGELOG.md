@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- **Sidebar Visibility for Non-Admin Users**: Configured `panel_admin: false` in add-on manifest (`addon/config.yaml`), enabling the Jira dashboard panel in the Home Assistant sidebar for all household members and standard accounts without requiring administrator privileges.
+
 ## 0.2.0
 
 - **Resilient Offline Synchronization & Two-Tier Outbox**: Local SQLite storage persistence with background `SyncWorker` processing pending rank and issue updates, frontend resilient offline queue (`flushOfflineQueue`), and visual synchronization status header badge.

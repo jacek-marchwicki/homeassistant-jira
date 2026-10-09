@@ -169,29 +169,56 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(doneColumn.locator('article', { hasText: 'PROJ-72' })).toBeVisible();
   });
 
-  test('6. Status Dropdown Transition: moving issue via select dropdown updates status and syncs', async ({
+  test('6. Status Dropdown Transition: Board & People columns have no status select, Backlog retains status dropdown', async ({
     page,
   }) => {
+    // 0. Ensure all issues are visible (clear filters)
+    await page.getByRole('button', { name: /All Issues/ }).click();
+
+    // 1. Verify Board column cards do NOT contain a status dropdown
     const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
     await expect(proj101Article).toBeVisible();
+    await expect(proj101Article.locator('select[id^="status-select"]')).toHaveCount(0);
+    await expect(proj101Article.locator('[role="combobox"][aria-label^="Change status"]')).toHaveCount(0);
 
-    const statusSelect = proj101Article.locator('select[id^="status-select"]');
-    await expect(statusSelect).toHaveValue('To Do');
+    // 2. Verify People column cards do NOT contain a status dropdown
+    await page.locator('header button[aria-label="People View"]').click();
+    const peopleCard = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(peopleCard).toBeVisible();
+    await expect(peopleCard.locator('select[id^="status-select"]')).toHaveCount(0);
+    await expect(peopleCard.locator('[role="combobox"][aria-label^="Change status"]')).toHaveCount(0);
+
+    // 3. Switch to Backlog View and verify status select dropdown is present and functional
+    await page.locator('header button[aria-label="Backlog View"]').click();
+    const proj104Row = page.locator('[data-testid="backlog-row-PROJ-104"]');
+    await expect(proj104Row).toBeVisible();
+
+    const backlogStatusSelect = proj104Row.locator('select[id^="backlog-status-select-PROJ-104"]');
+    await expect(backlogStatusSelect).toHaveValue('Backlog');
 
     // Intercept transition request
     const transitionPromise = page.waitForResponse(
-      (res) => res.url().includes('/api/issues/PROJ-101/transition') && res.status() === 200
+      (res) => res.url().includes('/api/issues/PROJ-104/transition') && res.status() === 200
     );
 
     // Select "In Progress" column option
-    await statusSelect.selectOption('In Progress');
+    await backlogStatusSelect.selectOption('In Progress');
 
     // Verify backend received transition call
     const res = await transitionPromise;
     expect(res.ok()).toBeTruthy();
 
     // Verify select value is now updated
-    await expect(statusSelect).toHaveValue('In Progress');
+    await expect(backlogStatusSelect).toHaveValue('In Progress');
+
+    // 4. Return to Board view and verify bottom Backlog panel also retains status dropdown
+    await page.locator('header button[aria-label="Kanban Board View"]').click();
+    const expandBacklogBtn = page.locator('button[aria-label="Expand Backlog list"]');
+    await expect(expandBacklogBtn).toBeVisible();
+    await expandBacklogBtn.click();
+
+    const panelRow = page.locator('[data-testid="backlog-panel"]').locator('[data-testid^="backlog-row-"]').first();
+    await expect(panelRow.locator('select[id^="backlog-status-select-"]')).toBeAttached();
   });
 
   test('7. Filter and Search: instant search query filters displayed cards', async ({

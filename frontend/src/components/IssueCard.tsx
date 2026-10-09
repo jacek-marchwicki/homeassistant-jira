@@ -8,13 +8,11 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
-import { JiraIssue, JiraStatusCategory } from '../types/jira.ts';
+import { JiraIssue } from '../types/jira.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
 import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 import { PriorityIcon } from './PriorityIcon.tsx';
-import { StatusSelect } from './StatusSelect.tsx';
 import {
-  getAvailableStatuses,
   getColumnForIssue,
   getJiraIssueUrl,
   isIssueExpedited,
@@ -67,20 +65,10 @@ export function IssueCard({
     opacity: isDragging ? 0.3 : 1,
   };
 
-  const statusOptions = getAvailableStatuses(columns);
-
   const handleQuickDone = (e: React.MouseEvent) => {
     e.stopPropagation();
     const doneCol = columns.find((c) => c.category === 'done');
     transitionIssueOptimistic(issue.key, 'done', doneCol?.name);
-  };
-
-  const handleStatusSelect = (statusName: string, category?: JiraStatusCategory) => {
-    const chosenStatus = statusOptions.find(
-      (c) => c.name.toLowerCase() === statusName.toLowerCase()
-    );
-    const cat = category || chosenStatus?.category || 'todo';
-    transitionIssueOptimistic(issue.key, cat, statusName);
   };
 
   return (
@@ -139,17 +127,6 @@ export function IssueCard({
               <span>Done</span>
             </button>
           )}
-
-          {/* Direct Transition Selector (Move to any column or Backlog without dragging) */}
-          <StatusSelect
-            id={`status-select-${issue.key}${isDragOverlay ? '-overlay' : ''}`}
-            value={currentColumn?.name || issue.status.name}
-            onChange={handleStatusSelect}
-            options={statusOptions}
-            size="sm"
-            ariaLabel={`Change status for ${issue.key}`}
-            title="Change Status"
-          />
         </div>
       </div>
 

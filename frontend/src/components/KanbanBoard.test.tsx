@@ -241,14 +241,41 @@ describe('KanbanBoard component', () => {
     });
   });
 
-  it('renders all form controls with unique id attributes across all cards on the board', async () => {
+  it('does not render status select dropdowns on board cards, and renders unique IDs for backlog controls when expanded', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
+    const backlogIssue: JiraIssue = {
+      id: '5',
+      key: 'TEST-5',
+      summary: 'Backlog task',
+      priority: 'medium',
+      status: { id: 'col-backlog', name: 'Backlog', category: 'todo' },
+      assignee: null,
+    };
+
     await act(async () => {
+      useBoardStore.setState({
+        issues: [...testIssues, backlogIssue],
+        columns: [
+          { id: 'col-backlog', name: 'Backlog', category: 'todo' },
+          { id: 'col-todo', name: 'To Do', category: 'todo' },
+          { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
+          { id: 'col-done', name: 'Done', category: 'done' },
+        ],
+        isBacklogExpandedOnBoard: true,
+      });
       root.render(<KanbanBoard />);
     });
 
+    // Board cards must not have select elements
+    const boardCards = container.querySelectorAll('[data-testid^="issue-card-"]');
+    expect(boardCards.length).toBeGreaterThan(0);
+    boardCards.forEach((card) => {
+      expect(card.querySelector('select')).toBeNull();
+    });
+
+    // Backlog panel retains form controls with unique ids
     const formElements = container.querySelectorAll('select, input, textarea');
     expect(formElements.length).toBeGreaterThan(0);
 

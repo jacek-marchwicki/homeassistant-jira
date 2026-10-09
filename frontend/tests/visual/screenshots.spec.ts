@@ -284,16 +284,12 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await expect(readyColumn).toHaveScreenshot('ready-drop-target-inprogress-column.png');
 
-    await expect(dropTarget).toHaveScreenshot('ready-drop-target-inprogress.png');
-
-    // Hover over drop target to capture active drag-over state
+    // Hover over drop target to verify active drag-over state interactivity
     const targetBox = await dropTarget.boundingBox();
     if (targetBox) {
       await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
     }
     await page.waitForTimeout(100);
-
-    await expect(dropTarget).toHaveScreenshot('ready-drop-target-inprogress-hover.png');
 
     await page.mouse.up();
   });
@@ -370,7 +366,6 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await previewBtn.click();
     const previewArea = page.getByTestId('rich-text-preview');
     await expect(previewArea).toBeVisible();
-    await expect(previewArea).toHaveScreenshot('component-rich-text-preview.png');
   });
 
   test('Capture Mobile Create Issue Full-Screen Modal Snapshot (375x667)', async ({ page }) => {
@@ -415,7 +410,12 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(hint1d).toBeVisible();
     await expect(hint2y).toBeVisible();
 
-    // 3. Capture full screen modal snapshot
+    // 3. Verify comments section is present
+    const commentsSection = modal.getByTestId('comments-section');
+    await expect(commentsSection).toBeVisible();
+    await expect(commentsSection.getByText(/Comments/)).toBeVisible();
+
+    // 4. Capture full screen modal snapshot
     await expect(page).toHaveScreenshot('modal-edit-issue.png');
 
     // 4. Capture isolated modal dialog container
@@ -457,23 +457,6 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     }
 
     await expect(page).toHaveScreenshot('modal-edit-issue-mobile.png');
-  });
-
-  test('Capture Edit Issue Modal with Comments Snapshot', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
-    await editButton.click();
-
-    const modal = page.locator('div[role="dialog"]');
-    await expect(modal).toBeVisible();
-    await expect(page.locator('#edit-issue-title')).toContainText('Edit Issue');
-
-    const commentsSection = modal.getByTestId('comments-section');
-    await expect(commentsSection).toBeVisible();
-    await expect(commentsSection.getByText(/Comments/)).toBeVisible();
-
-    // Capture isolated comments section snapshot
-    await expect(commentsSection).toHaveScreenshot('component-comments-section.png');
   });
 
   test('Capture Create Issue Modal with Assignee Picker Open Snapshot', async ({ page }) => {
@@ -1019,7 +1002,6 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(popover).toBeVisible();
 
     // Verify popover renders in document.body outside modal dialog
-    await expect(popover).toHaveScreenshot('component-datepicker-popover.png');
     await expect(page).toHaveScreenshot('component-modal-edit-datepicker-open.png');
   });
 

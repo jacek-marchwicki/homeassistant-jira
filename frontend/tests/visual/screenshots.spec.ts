@@ -1018,7 +1018,9 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const popover = page.getByTestId('date-picker-popover');
     await expect(popover).toBeVisible();
 
-    await expect(modal.locator('> div')).toHaveScreenshot('component-modal-edit-datepicker-open.png');
+    // Verify popover renders in document.body outside modal dialog
+    await expect(popover).toHaveScreenshot('component-datepicker-popover.png');
+    await expect(page).toHaveScreenshot('component-modal-edit-datepicker-open.png');
   });
 
   test('Capture Newly Created Issue with Status and Assignee at Highest Rank Top of List Snapshot', async ({ page }) => {

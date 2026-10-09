@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from 'lucide-react';
 
 export interface DatePickerProps {
   id?: string;
@@ -59,7 +60,13 @@ export function DatePicker({
 }: DatePickerProps) {
   const [inputValue, setInputValue] = useState(value || '');
   const [isOpen, setIsOpen] = useState(false);
+  const [popoverCoords, setPopoverCoords] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   // Sync internal input value with external value
   useEffect(() => {
@@ -76,12 +83,53 @@ export function DatePicker({
     return formatDateToIso(now.getFullYear(), now.getMonth(), now.getDate());
   })();
 
-  // Close calendar popover on outside click or Escape
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const popoverWidth = 288; // w-72
+    const popoverHeight = 340;
+    const margin = 8;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    let top = rect.bottom + 4;
+
+    // Flip above if tight below and more space above
+    if (spaceBelow < popoverHeight + margin && spaceAbove > spaceBelow) {
+      top = Math.max(margin, rect.top - popoverHeight - 4);
+    } else {
+      // Ensure not truncated by screen bottom
+      if (top + popoverHeight > window.innerHeight - margin) {
+        top = Math.max(margin, window.innerHeight - popoverHeight - margin);
+      }
+    }
+
+    // Prevent horizontal truncation
+    let left = rect.left;
+    if (left + popoverWidth > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - popoverWidth - margin);
+    }
+    if (left < margin) {
+      left = margin;
+    }
+
+    setPopoverCoords({ top, left });
+  }, []);
+
+  // Close calendar popover on outside click or Escape, and track scrolling/resize
   useEffect(() => {
     if (!isOpen) return;
 
+    updatePosition();
+
     function handlePointerDown(e: MouseEvent | TouchEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        popoverRef.current &&
+        !popoverRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     }
@@ -92,13 +140,22 @@ export function DatePicker({
       }
     }
 
+    function handleScrollOrResize() {
+      updatePosition();
+    }
+
     document.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
     };
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -141,8 +198,19 @@ export function DatePicker({
     if (!isOpen) {
       const parsed = parseIsoDate(inputValue) || new Date();
       setViewDate(parsed);
+      updatePosition();
     }
     setIsOpen((prev) => !prev);
+  };
+
+  const handlePrevYear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setViewDate((prev) => new Date(prev.getFullYear() - 1, prev.getMonth(), 1));
+  };
+
+  const handleNextYear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setViewDate((prev) => new Date(prev.getFullYear() + 1, prev.getMonth(), 1));
   };
 
   const handlePrevMonth = (e: React.MouseEvent) => {
@@ -213,6 +281,15 @@ export function DatePicker({
     days.push({ dateStr, dayNum: d, isCurrentMonth: false });
   }
 
+  // Generate Year options around current and view years
+  const currentYear = new Date().getFullYear();
+  const minYear = Math.min(currentYear - 10, viewYear - 10);
+  const maxYear = Math.max(currentYear + 20, viewYear + 15);
+  const yearOptions: number[] = [];
+  for (let y = minYear; y <= maxYear; y++) {
+    yearOptions.push(y);
+  }
+
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
       {/* Input row */}
@@ -255,101 +332,174 @@ export function DatePicker({
         </div>
       </div>
 
-      {/* Calendar Popover */}
-      {isOpen && (
-        <div
-          data-testid="date-picker-popover"
-          role="dialog"
-          aria-label="Calendar date picker"
-          className="absolute left-0 top-full mt-1.5 z-50 w-64 p-3 rounded-xl bg-[var(--jira-surface)] border border-[var(--jira-border)] shadow-2xl text-[var(--jira-text-primary)] animate-in fade-in zoom-in-95 duration-100"
-        >
-          {/* Month/Year Header */}
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--jira-border-subtle)]">
-            <button
-              type="button"
-              onClick={handlePrevMonth}
-              aria-label="Previous month"
-              className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <span className="text-xs font-bold text-[var(--jira-text-primary)] select-none">
-              {MONTH_NAMES[viewMonth]} {viewYear}
-            </span>
-
-            <button
-              type="button"
-              onClick={handleNextMonth}
-              aria-label="Next month"
-              className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Weekday Labels */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1">
-            {WEEK_DAYS.map((wd) => (
-              <span key={wd} className="text-2xs font-bold text-[var(--jira-text-muted)]">
-                {wd}
-              </span>
-            ))}
-          </div>
-
-          {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-1">
-            {days.map(({ dateStr, dayNum, isCurrentMonth }) => {
-              const isSelected = dateStr === inputValue;
-              const isToday = dateStr === todayStr;
-
-              return (
+      {/* Calendar Popover rendered in portal outside modal bounds */}
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            data-testid="date-picker-popover"
+            role="dialog"
+            aria-label="Calendar date picker"
+            style={{
+              position: 'fixed',
+              top: `${popoverCoords.top}px`,
+              left: `${popoverCoords.left}px`,
+              zIndex: 9999,
+            }}
+            className="w-72 p-3 rounded-xl bg-[var(--jira-surface)] border border-[var(--jira-border)] shadow-2xl text-[var(--jira-text-primary)] animate-in fade-in zoom-in-95 duration-100"
+          >
+            {/* Month/Year Header with quick jump buttons and dropdowns */}
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--jira-border-subtle)] gap-1">
+              <div className="flex items-center gap-0.5">
                 <button
-                  key={dateStr}
                   type="button"
-                  data-date={dateStr}
-                  onClick={() => handleSelectDate(dateStr)}
-                  aria-label={`Select ${dateStr}`}
-                  className={`h-7 w-7 mx-auto rounded-md text-xs font-medium flex items-center justify-center transition-colors cursor-pointer ${
-                    isSelected
-                      ? 'bg-[var(--jira-primary)] text-white font-bold'
-                      : isToday
-                        ? 'border border-[var(--jira-primary)] text-[var(--jira-primary)] hover:bg-[var(--jira-surface-hover)]'
-                        : isCurrentMonth
-                          ? 'text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)]'
-                          : 'text-[var(--jira-text-muted)] opacity-40 hover:bg-[var(--jira-surface-hover)]'
-                  }`}
+                  onClick={handlePrevYear}
+                  aria-label="Previous year"
+                  title="Previous year"
+                  className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
                 >
-                  {dayNum}
+                  <ChevronsLeft className="w-3.5 h-3.5" />
                 </button>
-              );
-            })}
-          </div>
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  aria-label="Previous month"
+                  title="Previous month"
+                  className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-          {/* Popover Actions */}
-          <div className="mt-3 pt-2 border-t border-[var(--jira-border-subtle)] flex items-center justify-between text-xs">
-            <button
-              type="button"
-              data-testid="date-picker-today"
-              onClick={handleSelectToday}
-              aria-label="Select today"
-              className="px-2 py-1 rounded text-[var(--jira-primary)] hover:bg-[var(--jira-primary)]/10 font-semibold transition-colors cursor-pointer"
-            >
-              Today
-            </button>
+              <div className="flex items-center gap-1">
+                <select
+                  aria-label="Select month"
+                  value={viewMonth}
+                  onChange={(e) => {
+                    const m = Number(e.target.value);
+                    setViewDate(new Date(viewYear, m, 1));
+                  }}
+                  className="text-xs font-bold text-[var(--jira-text-primary)] bg-transparent hover:bg-[var(--jira-surface-hover)] border border-transparent hover:border-[var(--jira-border)] rounded px-1 py-0.5 cursor-pointer focus:outline-none"
+                >
+                  {MONTH_NAMES.map((name, i) => (
+                    <option
+                      key={name}
+                      value={i}
+                      className="bg-[var(--jira-surface)] text-[var(--jira-text-primary)]"
+                    >
+                      {name}
+                    </option>
+                  ))}
+                </select>
 
-            <button
-              type="button"
-              data-testid="date-picker-clear"
-              onClick={handleClearPicker}
-              aria-label="Clear date from picker"
-              className="px-2 py-1 rounded text-[var(--jira-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
+                <select
+                  aria-label="Select year"
+                  data-testid="date-picker-year-select"
+                  value={viewYear}
+                  onChange={(e) => {
+                    const y = Number(e.target.value);
+                    setViewDate(new Date(y, viewMonth, 1));
+                  }}
+                  className="text-xs font-bold text-[var(--jira-text-primary)] bg-transparent hover:bg-[var(--jira-surface-hover)] border border-transparent hover:border-[var(--jira-border)] rounded px-1 py-0.5 cursor-pointer focus:outline-none"
+                >
+                  {yearOptions.map((y) => (
+                    <option
+                      key={y}
+                      value={y}
+                      className="bg-[var(--jira-surface)] text-[var(--jira-text-primary)]"
+                    >
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  aria-label="Next month"
+                  title="Next month"
+                  className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextYear}
+                  aria-label="Next year"
+                  title="Next year"
+                  className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
+                >
+                  <ChevronsRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Weekday Labels */}
+            <div className="grid grid-cols-7 gap-1 text-center mb-1">
+              {WEEK_DAYS.map((wd) => (
+                <span key={wd} className="text-2xs font-bold text-[var(--jira-text-muted)]">
+                  {wd}
+                </span>
+              ))}
+            </div>
+
+            {/* Days Grid */}
+            <div className="grid grid-cols-7 gap-1">
+              {days.map(({ dateStr, dayNum, isCurrentMonth }) => {
+                const isSelected = dateStr === inputValue;
+                const isToday = dateStr === todayStr;
+
+                return (
+                  <button
+                    key={dateStr}
+                    type="button"
+                    data-date={dateStr}
+                    onClick={() => handleSelectDate(dateStr)}
+                    aria-label={`Select ${dateStr}`}
+                    className={`h-7 w-7 mx-auto rounded-md text-xs font-medium flex items-center justify-center transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-[var(--jira-primary)] text-white font-bold'
+                        : isToday
+                          ? 'border border-[var(--jira-primary)] text-[var(--jira-primary)] hover:bg-[var(--jira-surface-hover)]'
+                          : isCurrentMonth
+                            ? 'text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)]'
+                            : 'text-[var(--jira-text-muted)] opacity-40 hover:bg-[var(--jira-surface-hover)]'
+                    }`}
+                  >
+                    {dayNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Popover Actions */}
+            <div className="mt-3 pt-2 border-t border-[var(--jira-border-subtle)] flex items-center justify-between text-xs">
+              <button
+                type="button"
+                data-testid="date-picker-today"
+                onClick={handleSelectToday}
+                aria-label="Select today"
+                className="px-2 py-1 rounded text-[var(--jira-primary)] hover:bg-[var(--jira-primary)]/10 font-semibold transition-colors cursor-pointer"
+              >
+                Today
+              </button>
+
+              <button
+                type="button"
+                data-testid="date-picker-clear"
+                onClick={handleClearPicker}
+                aria-label="Clear date from picker"
+                className="px-2 py-1 rounded text-[var(--jira-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -238,4 +238,22 @@ describe('CreateIssueModal component', () => {
     expect(dialogBox.className).toContain('p-4');
     expect(dialogBox.className).toContain('sm:p-6');
   });
+
+  it('displays Start Date before Due Date matching EditIssueModal order', async () => {
+    const handleClose = vi.fn();
+
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
+    });
+
+    const startDateInput = container.querySelector('#create-start-date');
+    const dueDateInput = container.querySelector('#create-due-date');
+    expect(startDateInput).not.toBeNull();
+    expect(dueDateInput).not.toBeNull();
+
+    // Verify Start Date appears before Due Date in document order
+    expect(
+      Boolean(startDateInput!.compareDocumentPosition(dueDateInput!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+  });
 });

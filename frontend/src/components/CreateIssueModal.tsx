@@ -252,20 +252,6 @@ export function CreateIssueModal({
 
             <div>
               <label
-                htmlFor="create-due-date"
-                className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
-              >
-                Due Date
-              </label>
-              <DatePicker
-                id="create-due-date"
-                value={dueDate}
-                onChange={setDueDate}
-              />
-            </div>
-
-            <div>
-              <label
                 htmlFor="create-start-date"
                 className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
               >
@@ -275,6 +261,20 @@ export function CreateIssueModal({
                 id="create-start-date"
                 value={startDate}
                 onChange={setStartDate}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="create-due-date"
+                className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
+              >
+                Due Date
+              </label>
+              <DatePicker
+                id="create-due-date"
+                value={dueDate}
+                onChange={setDueDate}
               />
             </div>
           </div>

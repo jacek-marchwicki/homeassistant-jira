@@ -95,3 +95,16 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Automated Acceptance & Visual Regression Coverage**:
     - Added offline reactivity unit tests (`frontend/src/store/offlineReactivity.test.ts`) and end-to-end acceptance tests 14 & 15 (`frontend/tests/integration/fullstack_e2e.spec.ts`).
     - Added visual regression tests in `frontend/tests/visual/screenshots.spec.ts` capturing the DatePicker popover in Edit Issue modal (`component-modal-edit-datepicker-open.png`) and the Home as Usual section (`ready-section-home-as-usual.png`, `ready-column-sections.png`).
+- [x] **Phase 5.7: DatePicker Portal Architecture, Quick Year Navigation & Modal Date Ordering Alignment**
+  - [x] **Portal-Based Popover Rendering & Collision Avoidance**:
+    - Re-architected `DatePicker` popover to render via React 19 `createPortal` into `document.body`, completely escaping modal overflow boundaries (`overflow-y-auto` and `overflow-hidden` clipping).
+    - Equipped with dynamic viewport collision detection: automatically flips above input when space below is limited, horizontally clamps to viewport edges, and tracks window resize and scroll events with zero truncation across all device sizes.
+  - [x] **Quick Year Navigation & Direct Year Selection**:
+    - Added quick year jump controls (`<<` and `>>`) allowing instant multi-year stepping without manual month-by-month cycling.
+    - Integrated native styled Year and Month `<select>` dropdowns directly in the calendar header, enabling instant 1-click jumps across arbitrary multi-year spans (2-5+ years).
+  - [x] **Date Order Alignment Across Modals**:
+    - Aligned field ordering in `CreateIssueModal`: placed "Start Date" before "Due Date", matching `EditIssueModal` layout consistency.
+  - [x] **Comprehensive Test Verification**:
+    - Unit tests covering portal rendering, quick year navigation buttons, and dropdown year selection (`DatePicker.test.tsx`, `CreateIssueModal.test.tsx`).
+    - Visual regression snapshots updated for the portaled DatePicker popover (`component-datepicker-popover.png`, `component-modal-edit-datepicker-open.png`).
+

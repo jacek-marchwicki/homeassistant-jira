@@ -31,6 +31,7 @@ describe('DatePicker component', () => {
       root.unmount();
     });
     container.remove();
+    document.querySelectorAll('[data-testid="date-picker-popover"]').forEach((el) => el.remove());
   });
 
   it('renders input with initial value and placeholder', async () => {
@@ -138,9 +139,116 @@ describe('DatePicker component', () => {
       calendarBtn.click();
     });
 
-    const popover = container.querySelector('[data-testid="date-picker-popover"]');
+    const popover = document.body.querySelector('[data-testid="date-picker-popover"]');
     expect(popover).not.toBeNull();
-    expect(popover?.textContent).toContain('October 2026');
+    expect(popover?.textContent).toContain('October');
+  });
+
+  it('renders popover in a portal attached to document.body, outside container', async () => {
+    const handleChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <DatePicker
+          id="test-date"
+          value="2026-10-15"
+          onChange={handleChange}
+        />
+      );
+    });
+
+    const calendarBtn = container.querySelector('button[aria-label="Open calendar"]') as HTMLButtonElement;
+    await act(async () => {
+      calendarBtn.click();
+    });
+
+    // Popover is in document.body
+    const popoverInBody = document.body.querySelector('[data-testid="date-picker-popover"]');
+    expect(popoverInBody).not.toBeNull();
+
+    // Popover is NOT a descendant of the component container (proves portal)
+    expect(container.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
+  });
+
+  it('allows quickly changing year via previous and next year buttons', async () => {
+    const handleChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <DatePicker
+          id="test-date"
+          value="2026-10-15"
+          onChange={handleChange}
+        />
+      );
+    });
+
+    const calendarBtn = container.querySelector('button[aria-label="Open calendar"]') as HTMLButtonElement;
+    await act(async () => {
+      calendarBtn.click();
+    });
+
+    const popover = document.body.querySelector('[data-testid="date-picker-popover"]') as HTMLDivElement;
+    expect(popover).not.toBeNull();
+
+    const yearSelect = popover.querySelector('[data-testid="date-picker-year-select"]') as HTMLSelectElement;
+    expect(yearSelect.value).toBe('2026');
+
+    // Click Next Year (>>)
+    const nextYearBtn = popover.querySelector('button[aria-label="Next year"]') as HTMLButtonElement;
+    expect(nextYearBtn).not.toBeNull();
+    await act(async () => {
+      nextYearBtn.click();
+    });
+    expect(yearSelect.value).toBe('2027');
+
+    // Click Prev Year (<<)
+    const prevYearBtn = popover.querySelector('button[aria-label="Previous year"]') as HTMLButtonElement;
+    expect(prevYearBtn).not.toBeNull();
+    await act(async () => {
+      prevYearBtn.click();
+      prevYearBtn.click();
+    });
+    expect(yearSelect.value).toBe('2025');
+  });
+
+  it('allows quickly selecting a year via the year select dropdown', async () => {
+    const handleChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <DatePicker
+          id="test-date"
+          value="2026-10-15"
+          onChange={handleChange}
+        />
+      );
+    });
+
+    const calendarBtn = container.querySelector('button[aria-label="Open calendar"]') as HTMLButtonElement;
+    await act(async () => {
+      calendarBtn.click();
+    });
+
+    const popover = document.body.querySelector('[data-testid="date-picker-popover"]') as HTMLDivElement;
+    const yearSelect = popover.querySelector('[data-testid="date-picker-year-select"]') as HTMLSelectElement;
+    expect(yearSelect).not.toBeNull();
+
+    await act(async () => {
+      yearSelect.value = '2030';
+      yearSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(yearSelect.value).toBe('2030');
+
+    // Pick a date in 2030
+    const dayBtn = popover.querySelector('button[data-date="2030-10-15"]') as HTMLButtonElement;
+    expect(dayBtn).not.toBeNull();
+    await act(async () => {
+      dayBtn.click();
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('2030-10-15');
   });
 
   it('selects date from calendar popover and calls onChange', async () => {
@@ -161,7 +269,8 @@ describe('DatePicker component', () => {
       calendarBtn.click();
     });
 
-    const dayBtn = container.querySelector('button[data-date="2026-10-20"]') as HTMLButtonElement;
+    const popover = document.body.querySelector('[data-testid="date-picker-popover"]') as HTMLDivElement;
+    const dayBtn = popover.querySelector('button[data-date="2026-10-20"]') as HTMLButtonElement;
     expect(dayBtn).not.toBeNull();
 
     await act(async () => {
@@ -170,7 +279,7 @@ describe('DatePicker component', () => {
 
     expect(handleChange).toHaveBeenCalledWith('2026-10-20');
     // Popover should close after selecting a date
-    expect(container.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
   });
 
   it('selects today from calendar popover', async () => {
@@ -191,7 +300,8 @@ describe('DatePicker component', () => {
       calendarBtn.click();
     });
 
-    const todayBtn = container.querySelector('button[data-testid="date-picker-today"]') as HTMLButtonElement;
+    const popover = document.body.querySelector('[data-testid="date-picker-popover"]') as HTMLDivElement;
+    const todayBtn = popover.querySelector('button[data-testid="date-picker-today"]') as HTMLButtonElement;
     expect(todayBtn).not.toBeNull();
 
     await act(async () => {
@@ -205,7 +315,7 @@ describe('DatePicker component', () => {
     const expectedTodayStr = `${expectedYear}-${expectedMonth}-${expectedDay}`;
 
     expect(handleChange).toHaveBeenCalledWith(expectedTodayStr);
-    expect(container.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
   });
 
   it('clears date via calendar popover clear button', async () => {
@@ -226,7 +336,8 @@ describe('DatePicker component', () => {
       calendarBtn.click();
     });
 
-    const clearPickerBtn = container.querySelector('button[data-testid="date-picker-clear"]') as HTMLButtonElement;
+    const popover = document.body.querySelector('[data-testid="date-picker-popover"]') as HTMLDivElement;
+    const clearPickerBtn = popover.querySelector('button[data-testid="date-picker-clear"]') as HTMLButtonElement;
     expect(clearPickerBtn).not.toBeNull();
 
     await act(async () => {
@@ -234,7 +345,7 @@ describe('DatePicker component', () => {
     });
 
     expect(handleChange).toHaveBeenCalledWith('');
-    expect(container.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
   });
 
   it('closes calendar popover on Escape key', async () => {
@@ -255,12 +366,12 @@ describe('DatePicker component', () => {
       calendarBtn.click();
     });
 
-    expect(container.querySelector('[data-testid="date-picker-popover"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="date-picker-popover"]')).not.toBeNull();
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
 
-    expect(container.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="date-picker-popover"]')).toBeNull();
   });
 });

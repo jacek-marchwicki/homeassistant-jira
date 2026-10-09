@@ -9,6 +9,7 @@ import { IssueTypeSelect } from './IssueTypeSelect.tsx';
 import { PrioritySelect } from './PrioritySelect.tsx';
 import { StatusSelect } from './StatusSelect.tsx';
 import { RichTextEditor } from './RichTextEditor.tsx';
+import { DatePicker } from './DatePicker.tsx';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -256,12 +257,10 @@ export function CreateIssueModal({
               >
                 Due Date
               </label>
-              <input
+              <DatePicker
                 id="create-due-date"
-                type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full h-10 px-3 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
+                onChange={setDueDate}
               />
             </div>
 
@@ -272,12 +271,10 @@ export function CreateIssueModal({
               >
                 Start Date
               </label>
-              <input
+              <DatePicker
                 id="create-start-date"
-                type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full h-10 px-3 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
+                onChange={setStartDate}
               />
             </div>
           </div>

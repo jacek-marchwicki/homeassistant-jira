@@ -273,6 +273,100 @@ describe('KanbanColumn component', () => {
     });
   });
 
+  it('renders Home as Usual sub-section between In Progress and Other in Ready column', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    const issues: JiraIssue[] = [
+      {
+        id: '1',
+        key: 'TEST-OVERDUE',
+        summary: 'Fix overdue leak',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        due_date: '2020-01-01',
+      },
+      {
+        id: '2',
+        key: 'TEST-EXPEDITED',
+        summary: 'Immediate urgent fix',
+        priority: 'highest',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        start_date: null,
+      },
+      {
+        id: '3',
+        key: 'TEST-INPROGRESS',
+        summary: 'Currently working on this',
+        priority: 'medium',
+        status: { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
+      },
+      {
+        id: '4',
+        key: 'TEST-DAILY',
+        summary: 'Daily morning routine',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        start_date: '2020-01-01',
+        recreate_after: '1d',
+      },
+      {
+        id: '5',
+        key: 'TEST-OTHER',
+        summary: 'Regular task for next month',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        due_date: '2099-12-31',
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <KanbanColumn
+            id="col-ready"
+            category="todo"
+            title="Ready"
+            colorVar="var(--jira-status-todo)"
+            issues={issues}
+            isHighlighted={false}
+          />
+        </DndContext>
+      );
+    });
+
+    const overdueSection = container.querySelector('[data-testid="ready-section-overdue"]');
+    const expeditedSection = container.querySelector('[data-testid="ready-section-expedited"]');
+    const inProgressSection = container.querySelector('[data-testid="ready-section-inprogress"]');
+    const homeAsUsualSection = container.querySelector('[data-testid="ready-section-home-as-usual"]');
+    const otherSection = container.querySelector('[data-testid="ready-section-other"]');
+
+    expect(overdueSection).not.toBeNull();
+    expect(expeditedSection).not.toBeNull();
+    expect(inProgressSection).not.toBeNull();
+    expect(homeAsUsualSection).not.toBeNull();
+    expect(otherSection).not.toBeNull();
+
+    expect(homeAsUsualSection?.textContent).toContain('Home as Usual');
+    expect(homeAsUsualSection?.textContent).toContain('1');
+    expect(homeAsUsualSection?.textContent).toContain('TEST-DAILY');
+
+    // Verify DOM order: Overdue -> Expedited -> In Progress -> Home as Usual -> Other
+    const sections = Array.from(container.querySelectorAll('[data-testid^="ready-section-"]'));
+    const sectionTestIds = sections.map((s) => s.getAttribute('data-testid'));
+    expect(sectionTestIds).toEqual([
+      'ready-section-overdue',
+      'ready-section-expedited',
+      'ready-section-inprogress',
+      'ready-section-home-as-usual',
+      'ready-section-other',
+    ]);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('hides Expedited section when empty, keeping Overdue and Other with header', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);

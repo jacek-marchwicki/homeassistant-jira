@@ -259,4 +259,47 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     expect(dialogBox.className).toContain('p-4');
     expect(dialogBox.className).toContain('sm:p-6');
   });
+
+  it('allows updating and clearing start date and due date via DatePicker', async () => {
+    const handleClose = vi.fn();
+    const updateSpy = vi.spyOn(useBoardStore.getState(), 'updateIssueOptimistic');
+
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={handleClose} />);
+    });
+
+    const startDateInput = container.querySelector('#edit-start-date') as HTMLInputElement;
+    const dueDateInput = container.querySelector('#edit-due-date') as HTMLInputElement;
+    expect(startDateInput.value).toBe('2026-10-01');
+    expect(dueDateInput.value).toBe('2026-11-01');
+
+    // Clear start date manually using clear button
+    const startDateWrapper = startDateInput.closest('div.relative') as HTMLElement;
+    const clearStartBtn = startDateWrapper.querySelector('button[aria-label="Clear date"]') as HTMLButtonElement;
+    expect(clearStartBtn).not.toBeNull();
+    await act(async () => {
+      clearStartBtn.click();
+    });
+    expect(startDateInput.value).toBe('');
+
+    // Update due date manually
+    await act(async () => {
+      setInputValue(dueDateInput, '2026-12-31');
+    });
+    expect(dueDateInput.value).toBe('2026-12-31');
+
+    // Submit form
+    const form = container.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      'PROJ-101',
+      expect.objectContaining({
+        start_date: null,
+        due_date: '2026-12-31',
+      })
+    );
+  });
 });

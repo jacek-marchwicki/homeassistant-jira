@@ -741,6 +741,11 @@ class FakeJiraClient:
         raw_start_date = (
             fields.get("customfield_10015") or fields.get("startDate") or fields.get("start_date")
         )
+        raw_recreate_after = (
+            fields.get("customfield_10027")
+            or fields.get("recreate_after")
+            or fields.get("recreateAfter")
+        )
         raw_created_at = fields.get("created") or fields.get("created_at")
         raw_updated_at = fields.get("updated") or fields.get("updated_at")
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -753,12 +758,18 @@ class FakeJiraClient:
             summary = fields.get("summary", existing.summary)
             due_date = str(raw_due_date) if raw_due_date is not None else existing.due_date
             start_date = str(raw_start_date) if raw_start_date is not None else existing.start_date
+            recreate_after = (
+                str(raw_recreate_after)
+                if raw_recreate_after is not None
+                else existing.recreate_after
+            )
             updated = existing.model_copy(
                 update={
                     "summary": summary,
                     "status": status,
                     "due_date": due_date,
                     "start_date": start_date,
+                    "recreate_after": recreate_after,
                     "updated_at": updated_at,
                 }
             )
@@ -768,6 +779,7 @@ class FakeJiraClient:
         # Otherwise create new issue representation
         due_date = str(raw_due_date) if raw_due_date is not None else None
         start_date = str(raw_start_date) if raw_start_date is not None else None
+        recreate_after = str(raw_recreate_after) if raw_recreate_after is not None else None
         new_issue = JiraIssue(
             id=str(issue_data.get("id", "999")),
             key=issue_key,
@@ -779,6 +791,7 @@ class FakeJiraClient:
             story_points=None,
             due_date=due_date,
             start_date=start_date,
+            recreate_after=recreate_after,
             created_at=created_at,
             updated_at=updated_at,
         )

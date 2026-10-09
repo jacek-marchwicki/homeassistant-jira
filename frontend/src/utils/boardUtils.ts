@@ -471,16 +471,29 @@ export interface ReadySections {
   overdue: JiraIssue[];
   expedited: JiraIssue[];
   inProgress: JiraIssue[];
+  homeAsUsual: JiraIssue[];
   other: JiraIssue[];
 }
 
 /**
- * Splits an array of issues into Overdue, Expedited, In Progress, and Other groups.
+ * Returns true if an issue belongs to "Home as Usual".
+ * An issue belongs to Home as Usual if it is Active (Start date <= Now date)
+ * and its "Recreate after" interval equals "1d".
+ */
+export function isIssueHomeAsUsual(issue: JiraIssue, now: Date = new Date()): boolean {
+  if (!isIssueActive(issue, now)) return false;
+  const recreate = (issue.recreate_after ?? issue.recreateAfter ?? '').trim().toLowerCase();
+  return recreate === '1d';
+}
+
+/**
+ * Splits an array of issues into Overdue, Expedited, In Progress, Home as Usual, and Other groups.
  * Precedence:
  * 1. Overdue (due date strictly before today - takes highest priority)
  * 2. Expedited (highest priority or due today)
  * 3. In Progress (status is inprogress, not overdue/expedited)
- * 4. Other (standard Ready / To Do issues)
+ * 4. Home as Usual (Active and recreate_after == "1d")
+ * 5. Other (standard Ready / To Do issues)
  */
 export function splitReadyIssues(
   issues: JiraIssue[],
@@ -490,6 +503,7 @@ export function splitReadyIssues(
   const overdue: JiraIssue[] = [];
   const expedited: JiraIssue[] = [];
   const inProgress: JiraIssue[] = [];
+  const homeAsUsual: JiraIssue[] = [];
   const other: JiraIssue[] = [];
 
   for (const issue of issues) {
@@ -499,12 +513,14 @@ export function splitReadyIssues(
       expedited.push(issue);
     } else if (isIssueInProgress(issue, columns)) {
       inProgress.push(issue);
+    } else if (isIssueHomeAsUsual(issue, now)) {
+      homeAsUsual.push(issue);
     } else {
       other.push(issue);
     }
   }
 
-  return { overdue, expedited, inProgress, other };
+  return { overdue, expedited, inProgress, homeAsUsual, other };
 }
 
 /**

@@ -10,6 +10,7 @@ import { PrioritySelect } from './PrioritySelect.tsx';
 import { StatusSelect } from './StatusSelect.tsx';
 import { CommentsSection } from './CommentsSection.tsx';
 import { RichTextEditor } from './RichTextEditor.tsx';
+import { DatePicker } from './DatePicker.tsx';
 
 function formatDateTime(isoString?: string | null): string | null {
   if (!isoString) return null;
@@ -284,12 +285,10 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               >
                 Start Date
               </label>
-              <input
+              <DatePicker
                 id="edit-start-date"
-                type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full h-10 px-3 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
+                onChange={setStartDate}
               />
             </div>
 
@@ -300,12 +299,10 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               >
                 Due Date
               </label>
-              <input
+              <DatePicker
                 id="edit-due-date"
-                type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full h-10 px-3 text-sm rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] focus:outline-none focus:border-[var(--jira-primary)]"
+                onChange={setDueDate}
               />
             </div>
           </div>

@@ -190,6 +190,18 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
               updated_at: '2026-10-05T00:00:00Z',
             },
             {
+              id: '105',
+              key: 'PROJ-105',
+              summary: 'Daily standup preparation and sync',
+              issue_type: 'task',
+              priority: 'medium',
+              status: { id: '10003', name: 'Ready', category: 'todo' },
+              recreate_after: '1d',
+              start_date: '2026-10-01',
+              due_date: '2026-10-10',
+              updated_at: '2026-10-05T00:00:00Z',
+            },
+            {
               id: '103',
               key: 'PROJ-103',
               summary: 'Quarterly roadmap documentation cleanup',
@@ -212,11 +224,13 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const overdueSection = page.getByTestId('ready-section-overdue');
     const expeditedSection = page.getByTestId('ready-section-expedited');
     const inProgressSection = page.getByTestId('ready-section-inprogress');
+    const homeAsUsualSection = page.getByTestId('ready-section-home-as-usual');
     const otherSection = page.getByTestId('ready-section-other');
 
     await expect(overdueSection).toBeVisible();
     await expect(expeditedSection).toBeVisible();
     await expect(inProgressSection).toBeVisible();
+    await expect(homeAsUsualSection).toBeVisible();
     await expect(otherSection).toBeVisible();
 
     // 1. Capture Overdue section snapshot
@@ -228,7 +242,10 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     // 3. Capture In Progress section snapshot
     await expect(inProgressSection).toHaveScreenshot('ready-section-inprogress.png');
 
-    // 4. Capture full Ready column snapshot with all sub-sections
+    // 4. Capture Home as Usual section snapshot
+    await expect(homeAsUsualSection).toHaveScreenshot('ready-section-home-as-usual.png');
+
+    // 5. Capture full Ready column snapshot with all sub-sections
     await expect(readyColumn).toHaveScreenshot('ready-column-sections.png');
   });
 
@@ -982,6 +999,26 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(listbox).toBeVisible();
 
     await expect(modal.locator('> div')).toHaveScreenshot('component-modal-edit-assignee-picker.png');
+  });
+
+  test('Capture Edit Issue Modal with DatePicker Popover Open Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
+    await editButton.click();
+
+    const modal = page.getByRole('dialog', { name: /Edit Issue/ });
+    await expect(modal).toBeVisible();
+
+    const dueDateInput = modal.locator('#edit-due-date');
+    const dueWrapper = dueDateInput.locator('xpath=ancestor::div[contains(@class, "relative")][1]');
+    const datePickerTrigger = dueWrapper.getByRole('button', { name: 'Open calendar' });
+    await expect(datePickerTrigger).toBeVisible();
+    await datePickerTrigger.click();
+
+    const popover = page.getByTestId('date-picker-popover');
+    await expect(popover).toBeVisible();
+
+    await expect(modal.locator('> div')).toHaveScreenshot('component-modal-edit-datepicker-open.png');
   });
 
   test('Capture Newly Created Issue with Status and Assignee at Highest Rank Top of List Snapshot', async ({ page }) => {

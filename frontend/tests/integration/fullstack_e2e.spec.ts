@@ -521,6 +521,124 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const responseJson = await transitionResponse.json();
     expect(responseJson.status.name).toBe('In Progress');
   });
+
+  test('14. DatePicker in Edit Modal: selects date via popover, enters date manually, clears date via clear button, and syncs to backend', async ({
+    page,
+  }) => {
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
+    await expect(proj101Article).toBeVisible();
+
+    // Click Edit PROJ-101
+    const editBtn = proj101Article.getByRole('button', { name: 'Edit PROJ-101' });
+    await editBtn.click();
+
+    const dialog = page.getByRole('dialog', { name: /Edit Issue PROJ-101/ });
+    await expect(dialog).toBeVisible();
+
+    const startDateInput = dialog.locator('#edit-start-date');
+    const dueDateInput = dialog.locator('#edit-due-date');
+    await expect(startDateInput).toBeVisible();
+    await expect(dueDateInput).toBeVisible();
+
+    // 1. Enter Due Date manually
+    await dueDateInput.fill('2026-11-20');
+    await expect(dueDateInput).toHaveValue('2026-11-20');
+
+    // 2. Open Calendar popover on Start Date via calendar button
+    const startWrapper = startDateInput.locator('xpath=ancestor::div[contains(@class, "relative")][1]');
+    const openCalendarBtn = startWrapper.getByRole('button', { name: 'Open calendar' });
+    await openCalendarBtn.click();
+
+    // Popover is visible
+    const popover = page.getByTestId('date-picker-popover');
+    await expect(popover).toBeVisible();
+
+    // Click "Today" in popover
+    const todayBtn = popover.getByTestId('date-picker-today');
+    await todayBtn.click();
+
+    // Popover closes and start date has a value
+    await expect(popover).not.toBeVisible();
+    const todayVal = await startDateInput.inputValue();
+    expect(todayVal).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    // 3. Clear Due Date via the input clear button ('X')
+    const dueWrapper = dueDateInput.locator('xpath=ancestor::div[contains(@class, "relative")][1]');
+    const clearDueBtn = dueWrapper.getByRole('button', { name: 'Clear date' });
+    await expect(clearDueBtn).toBeVisible();
+    await clearDueBtn.click();
+    await expect(dueDateInput).toHaveValue('');
+
+    // 4. Save Changes and verify backend PATCH call
+    const patchPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues/PROJ-101') && res.status() === 200
+    );
+
+    await dialog.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(dialog).not.toBeVisible();
+
+    const patchRes = await patchPromise;
+    expect(patchRes.ok()).toBeTruthy();
+    const patchJson = await patchRes.json();
+    expect(patchJson.start_date).toBe(todayVal);
+    expect(patchJson.due_date).toBeNull();
+  });
+
+  test('15. Home as Usual Section: displays active tasks with recreate_after == "1d" in Ready column between In Progress and Other', async ({
+    page,
+  }) => {
+    // Show all issues
+    await page.getByRole('button', { name: /All Issues/ }).click();
+
+    // Initially, verify sections in Ready (To Do) column
+    const todoColumn = page.getByTestId('column-col-todo');
+    await expect(todoColumn).toBeVisible();
+
+    // Post a webhook creating a daily routine task: Active (start_date in past) and recreate_after: '1d'
+    const dailyWebhookRes = await page.request.post('/api/webhooks/jira', {
+      data: {
+        webhookEvent: 'jira:issue_created',
+        issue: {
+          id: '888',
+          key: 'PROJ-888',
+          fields: {
+            summary: 'Daily Morning Checklist',
+            status: {
+              id: '1',
+              name: 'To Do',
+              statusCategory: { id: 2, key: 'new', name: 'To Do' },
+            },
+            priority: { id: '3', name: 'Medium' },
+            issuetype: { id: '3', name: 'Task' },
+            customfield_10015: '2026-10-01', // start_date: Active
+            customfield_10027: '1d', // recreate_after: '1d'
+          },
+        },
+      },
+    });
+    expect(dailyWebhookRes.ok()).toBeTruthy();
+
+    // Verify "Home as Usual" sub-section appears in Ready column
+    const homeAsUsualSection = todoColumn.getByTestId('ready-section-home-as-usual');
+    await expect(homeAsUsualSection).toBeVisible();
+    await expect(homeAsUsualSection).toContainText('Home as Usual');
+    await expect(homeAsUsualSection.locator('article', { hasText: 'PROJ-888' })).toBeVisible();
+
+    // Verify sub-section order in Ready column
+    const sections = todoColumn.locator('[data-testid^="ready-section-"]');
+    const count = await sections.count();
+    const testIds: string[] = [];
+    for (let i = 0; i < count; i++) {
+      testIds.push((await sections.nth(i).getAttribute('data-testid')) || '');
+    }
+
+    const inProgressIndex = testIds.indexOf('ready-section-inprogress');
+    const homeAsUsualIndex = testIds.indexOf('ready-section-home-as-usual');
+    const otherIndex = testIds.indexOf('ready-section-other');
+
+    expect(homeAsUsualIndex).toBeGreaterThan(inProgressIndex);
+    expect(otherIndex).toBeGreaterThan(homeAsUsualIndex);
+  });
 });
 
 

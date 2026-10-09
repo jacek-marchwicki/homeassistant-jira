@@ -11,6 +11,7 @@ import {
   isIssueOverdue,
   isIssueExpedited,
   isIssueInProgress,
+  isIssueHomeAsUsual,
   isEpicIssue,
   isReadyColumn,
   isInProgressColumn,
@@ -446,6 +447,115 @@ describe('boardUtils', () => {
       expect(expedited.map((i) => i.key)).toEqual(['PROG-EXPEDITED']);
       expect(inProgress.map((i) => i.key)).toEqual(['PROG-NORMAL']);
       expect(other.map((i) => i.key)).toEqual(['READY-NORMAL']);
+    });
+
+    it('identifies Home as Usual tasks when Active and recreate_after is "1d"', () => {
+      const activeDailyIssue: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'DAILY-ACTIVE',
+        summary: 'Daily routine task',
+        start_date: '2026-10-01', // Past start date -> Active
+        recreate_after: '1d',
+      };
+      const inactiveDailyIssue: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'DAILY-INACTIVE',
+        summary: 'Future daily task',
+        start_date: '2026-10-25', // Future start date -> Not active
+        recreate_after: '1d',
+      };
+      const weeklyIssue: JiraIssue = {
+        ...mockBaseIssue,
+        key: 'WEEKLY',
+        summary: 'Weekly task',
+        start_date: null, // Active
+        recreate_after: '1w',
+      };
+
+      expect(isIssueHomeAsUsual(activeDailyIssue, fixedNow)).toBe(true);
+      expect(isIssueHomeAsUsual(inactiveDailyIssue, fixedNow)).toBe(false);
+      expect(isIssueHomeAsUsual(weeklyIssue, fixedNow)).toBe(false);
+    });
+
+    it('splits Ready column into Overdue, Expedited, In Progress, Home as Usual, and Other with correct precedence', () => {
+      const issues: JiraIssue[] = [
+        // 1. Overdue with recreate_after == '1d' -> Overdue takes precedence
+        {
+          ...mockBaseIssue,
+          key: 'TASK-OVERDUE-DAILY',
+          summary: 'Overdue Daily Task',
+          priority: 'medium',
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+          due_date: '2026-09-30',
+          recreate_after: '1d',
+        },
+        // 2. Expedited with recreate_after == '1d' -> Expedited takes precedence
+        {
+          ...mockBaseIssue,
+          key: 'TASK-EXP-DAILY',
+          summary: 'Expedited Daily Task',
+          priority: 'highest',
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+          start_date: null,
+          due_date: '2026-10-20',
+          recreate_after: '1d',
+        },
+        // 3. In Progress with recreate_after == '1d' -> In Progress takes precedence
+        {
+          ...mockBaseIssue,
+          key: 'TASK-PROG-DAILY',
+          summary: 'In Progress Daily Task',
+          priority: 'medium',
+          status: { id: '3', name: 'In Progress', category: 'inprogress' },
+          start_date: null,
+          due_date: '2026-10-20',
+          recreate_after: '1d',
+        },
+        // 4. Home as Usual: Active and recreate_after == '1d'
+        {
+          ...mockBaseIssue,
+          key: 'TASK-HOME-AS-USUAL',
+          summary: 'Home as Usual Task',
+          priority: 'medium',
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+          start_date: '2026-10-01',
+          due_date: '2026-10-20',
+          recreate_after: '1d',
+        },
+        // 5. Inactive with recreate_after == '1d' -> Not Active, so lands in Other
+        {
+          ...mockBaseIssue,
+          key: 'TASK-INACTIVE-DAILY',
+          summary: 'Inactive Daily Task',
+          priority: 'medium',
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+          start_date: '2026-10-25', // Future start date
+          due_date: '2026-10-30',
+          recreate_after: '1d',
+        },
+        // 6. Regular Ready task -> lands in Other
+        {
+          ...mockBaseIssue,
+          key: 'TASK-REGULAR-OTHER',
+          summary: 'Regular Task',
+          priority: 'medium',
+          status: { id: '10003', name: 'Ready', category: 'todo' },
+          due_date: '2026-10-20',
+          recreate_after: '1w',
+        },
+      ];
+
+      const { overdue, expedited, inProgress, homeAsUsual, other } = splitReadyIssues(
+        issues,
+        fixedNow,
+        homeColumns
+      );
+
+      expect(overdue.map((i) => i.key)).toEqual(['TASK-OVERDUE-DAILY']);
+      expect(expedited.map((i) => i.key)).toEqual(['TASK-EXP-DAILY']);
+      expect(inProgress.map((i) => i.key)).toEqual(['TASK-PROG-DAILY']);
+      expect(homeAsUsual.map((i) => i.key)).toEqual(['TASK-HOME-AS-USUAL']);
+      expect(other.map((i) => i.key)).toEqual(['TASK-INACTIVE-DAILY', 'TASK-REGULAR-OTHER']);
     });
   });
 

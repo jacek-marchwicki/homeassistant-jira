@@ -6,6 +6,7 @@ import {
   filterIssues,
   filterIssuesForColumn,
   getActiveBoardColumns,
+  splitReadyIssues,
 } from '../utils/boardUtils.ts';
 
 const testColumns: BoardColumn[] = [
@@ -274,5 +275,127 @@ describe('Cross-View & Filter Offline Reactivity', () => {
       assignee_name: '',
       assignee_account_id: null,
     });
+  });
+
+  it('updating start_date and due_date or clearing them while offline is queued in outbox and immediately visible', async () => {
+    const issueWithDates: JiraIssue = {
+      id: '301',
+      key: 'PROJ-301',
+      summary: 'Task with Dates',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      assignee: null,
+      priority: 'medium',
+      issue_type: 'task',
+      start_date: '2026-10-01',
+      due_date: '2026-10-15',
+    };
+
+    useBoardStore.setState({
+      issues: [issueWithDates],
+      offlineOutbox: [],
+      syncStatus: 'synced',
+    });
+
+    // 1. Go offline
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    // 2. Update both start_date and due_date
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-301', {
+      start_date: '2026-10-10',
+      due_date: '2026-10-25',
+    });
+
+    let storeIssues = useBoardStore.getState().issues;
+    expect(storeIssues[0].start_date).toBe('2026-10-10');
+    expect(storeIssues[0].due_date).toBe('2026-10-25');
+    expect(useBoardStore.getState().syncStatus).toBe('offline');
+
+    let outbox = useBoardStore.getState().offlineOutbox;
+    expect(outbox.length).toBe(1);
+    expect(outbox[0].action).toBe('update_issue');
+    expect(outbox[0].payload).toEqual({
+      start_date: '2026-10-10',
+      due_date: '2026-10-25',
+    });
+
+    // 3. Clear dates while offline
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-301', {
+      start_date: null,
+      due_date: null,
+    });
+
+    storeIssues = useBoardStore.getState().issues;
+    expect(storeIssues[0].start_date).toBeNull();
+    expect(storeIssues[0].due_date).toBeNull();
+
+    outbox = useBoardStore.getState().offlineOutbox;
+    expect(outbox.length).toBe(2);
+    expect(outbox[1].action).toBe('update_issue');
+    expect(outbox[1].payload).toEqual({
+      start_date: null,
+      due_date: null,
+    });
+
+    // 4. Reconnect to network and drain queue
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...issueWithDates,
+        start_date: null,
+        due_date: null,
+      }),
+    });
+
+    await useBoardStore.getState().flushOfflineQueue();
+    expect(useBoardStore.getState().offlineOutbox.length).toBe(0);
+    expect(useBoardStore.getState().syncStatus).toBe('synced');
+  });
+
+  it('issue with recreate_after == "1d" and Active is immediately classified into Home as Usual section while offline', async () => {
+    const readyIssue: JiraIssue = {
+      id: '302',
+      key: 'PROJ-302',
+      summary: 'Task becoming daily routine',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      assignee: null,
+      priority: 'medium',
+      issue_type: 'task',
+      start_date: '2026-10-01',
+      due_date: '2026-10-20',
+      recreate_after: '1w',
+    };
+
+    useBoardStore.setState({
+      issues: [readyIssue],
+      columns: testColumns,
+      offlineOutbox: [],
+    });
+
+    // Verify initially in "other"
+    let sections = splitReadyIssues(
+      useBoardStore.getState().issues,
+      new Date('2026-10-07'),
+      testColumns
+    );
+    expect(sections.homeAsUsual.length).toBe(0);
+    expect(sections.other.length).toBe(1);
+
+    // Simulate offline
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    // Update recreate_after to '1d' while offline
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-302', {
+      recreate_after: '1d',
+    });
+
+    // Immediately classified into Home as Usual
+    sections = splitReadyIssues(
+      useBoardStore.getState().issues,
+      new Date('2026-10-07'),
+      testColumns
+    );
+    expect(sections.homeAsUsual.length).toBe(1);
+    expect(sections.homeAsUsual[0].key).toBe('PROJ-302');
+    expect(sections.other.length).toBe(0);
   });
 });

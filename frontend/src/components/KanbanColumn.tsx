@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { AlertCircle, CircleDot, PlayCircle, Zap } from 'lucide-react';
+import { AlertCircle, CircleDot, Home, PlayCircle, Zap } from 'lucide-react';
 import { BoardColumn, JiraIssue, JiraStatusCategory } from '../types/jira.ts';
 import { splitReadyIssues } from '../utils/boardUtils.ts';
 import { useBoardStore } from '../store/boardStore.ts';
@@ -102,14 +102,16 @@ export function KanbanColumn({
   const issueIds = issues.map((i) => i.key);
   const shouldShowDropTarget = isReadyColumn && (isDragging || showDropTarget);
 
-  const { overdue, expedited, inProgress, other } = isReadyColumn
+  const { overdue, expedited, inProgress, homeAsUsual, other } = isReadyColumn
     ? splitReadyIssues(issues, new Date(), columns)
-    : { overdue: [], expedited: [], inProgress: [], other: [] };
+    : { overdue: [], expedited: [], inProgress: [], homeAsUsual: [], other: [] };
 
   const hasOverdue = overdue.length > 0;
   const hasExpedited = expedited.length > 0;
   const hasInProgress = inProgress.length > 0;
-  const hasSpecialSections = isReadyColumn && (hasOverdue || hasExpedited || hasInProgress);
+  const hasHomeAsUsual = homeAsUsual.length > 0;
+  const hasSpecialSections =
+    isReadyColumn && (hasOverdue || hasExpedited || hasInProgress || hasHomeAsUsual);
 
   return (
     <div
@@ -216,6 +218,26 @@ export function KanbanColumn({
                   </div>
                   <div className="flex flex-col gap-2">
                     {inProgress.map((issue) => (
+                      <IssueCard key={issue.key} issue={issue} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 3b. Home as Usual Sub-section (only if not empty) */}
+              {hasHomeAsUsual && (
+                <div data-testid="ready-section-home-as-usual" className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                      <Home className="w-3.5 h-3.5" />
+                      <span>Home as Usual</span>
+                    </div>
+                    <span className="px-1.5 py-0.5 rounded-full text-2xs font-bold bg-emerald-500/20 text-emerald-300">
+                      {homeAsUsual.length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {homeAsUsual.map((issue) => (
                       <IssueCard key={issue.key} issue={issue} />
                     ))}
                   </div>

@@ -19,8 +19,9 @@ A high-performance, real-time Jira dashboard built for **Home Assistant** and **
 - **Optimistic UI (Zero Perceptual Latency) & Offline Outbox**:
   - User actions (moving cards, reordering rank via drag-and-drop, transitioning statuses, editing fields, creating issues) update the interface immediately ($< 50\text{ms}$).
   - Dual-layer offline outbox queuing (client-side Zustand queue + backend SQLite persistent outbox) with automatic background synchronization, exponential backoff retries, and graceful rollback on rejection.
-- **LexoRank Drag-and-Drop Issue Ranking**:
-  - Natural vertical card reordering in both Kanban Board and Backlog views without card snapping or layout jumping.
+- **LexoRank Drag-and-Drop Issue Ranking & Multi-Board Views**:
+  - Three specialized board views: **Kanban Board** (workflow stages), **People Board** (columns by Assignee with 24h Done retention and universal unassigned task visibility), and **Backlog** (full issue list with sprint drag-and-drop).
+  - Natural vertical card reordering across all views without card snapping or layout jumping.
   - Fractional alphanumeric LexoRank calculation for collision-free relative ordering, preserved across offline sessions and synced bi-directionally with Jira.
 - **Installable Progressive Web App (PWA)**:
   - Installable in browsers on **Android** (Google Chrome, Samsung Internet, Edge, Brave), **iOS** (Safari), and **Desktop**.

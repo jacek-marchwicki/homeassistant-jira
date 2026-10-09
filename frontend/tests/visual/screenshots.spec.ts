@@ -1067,5 +1067,29 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       fullPage: true,
     });
   });
+
+  test('Capture People View across Desktop and Mobile Viewports', async ({ page }) => {
+    // 1. Desktop 1440x900
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const peopleBtn = page.locator('header button[aria-label="People View"]');
+    await expect(peopleBtn).toBeVisible();
+    await peopleBtn.click();
+
+    // Verify columns by assignee are rendered
+    const peopleColumns = page.locator('[data-testid^="people-column-"]');
+    await expect(peopleColumns.first()).toBeVisible();
+
+    await expect(page).toHaveScreenshot('people-view-desktop.png', {
+      fullPage: true,
+    });
+
+    // 2. Mobile 375x667
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.waitForTimeout(150);
+    await expect(page).toHaveScreenshot('people-view-mobile.png', {
+      fullPage: true,
+    });
+  });
 });
 

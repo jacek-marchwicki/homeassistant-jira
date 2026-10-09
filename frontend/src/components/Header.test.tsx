@@ -115,11 +115,29 @@ describe('Header component', () => {
 
     expect(container.querySelector('button[aria-label="Kanban Board View"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Backlog View"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="People View"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Theme Selection"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Dark Mode"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Light Mode"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Kiosk Mode"]')).not.toBeNull();
+  });
+
+  it('switches currentView to "people" when People button is clicked', async () => {
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    const peopleBtn = container.querySelector(
+      'button[aria-label="People View"]'
+    ) as HTMLButtonElement;
+    expect(peopleBtn).not.toBeNull();
+
+    await act(async () => {
+      peopleBtn.click();
+    });
+
+    expect(useBoardStore.getState().currentView).toBe('people');
   });
 
   it('opens mobile theme dropdown and switches theme when an option is clicked', async () => {

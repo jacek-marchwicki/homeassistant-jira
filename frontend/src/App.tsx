@@ -8,6 +8,7 @@ import { Header } from './components/Header.tsx';
 import { InstallHelpModal } from './components/InstallHelpModal.tsx';
 import { KanbanBoard } from './components/KanbanBoard.tsx';
 import { MobileInstallBanner } from './components/MobileInstallBanner.tsx';
+import { PeopleBoard } from './components/PeopleBoard.tsx';
 import { useBoardStore } from './store/boardStore.ts';
 import { getWsUrl } from './utils/paths.ts';
 import { usePwaInstall } from './utils/usePwaInstall.ts';
@@ -151,8 +152,14 @@ export default function App() {
       {/* Quick Filters & Search */}
       <FilterBar />
 
-      {/* Main View: Kanban Board or Dedicated Backlog List View */}
-      {currentView === 'board' ? <KanbanBoard /> : <BacklogView />}
+      {/* Main View: Kanban Board, People Board, or Dedicated Backlog List View */}
+      {currentView === 'board' ? (
+        <KanbanBoard />
+      ) : currentView === 'people' ? (
+        <PeopleBoard />
+      ) : (
+        <BacklogView />
+      )}
 
       {/* PWA Installation Guidance Modal */}
       <InstallHelpModal

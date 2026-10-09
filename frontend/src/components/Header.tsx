@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Check,
   ChevronDown,
@@ -12,11 +12,12 @@ import {
   Plus,
   Sun,
   Tv,
+  Users,
   Wifi,
   WifiOff,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
-import { splitIssuesByBacklog } from '../utils/boardUtils.ts';
+import { isDoneIssueWithinDays, splitIssuesByBacklog } from '../utils/boardUtils.ts';
 
 export interface HeaderProps {
   canInstall?: boolean;
@@ -90,6 +91,9 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
   }, [isThemeMenuOpen]);
 
   const { boardIssues, backlogIssues } = splitIssuesByBacklog(issues, columns);
+  const peopleIssuesCount = useMemo(() => {
+    return boardIssues.filter((i) => isDoneIssueWithinDays(i, 1)).length;
+  }, [boardIssues]);
 
   return (
     <header className="flex flex-nowrap items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 border-b border-[var(--jira-border)] bg-[var(--jira-surface)] sticky top-0 z-30">
@@ -110,7 +114,7 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
           </div>
         </div>
 
-        {/* View Switcher: Board vs Backlog - Text hidden on mobile in favor of icons */}
+        {/* View Switcher: Board vs People vs Backlog - Text hidden on mobile in favor of icons */}
         <div className="flex items-center p-0.5 sm:p-1 rounded-lg border border-[var(--jira-border)] bg-[var(--jira-canvas)] shrink-0">
           <button
             onClick={() => setCurrentView('board')}
@@ -132,6 +136,29 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
               }`}
             >
               {boardIssues.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView('people')}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs transition-colors cursor-pointer min-h-[32px] sm:min-h-[36px] ${
+              currentView === 'people'
+                ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
+                : 'text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
+            }`}
+            title="People View (Grouped by Assignee)"
+            aria-label="People View"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">People</span>
+            <span
+              className={`ml-0.5 px-1.5 py-0.5 rounded-full text-2xs font-bold ${
+                currentView === 'people'
+                  ? 'bg-black/20 text-white'
+                  : 'bg-[var(--jira-surface)] text-[var(--jira-text-secondary)]'
+              }`}
+            >
+              {peopleIssuesCount}
             </span>
           </button>
 

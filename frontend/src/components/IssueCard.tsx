@@ -191,6 +191,27 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
               <span>{issue.recreate_after ?? issue.recreateAfter}</span>
             </span>
           )}
+
+          {isDone && (issue.updated_at || issue.updatedAt) && (() => {
+            const dateStr = issue.updated_at ?? issue.updatedAt;
+            try {
+              const d = new Date(dateStr!);
+              const timeStr = !isNaN(d.getTime())
+                ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : dateStr;
+              return (
+                <span
+                  className="flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+                  title={`Done: Updated at ${dateStr}`}
+                >
+                  <CheckCircle2 className="w-3 h-3 shrink-0" />
+                  <span>{timeStr}</span>
+                </span>
+              );
+            } catch {
+              return null;
+            }
+          })()}
           <AssigneeAvatar assignee={issue.assignee} />
         </div>
       </div>

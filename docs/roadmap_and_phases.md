@@ -107,4 +107,19 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Comprehensive Test Verification**:
     - Unit tests covering portal rendering, quick year navigation buttons, and dropdown year selection (`DatePicker.test.tsx`, `CreateIssueModal.test.tsx`).
     - Visual regression snapshots updated for the portaled DatePicker popover (`component-datepicker-popover.png`, `component-modal-edit-datepicker-open.png`).
+- [x] **Phase 5.8: "People" Board with Assignee Columns & 24h Done Task Retention**
+  - [x] **Dedicated "People" Board View & Assignee Columns**:
+    - Introduced a third board view, **"People"** ([`frontend/src/components/PeopleBoard.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/PeopleBoard.tsx)), directly switchable from the top navigation header alongside "Board" and "Backlog".
+    - Columns are organized by Assignee (Column 1 - Person 1, Column 2 - Person 2) synthesized from active issues, backend available users, and current user identity via `getAssigneesFromBoard`, ordering current user first followed by other team members alphabetically.
+  - [x] **Universal Unassigned Task Visibility**:
+    - Unassigned tasks are presented across every person column (`isAssignedToPersonOrUnassigned`), ensuring unassigned items remain immediately visible and actionable for all team members (mirroring the behavior of "Assigned to Me").
+  - [x] **Ready-Style Task Hierarchy with All Statuses Represented**:
+    - Every person column organizes tasks according to the "Ready" board hierarchy (`Overdue` > `Expedited` > `In Progress` > `Home as Usual` > `To Do` > `Done`), with all statuses visible.
+  - [x] **24-Hour Done Task Retention with Crossed-Out Formatting**:
+    - Tasks marked as "Done" remain visible in their assignee's column for 24 hours (`isDoneIssueWithinDays(issue, 1, now)`), rendered with crossed-out summary text (`line-through`), a green checkmark badge, and the last updated at timestamp. Tasks completed older than 24 hours are cleanly filtered out.
+  - [x] **Drag-and-Drop Reassignment & Sub-50ms Offline Resilience**:
+    - Dragging cards between person columns reassigns the issue to the target person optimistically in under 50ms with drag-and-drop orchestration (`handlePeopleDragEnd`), queuing changes into `offlineOutbox` when disconnected with rollback safety and automatic reconciliation.
+  - [x] **Comprehensive Test Coverage & Visual Regression Snapshots**:
+    - Added unit test suites for People utilities (`boardUtils.test.ts`), column components (`PeopleColumn.test.tsx`), board view (`PeopleBoard.test.tsx`), header navigation (`Header.test.tsx`), and offline reactivity (`offlineReactivity.test.ts`).
+    - Added automated Playwright visual regression snapshots capturing the People Board on Desktop (`people-view-desktop.png`) and Mobile (`people-view-mobile.png`).
 

@@ -110,7 +110,7 @@ export function saveCachedOutbox(items: OfflineOutboxItem[]): void {
   }
 }
 
-export type DashboardView = 'board' | 'backlog';
+export type DashboardView = 'board' | 'backlog' | 'people';
 
 export interface BoardStoreState {
   theme: ThemeMode;

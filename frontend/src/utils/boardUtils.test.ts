@@ -26,6 +26,10 @@ import {
   calculateRankBetween,
   handleKanbanDragEnd,
   handleBacklogDragEnd,
+  isAssignedToPersonOrUnassigned,
+  getAssigneesFromBoard,
+  splitReadyAndDoneIssues,
+  filterIssuesForPeopleColumn,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -1236,6 +1240,212 @@ describe('boardUtils', () => {
       expect(moveToBoard).not.toHaveBeenCalled();
       expect(moveToBacklog).not.toHaveBeenCalled();
       expect(rankIssueOptimistic).toHaveBeenCalledWith('B2', 'B1', undefined, expect.any(String));
+    });
+  });
+
+  describe('People Board Utilities', () => {
+    describe('isAssignedToPersonOrUnassigned', () => {
+      it('returns true when issue has no assignee (unassigned task)', () => {
+        const unassignedIssue: JiraIssue = { ...mockBaseIssue, assignee: null };
+        expect(isAssignedToPersonOrUnassigned(unassignedIssue, 'Jacek Marchwicki')).toBe(true);
+        expect(isAssignedToPersonOrUnassigned(unassignedIssue, 'Alex Lead')).toBe(true);
+      });
+
+      it('returns true when issue assignee displayName is empty or blank', () => {
+        const blankAssignee: JiraIssue = {
+          ...mockBaseIssue,
+          assignee: { displayName: '   ' },
+        };
+        expect(isAssignedToPersonOrUnassigned(blankAssignee, 'Jacek Marchwicki')).toBe(true);
+      });
+
+      it('returns true when issue matches person displayName', () => {
+        const assignedIssue: JiraIssue = {
+          ...mockBaseIssue,
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-1' },
+        };
+        expect(isAssignedToPersonOrUnassigned(assignedIssue, 'Jacek Marchwicki')).toBe(true);
+        expect(isAssignedToPersonOrUnassigned(assignedIssue, 'jacek')).toBe(true);
+        expect(isAssignedToPersonOrUnassigned(assignedIssue, 'Alex Lead')).toBe(false);
+      });
+
+      it('returns true when issue matches person accountId', () => {
+        const assignedIssue: JiraIssue = {
+          ...mockBaseIssue,
+          assignee: { displayName: 'Jacek M.', accountId: 'usr-jacek-123' },
+        };
+        expect(
+          isAssignedToPersonOrUnassigned(assignedIssue, 'Other Name', 'usr-jacek-123')
+        ).toBe(true);
+        expect(
+          isAssignedToPersonOrUnassigned(assignedIssue, 'Other Name', 'usr-alex-456')
+        ).toBe(false);
+      });
+    });
+
+    describe('getAssigneesFromBoard', () => {
+      it('aggregates unique assignees and puts currentUser first', () => {
+        const issues: JiraIssue[] = [
+          {
+            ...mockBaseIssue,
+            key: 'ISSUE-1',
+            assignee: { displayName: 'Zoe Designer', accountId: 'usr-zoe' },
+          },
+          {
+            ...mockBaseIssue,
+            key: 'ISSUE-2',
+            assignee: { displayName: 'Alex Lead', accountId: 'usr-alex' },
+          },
+          {
+            ...mockBaseIssue,
+            key: 'ISSUE-3',
+            assignee: null, // unassigned
+          },
+        ];
+
+        const availableUsers = [
+          { displayName: 'Bob Backend', accountId: 'usr-bob' },
+          { displayName: 'Alex Lead', accountId: 'usr-alex' }, // duplicate
+        ];
+
+        const result = getAssigneesFromBoard(issues, availableUsers, 'Jacek Marchwicki');
+
+        // Current user must be first
+        expect(result[0].displayName).toBe('Jacek Marchwicki');
+
+        // Subsequent people sorted alphabetically
+        const others = result.slice(1).map((p) => p.displayName);
+        expect(others).toEqual(['Alex Lead', 'Bob Backend', 'Zoe Designer']);
+      });
+
+      it('handles empty issues and users by returning currentUser only', () => {
+        const result = getAssigneesFromBoard([], [], 'Jacek Marchwicki');
+        expect(result.length).toBe(1);
+        expect(result[0].displayName).toBe('Jacek Marchwicki');
+      });
+    });
+
+    describe('splitReadyAndDoneIssues', () => {
+      it('separates issues into Overdue, Expedited, In Progress, Home as Usual, Other, and Done', () => {
+        const overdueIssue: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'OVERDUE-1',
+          due_date: '2026-10-01', // strictly before 2026-10-05
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        };
+        const expeditedIssue: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'EXPEDITED-1',
+          priority: 'highest',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        };
+        const inProgressIssue: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'INPROGRESS-1',
+          status: { id: 'col-in-progress', name: 'In Progress', category: 'inprogress' },
+        };
+        const homeAsUsualIssue: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'HOME-1',
+          recreate_after: '1d',
+          start_date: '2026-10-01',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        };
+        const otherIssue: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'OTHER-1',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        };
+        const recentDoneIssue: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'DONE-RECENT',
+          status: { id: 'col-done', name: 'Done', category: 'done' },
+          updated_at: '2026-10-05T10:00:00Z', // 2 hours ago
+        };
+        const oldDoneIssue: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'DONE-OLD',
+          status: { id: 'col-done', name: 'Done', category: 'done' },
+          updated_at: '2026-10-02T10:00:00Z', // 3 days ago (>24h)
+        };
+
+        const issues = [
+          overdueIssue,
+          expeditedIssue,
+          inProgressIssue,
+          homeAsUsualIssue,
+          otherIssue,
+          recentDoneIssue,
+          oldDoneIssue,
+        ];
+
+        const sections = splitReadyAndDoneIssues(issues, fixedNow, homeColumns, 1);
+
+        expect(sections.overdue.map((i) => i.key)).toEqual(['OVERDUE-1']);
+        expect(sections.expedited.map((i) => i.key)).toEqual(['EXPEDITED-1']);
+        expect(sections.inProgress.map((i) => i.key)).toEqual(['INPROGRESS-1']);
+        expect(sections.homeAsUsual.map((i) => i.key)).toEqual(['HOME-1']);
+        expect(sections.other.map((i) => i.key)).toEqual(['OTHER-1']);
+        // Only recent Done is included; old Done (>24h) is excluded
+        expect(sections.done.map((i) => i.key)).toEqual(['DONE-RECENT']);
+      });
+    });
+
+    describe('filterIssuesForPeopleColumn', () => {
+      it('includes tasks assigned to target person AND unassigned tasks, with all statuses represented', () => {
+        const personTask: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'P1-TASK',
+          assignee: { displayName: 'Person 1', accountId: 'usr-p1' },
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        };
+        const otherPersonTask: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'P2-TASK',
+          assignee: { displayName: 'Person 2', accountId: 'usr-p2' },
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        };
+        const unassignedTask: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'UNASSIGNED-TASK',
+          assignee: null,
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        };
+        const personDoneTask: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'P1-DONE',
+          assignee: { displayName: 'Person 1', accountId: 'usr-p1' },
+          status: { id: 'col-done', name: 'Done', category: 'done' },
+          updated_at: '2026-10-05T10:00:00Z',
+        };
+        const personOldDoneTask: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'P1-OLD-DONE',
+          assignee: { displayName: 'Person 1', accountId: 'usr-p1' },
+          status: { id: 'col-done', name: 'Done', category: 'done' },
+          updated_at: '2026-10-01T10:00:00Z', // > 24h
+        };
+
+        const issues = [
+          personTask,
+          otherPersonTask,
+          unassignedTask,
+          personDoneTask,
+          personOldDoneTask,
+        ];
+
+        const p1Issues = filterIssuesForPeopleColumn(
+          issues,
+          { displayName: 'Person 1', accountId: 'usr-p1' },
+          { now: fixedNow }
+        );
+
+        expect(p1Issues.map((i) => i.key)).toEqual([
+          'P1-TASK',
+          'UNASSIGNED-TASK',
+          'P1-DONE',
+        ]);
+      });
     });
   });
 });

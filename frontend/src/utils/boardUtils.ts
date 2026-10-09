@@ -1,6 +1,6 @@
 import type { DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { BoardColumn, JiraIssue, JiraStatusCategory } from '../types/jira.ts';
+import { BoardColumn, JiraIssue, JiraStatusCategory, JiraUser } from '../types/jira.ts';
 
 const CATEGORY_COLORS: Record<JiraStatusCategory, string> = {
   todo: 'var(--jira-status-todo)',
@@ -951,6 +951,319 @@ export function handleBacklogDragEnd(
         params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
       }
     }
+  }
+}
+
+export interface AssigneePerson {
+  displayName: string;
+  accountId?: string;
+  avatarUrl?: string;
+}
+
+/**
+ * Returns true if an issue is assigned to the specified person or unassigned.
+ */
+export function isAssignedToPersonOrUnassigned(
+  issue: JiraIssue,
+  personName: string,
+  personAccountId?: string
+): boolean {
+  if (!issue.assignee) return true;
+  const name = issue.assignee.displayName || issue.assignee.display_name || '';
+  if (!name.trim()) return true;
+
+  if (personAccountId && (issue.assignee.accountId || issue.assignee.account_id)) {
+    const accId = issue.assignee.accountId || issue.assignee.account_id;
+    if (accId === personAccountId) return true;
+  }
+
+  const pName = personName.trim().toLowerCase();
+  const aName = name.trim().toLowerCase();
+  return aName.includes(pName) || pName.includes(aName);
+}
+
+/**
+ * Extracts unique assignees from issues, availableUsers, and currentUser.
+ * currentUser is placed first, followed by remaining team members sorted alphabetically.
+ */
+export function getAssigneesFromBoard(
+  issues: JiraIssue[],
+  availableUsers: JiraUser[] = [],
+  currentUser: string = 'Jacek Marchwicki'
+): AssigneePerson[] {
+  const map = new Map<string, AssigneePerson>();
+
+  const addPerson = (name: string, accountId?: string, avatarUrl?: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { displayName: trimmed, accountId, avatarUrl });
+    } else {
+      if (!existing.accountId && accountId) existing.accountId = accountId;
+      if (!existing.avatarUrl && avatarUrl) existing.avatarUrl = avatarUrl;
+    }
+  };
+
+  // 1. Current User
+  if (currentUser && currentUser.trim()) {
+    addPerson(currentUser.trim());
+  }
+
+  // 2. Available users from backend
+  for (const u of availableUsers) {
+    const name = u.displayName || u.display_name;
+    if (name) {
+      addPerson(name, u.accountId || u.account_id, u.avatarUrl || u.avatar_url);
+    }
+  }
+
+  // 3. Assignees in issues
+  for (const issue of issues) {
+    if (issue.assignee) {
+      const name = issue.assignee.displayName || issue.assignee.display_name;
+      if (name) {
+        addPerson(
+          name,
+          issue.assignee.accountId || issue.assignee.account_id,
+          issue.assignee.avatarUrl || issue.assignee.avatar_url
+        );
+      }
+    }
+  }
+
+  const all = Array.from(map.values());
+  const curKey = (currentUser || '').trim().toLowerCase();
+
+  const currentPerson = all.find((p) => p.displayName.toLowerCase() === curKey);
+  const otherPeople = all.filter((p) => p.displayName.toLowerCase() !== curKey);
+  otherPeople.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  if (currentPerson) {
+    return [currentPerson, ...otherPeople];
+  }
+  return otherPeople;
+}
+
+export interface ReadyAndDoneSections extends ReadySections {
+  done: JiraIssue[];
+}
+
+/**
+ * Splits issues into Overdue, Expedited, In Progress, Home as Usual, Other, and Done sections.
+ * Done issues updated within doneMaxDays (default: 1 day / 24 hours) are retained in the done section.
+ */
+export function splitReadyAndDoneIssues(
+  issues: JiraIssue[],
+  now: Date = new Date(),
+  columns?: BoardColumn[],
+  doneMaxDays: number = 1
+): ReadyAndDoneSections {
+  const overdue: JiraIssue[] = [];
+  const expedited: JiraIssue[] = [];
+  const inProgress: JiraIssue[] = [];
+  const homeAsUsual: JiraIssue[] = [];
+  const other: JiraIssue[] = [];
+  const done: JiraIssue[] = [];
+
+  for (const issue of issues) {
+    const isDone =
+      issue.status?.category === 'done' ||
+      (issue.status?.name || '').trim().toLowerCase() === 'done';
+
+    if (isDone) {
+      if (isDoneIssueWithinDays(issue, doneMaxDays, now)) {
+        done.push(issue);
+      }
+      continue;
+    }
+
+    if (isIssueOverdue(issue, now)) {
+      overdue.push(issue);
+    } else if (isIssueExpedited(issue, now)) {
+      expedited.push(issue);
+    } else if (isIssueInProgress(issue, columns)) {
+      inProgress.push(issue);
+    } else if (isIssueHomeAsUsual(issue, now)) {
+      homeAsUsual.push(issue);
+    } else {
+      other.push(issue);
+    }
+  }
+
+  return { overdue, expedited, inProgress, homeAsUsual, other, done };
+}
+
+/**
+ * Filters issues for a specific person's column on the People board.
+ * Includes issues assigned to that person OR unassigned issues.
+ * Preserves all statuses, retaining Done issues updated within 24 hours (1 day).
+ */
+export function filterIssuesForPeopleColumn(
+  issues: JiraIssue[],
+  person: AssigneePerson,
+  options: FilterIssuesOptions = {}
+): JiraIssue[] {
+  const { searchQuery = '', now = new Date() } = options;
+
+  let filters: Set<string>;
+  if (options.activeFilter === 'all') {
+    filters = new Set();
+  } else if (options.activeFilters !== undefined) {
+    filters = new Set(options.activeFilters);
+  } else if (options.activeFilter) {
+    filters = new Set(
+      options.activeFilter
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+  } else {
+    filters = new Set(['active', 'hide_epics']);
+  }
+
+  return issues.filter((issue) => {
+    // 1. Text Search Filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesKey = (issue.key || '').toLowerCase().includes(q);
+      const matchesSummary = (issue.summary || '').toLowerCase().includes(q);
+      const matchesDescription = (issue.description || '').toLowerCase().includes(q);
+      if (!matchesKey && !matchesSummary && !matchesDescription) return false;
+    }
+
+    // 2. Assignee match for this Person (assigned to person OR unassigned)
+    if (!isAssignedToPersonOrUnassigned(issue, person.displayName, person.accountId)) {
+      return false;
+    }
+
+    // 3. Active Filter (Start date not in future: empty or <= now)
+    if (filters.has('active')) {
+      if (!isIssueActive(issue, now)) {
+        return false;
+      }
+    }
+
+    // 4. Hide Epics Filter
+    if (filters.has('hide_epics')) {
+      if (isEpicIssue(issue)) {
+        return false;
+      }
+    }
+
+    // 5. Done issues: must be within 24 hours (1 day)
+    const isDone =
+      issue.status?.category === 'done' ||
+      (issue.status?.name || '').trim().toLowerCase() === 'done';
+    if (isDone && !isDoneIssueWithinDays(issue, 1, now)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+export interface PeopleDragEndParams {
+  issues: JiraIssue[];
+  backlogIssues: JiraIssue[];
+  people: AssigneePerson[];
+  updateIssueOptimistic: (
+    issueKey: string,
+    updates: { assignee_name?: string; assignee_account_id?: string | null }
+  ) => Promise<void> | void;
+  rankIssueOptimistic: (
+    issueKey: string,
+    rankBeforeKey?: string,
+    rankAfterKey?: string,
+    targetRank?: string
+  ) => Promise<void> | void;
+  moveToBacklog: (issueKey: string) => Promise<void> | void;
+  moveToBoard: (issueKey: string) => Promise<void> | void;
+}
+
+export function handlePeopleDragEnd(
+  event: DragEndEvent,
+  params: PeopleDragEndParams
+): void {
+  const { active, over } = event;
+  if (!over) return;
+
+  const activeKey = String(active.id);
+  const activeItem = params.issues.find((i) => i.key === activeKey);
+  if (!activeItem) return;
+
+  const overKey = String(over.id);
+  const overData = over.data?.current;
+
+  // 1. Dropped onto Backlog slide-out / panel
+  if (
+    overKey === 'panel-backlog-list' ||
+    overData?.targetType === 'backlog' ||
+    params.backlogIssues.some((i) => i.key === overKey)
+  ) {
+    params.moveToBacklog(activeKey);
+    const overItem = params.backlogIssues.find((i) => i.key === overKey);
+    if (overItem) {
+      const targetIndex = params.backlogIssues.findIndex((i) => i.key === overKey);
+      const prevItem = targetIndex > 0 ? params.backlogIssues[targetIndex - 1] : null;
+      const nextItem = params.backlogIssues[targetIndex];
+      const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+      params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+    }
+    return;
+  }
+
+  // 2. Identify target person
+  let targetPerson: AssigneePerson | undefined;
+  if (overData?.type === 'PeopleColumn' && typeof overData.personName === 'string') {
+    targetPerson = params.people.find(
+      (p) =>
+        p.displayName === overData.personName ||
+        (overData.accountId && p.accountId === overData.accountId)
+    );
+  } else if (overKey.startsWith('people-column-')) {
+    const colId = overKey.replace('people-column-', '');
+    targetPerson = params.people.find((p) => (p.accountId && p.accountId === colId) || p.displayName === colId);
+  } else if (overData?.type === 'Issue' && overData.issue) {
+    const overIssue = overData.issue as JiraIssue;
+    if (overData.columnPersonName) {
+      targetPerson = params.people.find(
+        (p) => p.displayName === overData.columnPersonName
+      );
+    } else if (overIssue.assignee) {
+      targetPerson = params.people.find(
+        (p) =>
+          p.displayName === overIssue.assignee?.displayName ||
+          (p.accountId && p.accountId === overIssue.assignee?.accountId)
+      );
+    }
+  }
+
+  // If issue was in backlog and dropped on people column, move to board first
+  if (isBacklogIssue(activeItem)) {
+    params.moveToBoard(activeKey);
+  }
+
+  // If target person is identified and issue's assignee differs, update assignee
+  if (targetPerson) {
+    const currentAssigneeName = activeItem.assignee?.displayName || '';
+    if (
+      currentAssigneeName.toLowerCase() !== targetPerson.displayName.toLowerCase() ||
+      (targetPerson.accountId && activeItem.assignee?.accountId !== targetPerson.accountId)
+    ) {
+      params.updateIssueOptimistic(activeKey, {
+        assignee_name: targetPerson.displayName,
+        assignee_account_id: targetPerson.accountId,
+      });
+    }
+  }
+
+  // Rank reordering if dropped over another issue card
+  const overItem = params.issues.find((i) => i.key === overKey);
+  if (overItem && overKey !== activeKey) {
+    const targetRank = calculateRankBetween(overItem.rank, null);
+    params.rankIssueOptimistic(activeKey, undefined, overItem.key, targetRank);
   }
 }
 

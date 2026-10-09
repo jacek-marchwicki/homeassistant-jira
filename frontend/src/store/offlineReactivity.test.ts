@@ -398,4 +398,92 @@ describe('Cross-View & Filter Offline Reactivity', () => {
     expect(sections.homeAsUsual[0].key).toBe('PROJ-302');
     expect(sections.other.length).toBe(0);
   });
+
+  it('reassigning an issue on People view while offline applies optimistically in <50ms and queues in outbox', async () => {
+    const task: JiraIssue = {
+      id: '401',
+      key: 'PROJ-401',
+      summary: 'Task to reassign to teammate',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      assignee: null, // initially unassigned
+      priority: 'high',
+      issue_type: 'task',
+      updated_at: '2026-10-07T12:00:00Z',
+    };
+
+    useBoardStore.setState({
+      issues: [task],
+      columns: testColumns,
+      currentView: 'people',
+      offlineOutbox: [],
+      syncStatus: 'synced',
+    });
+
+    // Simulate network drop
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    const start = performance.now();
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-401', {
+      assignee_name: 'Alex Lead',
+      assignee_account_id: 'usr-alex',
+    });
+    const duration = performance.now() - start;
+
+    expect(duration).toBeLessThan(50);
+
+    const updatedIssue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-401');
+    expect(updatedIssue?.assignee?.displayName).toBe('Alex Lead');
+    expect(updatedIssue?.assignee?.accountId).toBe('usr-alex');
+    expect(updatedIssue?._optimisticState).toBe('pending');
+
+    const outbox = useBoardStore.getState().offlineOutbox;
+    expect(outbox.length).toBe(1);
+    expect(outbox[0].action).toBe('update_issue');
+    expect(outbox[0].payload).toEqual({
+      assignee_name: 'Alex Lead',
+      assignee_account_id: 'usr-alex',
+    });
+  });
+
+  it('marking an issue as Done on People view while offline remains visible crossed out within 24h', async () => {
+    const task: JiraIssue = {
+      id: '402',
+      key: 'PROJ-402',
+      summary: 'Task completed by Alex on People board',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      assignee: { displayName: 'Alex Lead', accountId: 'usr-alex' },
+      priority: 'medium',
+      issue_type: 'task',
+      updated_at: '2026-10-07T10:00:00Z',
+    };
+
+    useBoardStore.setState({
+      issues: [task],
+      columns: testColumns,
+      currentView: 'people',
+      offlineOutbox: [],
+      syncStatus: 'synced',
+    });
+
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    const start = performance.now();
+    await useBoardStore.getState().transitionIssueOptimistic('PROJ-402', 'done', 'Done');
+    const duration = performance.now() - start;
+
+    expect(duration).toBeLessThan(50);
+
+    const updatedIssue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-402');
+    expect(updatedIssue?.status.category).toBe('done');
+    expect(updatedIssue?.status.name).toBe('Done');
+    expect(updatedIssue?._optimisticState).toBe('pending');
+
+    const outbox = useBoardStore.getState().offlineOutbox;
+    expect(outbox.length).toBe(1);
+    expect(outbox[0].action).toBe('transition_issue');
+    expect(outbox[0].payload).toEqual({
+      target_category: 'done',
+      target_status: 'Done',
+    });
+  });
 });

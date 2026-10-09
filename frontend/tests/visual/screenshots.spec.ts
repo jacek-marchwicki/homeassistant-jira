@@ -198,7 +198,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
               status: { id: '10003', name: 'Ready', category: 'todo' },
               recreate_after: '1d',
               start_date: '2026-10-01',
-              due_date: '2026-10-10',
+              due_date: '2028-06-01',
               updated_at: '2026-10-05T00:00:00Z',
             },
             {
@@ -514,18 +514,23 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(modal.locator('> div')).toHaveScreenshot('component-modal-create-status-picker.png');
   });
 
-  test('Capture Issue Card with Status Selector Open Snapshot', async ({ page }) => {
+  test('Capture Backlog Row with Status Selector Open Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    const card = page.locator('article', { hasText: 'PROJ-101' });
-    await expect(card).toBeVisible();
 
-    const statusPicker = card.locator('[role="combobox"][aria-label="Change status for PROJ-101"]');
+    const backlogBtn = page.locator('header button[aria-label="Backlog View"]');
+    await backlogBtn.click();
+    await expect(page.getByRole('heading', { name: /Active Sprint/ })).toBeVisible();
+
+    const row = page.locator('[data-testid="backlog-row-PROJ-104"]');
+    await expect(row).toBeVisible();
+
+    const statusPicker = row.locator('[role="combobox"][aria-label="Change status for PROJ-104"]');
     await statusPicker.click();
 
-    const listbox = card.locator('[role="listbox"][aria-label="Change status for PROJ-101"]');
+    const listbox = row.locator('[role="listbox"][aria-label="Change status for PROJ-104"]');
     await expect(listbox).toBeVisible();
 
-    await expect(card).toHaveScreenshot('component-card-status-picker.png');
+    await expect(row).toHaveScreenshot('component-backlog-row-status-picker.png');
   });
 
   test('Capture Board Filtered by Search Query Snapshot', async ({ page }) => {

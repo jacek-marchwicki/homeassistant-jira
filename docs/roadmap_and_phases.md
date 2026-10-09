@@ -122,4 +122,18 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Comprehensive Test Coverage & Visual Regression Snapshots**:
     - Added unit test suites for People utilities (`boardUtils.test.ts`), column components (`PeopleColumn.test.tsx`), board view (`PeopleBoard.test.tsx`), header navigation (`Header.test.tsx`), and offline reactivity (`offlineReactivity.test.ts`).
     - Added automated Playwright visual regression snapshots capturing the People Board on Desktop (`people-view-desktop.png`) and Mobile (`people-view-mobile.png`).
+- [x] **Phase 5.9: Streamlined Column Cards & Contextual Backlog Status Control**
+  - [x] **Status Picker Removal from Board & People Column Cards**:
+    - Streamlined issue cards (`IssueCard`) across both "Board" workflow columns and "People" assignee columns by removing the embedded status select dropdown (`StatusSelect`), decluttering card headers and eliminating accidental status changes during card dragging or tapping.
+    - Preserved direct one-tap Quick Action (`Done`) and Edit (`Pencil`) buttons on column cards for rapid completion and full-field updates.
+  - [x] **Contextual Status Control in Backlog**:
+    - Retained the universal status dropdown selector (`StatusSelect`) in `BacklogIssueRow` across both the dedicated **Backlog** board (`BacklogView`) and the collapsible **Backlog** panel at the bottom of the **Board** and **People** tabs (`BacklogPanel`), providing immediate status reassignment before or during sprint planning without having to drag items to the board.
+  - [x] **Sub-50ms Optimistic Transitions & Offline Outbox Integrity**:
+    - Maintained optimistic status mutations in Backlog rows with $<50\text{ms}$ latency and automatic queuing to `offlineOutbox` when disconnected (`ha_jira_offline_outbox_v1`), verified via unit and offline reactivity test suites.
+  - [x] **Comprehensive Test Verification & Visual Regression Snapshots**:
+    - Added dedicated unit test suite for `IssueCard` ([`frontend/src/components/IssueCard.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/IssueCard.test.tsx)) asserting card element rendering and verifying absence of status picker dropdowns.
+    - Updated `KanbanBoard.test.tsx` verifying board column cards contain no select dropdowns while backlog controls maintain unique ID attributes.
+    - Updated Full-Stack E2E acceptance tests ([`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts)) validating removal of status dropdowns from Board and People column cards, presence and functionality in Backlog View, and presence in the bottom Backlog panel.
+    - Updated automated Playwright visual regression snapshots capturing Backlog row with open status selector (`component-backlog-row-status-picker.png`) and verified all 40 visual snapshots pass cleanly.
+
 

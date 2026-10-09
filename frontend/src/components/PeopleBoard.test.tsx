@@ -151,4 +151,37 @@ describe('PeopleBoard Component', () => {
     const doneTaskSummary = jacekCol?.querySelector('[title="Click to edit PROJ-1"]');
     expect(doneTaskSummary?.className).toContain('line-through');
   });
+
+  it('assigns unique sortable IDs scoped by column so dragging an unassigned task starts from the specific column', async () => {
+    const unassignedIssue: JiraIssue = {
+      id: '3',
+      key: 'SHARED-100',
+      summary: 'Shared unassigned task across columns',
+      priority: 'medium',
+      status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+      assignee: null,
+    };
+
+    await act(async () => {
+      useBoardStore.setState({ issues: [unassignedIssue] });
+      root.render(<PeopleBoard now={mockNow} />);
+    });
+
+    const jacekCol = container.querySelector('[data-testid="people-column-usr-jacek"]');
+    const alexCol = container.querySelector('[data-testid="people-column-usr-alex"]');
+
+    const jacekCard = jacekCol?.querySelector('[data-testid="issue-card-SHARED-100"]');
+    const alexCard = alexCol?.querySelector('[data-testid="issue-card-SHARED-100"]');
+
+    expect(jacekCard).not.toBeNull();
+    expect(alexCard).not.toBeNull();
+
+    // Verify sortable IDs are column-scoped and strictly distinct
+    const jacekSortableId = jacekCard?.getAttribute('data-sortable-id');
+    const alexSortableId = alexCard?.getAttribute('data-sortable-id');
+
+    expect(jacekSortableId).toBe('usr-jacek:SHARED-100');
+    expect(alexSortableId).toBe('usr-alex:SHARED-100');
+    expect(jacekSortableId).not.toBe(alexSortableId);
+  });
 });

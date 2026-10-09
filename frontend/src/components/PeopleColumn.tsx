@@ -34,7 +34,7 @@ export function PeopleColumn({
   });
 
   const isOver = Boolean(isHighlighted || isDroppableOver);
-  const issueIds = issues.map((i) => i.key);
+  const issueSortableIds = issues.map((i) => `${columnId}:${i.key}`);
 
   const { overdue, expedited, inProgress, homeAsUsual, other, done } = splitReadyAndDoneIssues(
     issues,
@@ -93,7 +93,7 @@ export function PeopleColumn({
 
       {/* Issues List with Ready-style Sections */}
       <div className="flex flex-col gap-2.5 flex-1">
-        <SortableContext items={issueIds} strategy={verticalListSortingStrategy}>
+        <SortableContext items={issueSortableIds} strategy={verticalListSortingStrategy}>
           {hasSpecialSections ? (
             <div className="flex flex-col gap-4 flex-1">
               {/* 1. Overdue Sub-section */}
@@ -110,7 +110,12 @@ export function PeopleColumn({
                   </div>
                   <div className="flex flex-col gap-2">
                     {overdue.map((issue) => (
-                      <IssueCard key={issue.key} issue={issue} />
+                      <IssueCard
+                        key={issue.key}
+                        issue={issue}
+                        sortableId={`${columnId}:${issue.key}`}
+                        sourceColumnId={columnId}
+                      />
                     ))}
                   </div>
                 </div>
@@ -130,7 +135,12 @@ export function PeopleColumn({
                   </div>
                   <div className="flex flex-col gap-2">
                     {expedited.map((issue) => (
-                      <IssueCard key={issue.key} issue={issue} />
+                      <IssueCard
+                        key={issue.key}
+                        issue={issue}
+                        sortableId={`${columnId}:${issue.key}`}
+                        sourceColumnId={columnId}
+                      />
                     ))}
                   </div>
                 </div>
@@ -150,7 +160,12 @@ export function PeopleColumn({
                   </div>
                   <div className="flex flex-col gap-2">
                     {inProgress.map((issue) => (
-                      <IssueCard key={issue.key} issue={issue} />
+                      <IssueCard
+                        key={issue.key}
+                        issue={issue}
+                        sortableId={`${columnId}:${issue.key}`}
+                        sourceColumnId={columnId}
+                      />
                     ))}
                   </div>
                 </div>
@@ -170,7 +185,12 @@ export function PeopleColumn({
                   </div>
                   <div className="flex flex-col gap-2">
                     {homeAsUsual.map((issue) => (
-                      <IssueCard key={issue.key} issue={issue} />
+                      <IssueCard
+                        key={issue.key}
+                        issue={issue}
+                        sortableId={`${columnId}:${issue.key}`}
+                        sourceColumnId={columnId}
+                      />
                     ))}
                   </div>
                 </div>
@@ -190,7 +210,12 @@ export function PeopleColumn({
                   </div>
                   <div className="flex flex-col gap-2">
                     {other.map((issue) => (
-                      <IssueCard key={issue.key} issue={issue} />
+                      <IssueCard
+                        key={issue.key}
+                        issue={issue}
+                        sortableId={`${columnId}:${issue.key}`}
+                        sourceColumnId={columnId}
+                      />
                     ))}
                   </div>
                 </div>
@@ -210,7 +235,12 @@ export function PeopleColumn({
                   </div>
                   <div className="flex flex-col gap-2">
                     {done.map((issue) => (
-                      <IssueCard key={issue.key} issue={issue} />
+                      <IssueCard
+                        key={issue.key}
+                        issue={issue}
+                        sortableId={`${columnId}:${issue.key}`}
+                        sourceColumnId={columnId}
+                      />
                     ))}
                   </div>
                 </div>
@@ -219,7 +249,12 @@ export function PeopleColumn({
           ) : (
             <>
               {issues.map((issue) => (
-                <IssueCard key={issue.key} issue={issue} />
+                <IssueCard
+                  key={issue.key}
+                  issue={issue}
+                  sortableId={`${columnId}:${issue.key}`}
+                  sourceColumnId={columnId}
+                />
               ))}
               {issues.length === 0 && (
                 <div

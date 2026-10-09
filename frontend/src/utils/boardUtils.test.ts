@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   getColumnForIssue,
   getCategoryColorVar,
@@ -30,6 +30,8 @@ import {
   getAssigneesFromBoard,
   splitReadyAndDoneIssues,
   filterIssuesForPeopleColumn,
+  extractIssueKey,
+  handlePeopleDragEnd,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -1445,6 +1447,77 @@ describe('boardUtils', () => {
           'UNASSIGNED-TASK',
           'P1-DONE',
         ]);
+      });
+    });
+
+    describe('extractIssueKey', () => {
+      it('extracts raw issue key without colon prefix', () => {
+        expect(extractIssueKey('DEV-999')).toBe('DEV-999');
+      });
+
+      it('extracts raw issue key from column-scoped id', () => {
+        expect(extractIssueKey('col-1:DEV-999')).toBe('DEV-999');
+        expect(extractIssueKey('usr-jacek:DEV-999')).toBe('DEV-999');
+      });
+    });
+
+    describe('handlePeopleDragEnd', () => {
+      it('reassigns issue when dragged from one column to another using scoped IDs', () => {
+        const task: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'TASK-1',
+          assignee: null,
+        };
+        const issues = [task];
+        const updateIssueOptimistic = vi.fn();
+        const rankIssueOptimistic = vi.fn();
+        const moveToBacklog = vi.fn();
+        const moveToBoard = vi.fn();
+
+        const people = [
+          { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+          { displayName: 'Alex Lead', accountId: 'usr-alex' },
+        ];
+
+        handlePeopleDragEnd(
+          {
+            active: {
+              id: 'usr-jacek:TASK-1',
+              data: {
+                current: {
+                  type: 'Issue',
+                  issue: task,
+                  sourceColumnId: 'usr-jacek',
+                },
+              },
+            },
+            over: {
+              id: 'people-column-usr-alex',
+              data: {
+                current: {
+                  type: 'PeopleColumn',
+                  columnId: 'usr-alex',
+                  personName: 'Alex Lead',
+                  accountId: 'usr-alex',
+                },
+              },
+            },
+          } as any,
+          {
+            issues,
+            backlogIssues: [],
+            people,
+            updateIssueOptimistic,
+            rankIssueOptimistic,
+            moveToBacklog,
+            moveToBoard,
+          }
+        );
+
+        expect(updateIssueOptimistic).toHaveBeenCalledWith('TASK-1', {
+          assignee_name: 'Alex Lead',
+          assignee_account_id: 'usr-alex',
+        });
       });
     });
   });

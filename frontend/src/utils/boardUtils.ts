@@ -60,6 +60,18 @@ export function getColumnForIssue(
 }
 
 /**
+ * Extracts raw Jira issue key from an item ID or scoped sortable ID (e.g. "usr-123:TASK-1" -> "TASK-1").
+ */
+export function extractIssueKey(id: string | number): string {
+  const str = String(id);
+  const colonIdx = str.lastIndexOf(':');
+  if (colonIdx !== -1) {
+    return str.slice(colonIdx + 1);
+  }
+  return str;
+}
+
+/**
  * Resolves the target BoardColumn from a dnd-kit `over` target.
  * Supports droppable Column containers, Sortable Issue items, and ID fallbacks.
  */
@@ -98,7 +110,8 @@ export function getColumnFromOver(
   if (colById) return colById;
 
   // 4. Fallback: match by issue key
-  const issueById = issues.find((i) => i.key === String(over.id));
+  const issueKey = extractIssueKey(over.id);
+  const issueById = issues.find((i) => i.key === issueKey);
   if (issueById) {
     return getColumnForIssue(issueById, columns);
   }
@@ -1189,16 +1202,18 @@ export function handlePeopleDragEnd(
   const { active, over } = event;
   if (!over) return;
 
-  const activeKey = String(active.id);
+  const activeKey = active.data?.current?.issue?.key || extractIssueKey(active.id);
   const activeItem = params.issues.find((i) => i.key === activeKey);
   if (!activeItem) return;
 
-  const overKey = String(over.id);
+  const overKey = extractIssueKey(over.id);
   const overData = over.data?.current;
+  const activeData = active.data?.current;
+  const sourceColumnId = activeData?.sourceColumnId as string | undefined;
 
   // 1. Dropped onto Backlog slide-out / panel
   if (
-    overKey === 'panel-backlog-list' ||
+    over.id === 'panel-backlog-list' ||
     overData?.targetType === 'backlog' ||
     params.backlogIssues.some((i) => i.key === overKey)
   ) {
@@ -1214,17 +1229,38 @@ export function handlePeopleDragEnd(
     return;
   }
 
-  // 2. Identify target person
+  // 2. Identify target person & column
   let targetPerson: AssigneePerson | undefined;
-  if (overData?.type === 'PeopleColumn' && typeof overData.personName === 'string') {
+  let targetColId: string | undefined;
+
+  if (overData?.type === 'PeopleColumn') {
+    targetColId = (overData.columnId || overData.accountId || overData.personName) as string | undefined;
+    if (typeof overData.personName === 'string') {
+      targetPerson = params.people.find(
+        (p) =>
+          p.displayName === overData.personName ||
+          (overData.accountId && p.accountId === overData.accountId)
+      );
+    } else if (targetColId) {
+      targetPerson = params.people.find(
+        (p) => (p.accountId && p.accountId === targetColId) || p.displayName === targetColId
+      );
+    }
+  } else if (String(over.id).startsWith('people-column-')) {
+    targetColId = String(over.id).replace('people-column-', '');
     targetPerson = params.people.find(
-      (p) =>
-        p.displayName === overData.personName ||
-        (overData.accountId && p.accountId === overData.accountId)
+      (p) => (p.accountId && p.accountId === targetColId) || p.displayName === targetColId
     );
-  } else if (overKey.startsWith('people-column-')) {
-    const colId = overKey.replace('people-column-', '');
-    targetPerson = params.people.find((p) => (p.accountId && p.accountId === colId) || p.displayName === colId);
+  } else if (overData?.sourceColumnId) {
+    targetColId = overData.sourceColumnId as string;
+    targetPerson = params.people.find(
+      (p) => (p.accountId && p.accountId === targetColId) || p.displayName === targetColId
+    );
+  } else if (String(over.id).includes(':')) {
+    targetColId = String(over.id).split(':')[0];
+    targetPerson = params.people.find(
+      (p) => (p.accountId && p.accountId === targetColId) || p.displayName === targetColId
+    );
   } else if (overData?.type === 'Issue' && overData.issue) {
     const overIssue = overData.issue as JiraIssue;
     if (overData.columnPersonName) {
@@ -1245,13 +1281,23 @@ export function handlePeopleDragEnd(
     params.moveToBoard(activeKey);
   }
 
-  // If target person is identified and issue's assignee differs, update assignee
+  // Reassignment logic:
   if (targetPerson) {
-    const currentAssigneeName = activeItem.assignee?.displayName || '';
-    if (
+    const currentAssigneeName =
+      activeItem.assignee?.displayName || activeItem.assignee?.display_name || '';
+    const currentAssigneeId =
+      activeItem.assignee?.accountId || activeItem.assignee?.account_id;
+    const isDifferentAssignee =
       currentAssigneeName.toLowerCase() !== targetPerson.displayName.toLowerCase() ||
-      (targetPerson.accountId && activeItem.assignee?.accountId !== targetPerson.accountId)
-    ) {
+      Boolean(targetPerson.accountId && currentAssigneeId !== targetPerson.accountId);
+
+    const isExplicitColumnDrop =
+      overData?.type === 'PeopleColumn' || String(over.id).startsWith('people-column-');
+    const isDifferentColumn = Boolean(
+      sourceColumnId && targetColId && sourceColumnId !== targetColId
+    );
+
+    if (isDifferentColumn || isExplicitColumnDrop || (isDifferentAssignee && !sourceColumnId)) {
       params.updateIssueOptimistic(activeKey, {
         assignee_name: targetPerson.displayName,
         assignee_account_id: targetPerson.accountId,

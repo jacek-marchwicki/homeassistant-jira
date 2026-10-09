@@ -24,9 +24,16 @@ import {
 interface IssueCardProps {
   issue: JiraIssue;
   isDragOverlay?: boolean;
+  sortableId?: string;
+  sourceColumnId?: string;
 }
 
-export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
+export function IssueCard({
+  issue,
+  isDragOverlay = false,
+  sortableId,
+  sourceColumnId,
+}: IssueCardProps) {
   const { columns, jiraUrl, transitionIssueOptimistic, setEditingIssue } = useBoardStore();
   const currentColumn = getColumnForIssue(issue, columns);
   const isDone = (currentColumn?.category || issue.status.category) === 'done';
@@ -34,6 +41,7 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
   const isOverdue = isIssueOverdue(issue);
   const isExpedited = isIssueExpedited(issue);
   const issueUrl = getJiraIssueUrl(issue, jiraUrl);
+  const itemId = sortableId || issue.key;
 
   const {
     attributes,
@@ -43,11 +51,13 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
     transition,
     isDragging,
   } = useSortable({
-    id: issue.key,
+    id: itemId,
     disabled: isDragOverlay,
     data: {
       type: 'Issue',
       issue,
+      sortableId: itemId,
+      sourceColumnId,
     },
   });
 
@@ -80,6 +90,7 @@ export function IssueCard({ issue, isDragOverlay = false }: IssueCardProps) {
       {...attributes}
       {...listeners}
       data-testid={`issue-card-${issue.key}`}
+      data-sortable-id={itemId}
       className={`group relative p-3 rounded-lg bg-[var(--jira-surface-elevated)] border transition-all shadow-sm cursor-grab active:cursor-grabbing select-none touch-manipulation ${
         issue._optimisticState === 'pending'
           ? 'border-[var(--jira-primary)] ring-2 ring-[var(--jira-primary)]/30 animate-pulse'

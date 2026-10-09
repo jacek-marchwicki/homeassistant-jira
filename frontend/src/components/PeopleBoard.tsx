@@ -23,6 +23,7 @@ import { BacklogPanel } from './BacklogPanel.tsx';
 import { IssueCard } from './IssueCard.tsx';
 import { PeopleColumn } from './PeopleColumn.tsx';
 import {
+  extractIssueKey,
   filterIssuesForPeopleColumn,
   getAssigneesFromBoard,
   handlePeopleDragEnd,
@@ -91,7 +92,8 @@ export function PeopleBoard({ now = new Date() }: PeopleBoardProps) {
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const issue = issues.find((i) => i.key === active.id);
+    const activeKey = active.data?.current?.issue?.key || extractIssueKey(active.id);
+    const issue = issues.find((i) => i.key === activeKey);
     if (issue) {
       setActiveIssue(issue);
     }
@@ -110,8 +112,30 @@ export function PeopleBoard({ now = new Date() }: PeopleBoardProps) {
       return;
     }
 
-    if (backlogIssues.some((i) => i.key === String(over.id))) {
+    const overKey = extractIssueKey(over.id);
+    if (backlogIssues.some((i) => i.key === overKey)) {
       setOverTargetId('backlog');
+      return;
+    }
+
+    if (overData?.type === 'PeopleColumn' && overData.columnId) {
+      setOverTargetId(`people-column-${overData.columnId}`);
+      return;
+    }
+
+    if (overData?.sourceColumnId) {
+      setOverTargetId(`people-column-${overData.sourceColumnId}`);
+      return;
+    }
+
+    if (String(over.id).startsWith('people-column-')) {
+      setOverTargetId(String(over.id));
+      return;
+    }
+
+    if (String(over.id).includes(':')) {
+      const colId = String(over.id).split(':')[0];
+      setOverTargetId(`people-column-${colId}`);
       return;
     }
 

@@ -127,6 +127,36 @@ class SQLiteStorage:
                     );
                     """
                 )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS background_images (
+                        content_hash TEXT PRIMARY KEY,
+                        file_path TEXT NOT NULL,
+                        created_at REAL NOT NULL,
+                        last_requested_at REAL NOT NULL,
+                        byte_size INTEGER NOT NULL
+                    );
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS issue_background_links (
+                        issue_key TEXT PRIMARY KEY,
+                        last_content_hash TEXT NOT NULL,
+                        updated_at REAL NOT NULL,
+                        FOREIGN KEY(last_content_hash)
+                            REFERENCES background_images(content_hash) ON DELETE CASCADE
+                    );
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS gemini_daily_usage (
+                        usage_date TEXT PRIMARY KEY,
+                        generation_count INTEGER NOT NULL DEFAULT 0
+                    );
+                    """
+                )
                 conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION};")
 
     def get_schema_version(self) -> int:
@@ -523,6 +553,170 @@ class SQLiteStorage:
                         """,
                         (status, error_message, now, outbox_id),
                     )
+
+    def get_background_image(self, content_hash: str) -> dict[str, Any] | None:
+        """Retrieve background image metadata by content hash."""
+        with self._lock:
+            conn = self._get_connection()
+            cur = conn.execute(
+                """
+                SELECT content_hash, file_path, created_at, last_requested_at, byte_size
+                FROM background_images
+                WHERE content_hash = ?;
+                """,
+                (content_hash,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "content_hash": row["content_hash"],
+                "file_path": row["file_path"],
+                "created_at": row["created_at"],
+                "last_requested_at": row["last_requested_at"],
+                "byte_size": row["byte_size"],
+            }
+
+    def save_background_image(
+        self,
+        content_hash: str,
+        file_path: str,
+        byte_size: int,
+        issue_key: str | None = None,
+    ) -> None:
+        """Store or update background image metadata, optionally linking to an issue key."""
+        now = time.time()
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO background_images (
+                        content_hash, file_path, created_at, last_requested_at, byte_size
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(content_hash) DO UPDATE SET
+                        file_path = excluded.file_path,
+                        last_requested_at = excluded.last_requested_at,
+                        byte_size = excluded.byte_size;
+                    """,
+                    (content_hash, file_path, now, now, byte_size),
+                )
+                if issue_key:
+                    conn.execute(
+                        """
+                        INSERT INTO issue_background_links (
+                            issue_key, last_content_hash, updated_at
+                        )
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(issue_key) DO UPDATE SET
+                            last_content_hash = excluded.last_content_hash,
+                            updated_at = excluded.updated_at;
+                        """,
+                        (issue_key, content_hash, now),
+                    )
+
+    def touch_background_image(self, content_hash: str) -> None:
+        """Update last_requested_at timestamp for a background image."""
+        now = time.time()
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                conn.execute(
+                    """
+                    UPDATE background_images
+                    SET last_requested_at = ?
+                    WHERE content_hash = ?;
+                    """,
+                    (now, content_hash),
+                )
+
+    def get_issue_last_background_hash(self, issue_key: str) -> str | None:
+        """Get the most recent background image content hash associated with an issue."""
+        with self._lock:
+            conn = self._get_connection()
+            cur = conn.execute(
+                """
+                SELECT last_content_hash
+                FROM issue_background_links
+                WHERE issue_key = ?;
+                """,
+                (issue_key,),
+            )
+            row = cur.fetchone()
+            return row["last_content_hash"] if row else None
+
+    def get_daily_generation_count(self, date_str: str) -> int:
+        """Get the number of images generated for a given calendar date ('YYYY-MM-DD')."""
+        with self._lock:
+            conn = self._get_connection()
+            cur = conn.execute(
+                """
+                SELECT generation_count
+                FROM gemini_daily_usage
+                WHERE usage_date = ?;
+                """,
+                (date_str,),
+            )
+            row = cur.fetchone()
+            return int(row["generation_count"]) if row else 0
+
+    def increment_daily_generation_count(self, date_str: str) -> int:
+        """Increment and return the generation count for a given calendar date."""
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO gemini_daily_usage (usage_date, generation_count)
+                    VALUES (?, 1)
+                    ON CONFLICT(usage_date) DO UPDATE SET
+                        generation_count = generation_count + 1;
+                    """,
+                    (date_str,),
+                )
+                cur = conn.execute(
+                    "SELECT generation_count FROM gemini_daily_usage WHERE usage_date = ?;",
+                    (date_str,),
+                )
+                row = cur.fetchone()
+                return int(row["generation_count"]) if row else 1
+
+    def prune_expired_background_images(self, retention_seconds: int) -> list[str]:
+        """Prune background images unrequested for longer than retention_seconds.
+
+        Returns list of unlinked file paths to be removed from disk.
+        """
+        threshold = time.time() - retention_seconds
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                cur = conn.execute(
+                    """
+                    SELECT content_hash, file_path
+                    FROM background_images
+                    WHERE last_requested_at < ?;
+                    """,
+                    (threshold,),
+                )
+                expired = cur.fetchall()
+                if not expired:
+                    return []
+
+                expired_hashes = [row["content_hash"] for row in expired]
+                file_paths = [row["file_path"] for row in expired]
+
+                placeholders = ",".join("?" for _ in expired_hashes)
+                conn.execute(
+                    f"DELETE FROM issue_background_links "
+                    f"WHERE last_content_hash IN ({placeholders});",
+                    expired_hashes,
+                )
+                conn.execute(
+                    f"DELETE FROM background_images WHERE content_hash IN ({placeholders});",
+                    expired_hashes,
+                )
+                return file_paths
 
     def close(self) -> None:
         """Close SQLite database connection."""

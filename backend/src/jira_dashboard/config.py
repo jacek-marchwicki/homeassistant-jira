@@ -14,6 +14,12 @@ from pydantic import BaseModel, Field
 
 DEFAULT_OPTIONS_PATH = Path("/data/options.json")
 
+DEFAULT_GEMINI_PROMPT_TEMPLATE = (
+    "A simple, colorful, kid-friendly storybook illustration depicting the chore or activity: "
+    "'{summary}'. Clean shapes, gentle lighting, playful and clear visual cues for children, "
+    "minimal background distractions, no text or words in the image."
+)
+
 
 class JiraDashboardSettings(BaseModel):
     """Application settings for Jira Dashboard."""
@@ -34,6 +40,34 @@ class JiraDashboardSettings(BaseModel):
         default="/data/jira_dashboard.sqlite3",
         description="Path to SQLite database for offline storage",
     )
+    gemini_api_key: str | None = Field(
+        default=None, description="Google GenAI / Gemini API key for AI background generation"
+    )
+    gemini_model: str = Field(
+        default="gemini-3.1-flash-lite-image",
+        description="Gemini model identifier for background image generation",
+    )
+    gemini_prompt_template: str = Field(
+        default=DEFAULT_GEMINI_PROMPT_TEMPLATE,
+        description="Prompt template for generating kid-friendly task background images",
+    )
+    gemini_daily_limit: int = Field(
+        default=100, description="Maximum number of AI background images generated per day"
+    )
+    gemini_debounce_seconds: int = Field(
+        default=300,
+        description="Settle time in seconds after task modification before generating new image",
+    )
+    gemini_cache_retention_seconds: int = Field(
+        default=2592000,
+        description="Retention duration in seconds (30 days) before unrequested images are pruned",
+    )
+
+    @property
+    def background_cache_dir(self) -> Path:
+        """Directory where generated background images are cached on disk."""
+        data_parent = Path(self.sqlite_db_path).parent
+        return data_parent / "background_cache"
 
     @property
     def has_jira_credentials(self) -> bool:
@@ -73,12 +107,25 @@ class JiraDashboardSettings(BaseModel):
             "webhook_secret": "JIRA_WEBHOOK_SECRET",
             "polling_interval_seconds": "POLLING_INTERVAL_SECONDS",
             "sqlite_db_path": "SQLITE_DB_PATH",
+            "gemini_api_key": "GEMINI_API_KEY",
+            "gemini_model": "GEMINI_MODEL",
+            "gemini_prompt_template": "GEMINI_PROMPT_TEMPLATE",
+            "gemini_daily_limit": "GEMINI_DAILY_LIMIT",
+            "gemini_debounce_seconds": "GEMINI_DEBOUNCE_SECONDS",
+            "gemini_cache_retention_seconds": "GEMINI_CACHE_RETENTION_SECONDS",
+        }
+
+        int_fields = {
+            "polling_interval_seconds",
+            "gemini_daily_limit",
+            "gemini_debounce_seconds",
+            "gemini_cache_retention_seconds",
         }
 
         for field_name, env_var in env_mappings.items():
             val = os.environ.get(env_var)
             if val is not None and val != "":
-                if field_name == "polling_interval_seconds":
+                if field_name in int_fields:
                     try:
                         config_data[field_name] = int(val)
                     except ValueError:

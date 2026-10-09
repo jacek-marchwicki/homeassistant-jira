@@ -10,7 +10,7 @@ class TestPackageMetadata(unittest.TestCase):
 
     def test_package_metadata(self) -> None:
         """Verify package version is defined."""
-        self.assertEqual(jira_dashboard.__version__, "0.1.1")
+        self.assertEqual(jira_dashboard.__version__, "0.2.0")
 
 
 if __name__ == "__main__":

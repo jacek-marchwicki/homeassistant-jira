@@ -31,7 +31,7 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
 
     # Required Home Assistant Add-on top-level metadata
     assert config["name"] == "Jira Dashboard"
-    assert config["version"] == "0.1.1"
+    assert config["version"] == "0.2.0"
     assert config["slug"] == "jira_dashboard"
     assert "description" in config and len(config["description"]) > 10
     assert config["url"] == "https://github.com/jacek-marchwicki/homeassistant-jira"
@@ -287,7 +287,7 @@ def test_addon_documentation_and_assets() -> None:
     changelog_file = addon_dir / "CHANGELOG.md"
     assert changelog_file.is_file(), "addon/CHANGELOG.md must exist"
     changelog_text = changelog_file.read_text(encoding="utf-8")
-    assert "0.1.1" in changelog_text
+    assert "0.2.0" in changelog_text
 
     icon_file = addon_dir / "icon.png"
     assert icon_file.is_file(), "addon/icon.png must exist for Add-on store icon"

@@ -27,6 +27,8 @@ export const DEFAULT_COLUMNS: BoardColumn[] = [
 
 export const LOCAL_STORAGE_BOARD_CACHE_KEY = 'ha_jira_board_cache_v1';
 export const LOCAL_STORAGE_OUTBOX_KEY = 'ha_jira_offline_outbox_v1';
+export const LOCAL_STORAGE_CURRENT_VIEW_KEY = 'ha_jira_current_view';
+export const LOCAL_STORAGE_CURRENT_USER_KEY = 'ha_jira_current_user';
 
 export class ServerRejectionError extends Error {
   constructor(message: string) {
@@ -49,6 +51,49 @@ export interface CachedBoardData {
   jiraUrl: string;
   columns: BoardColumn[];
   issues: JiraIssue[];
+  availableUsers?: JiraUser[];
+}
+
+export function loadCachedView(): DashboardView {
+  if (typeof window === 'undefined' || !window.localStorage) return 'board';
+  try {
+    const saved = window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY);
+    if (saved === 'board' || saved === 'backlog' || saved === 'people') {
+      return saved;
+    }
+  } catch {
+    // Ignore error
+  }
+  return 'board';
+}
+
+export function saveCachedView(view: DashboardView): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_CURRENT_VIEW_KEY, view);
+  } catch {
+    // Ignore error
+  }
+}
+
+export function loadCachedUser(): string {
+  if (typeof window === 'undefined' || !window.localStorage) return 'Jacek Marchwicki';
+  try {
+    const saved = window.localStorage.getItem(LOCAL_STORAGE_CURRENT_USER_KEY);
+    if (saved && saved.trim()) return saved.trim();
+  } catch {
+    // Ignore error
+  }
+  return 'Jacek Marchwicki';
+}
+
+export function saveCachedUser(userName: string): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_CURRENT_USER_KEY, userName.trim());
+  } catch {
+    // Ignore error
+  }
 }
 
 export function loadCachedBoard(): CachedBoardData | null {
@@ -71,6 +116,7 @@ export function loadCachedBoard(): CachedBoardData | null {
       return {
         ...parsed,
         issues: sortIssuesByRank(parsed.issues),
+        availableUsers: Array.isArray(parsed.availableUsers) ? parsed.availableUsers : [],
       };
     }
   } catch {
@@ -190,29 +236,21 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   activeFilters: ['my', 'active', 'hide_epics'],
   activeFilter: 'my,active,hide_epics',
   searchQuery: '',
-  currentUser: (() => {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const saved = window.localStorage.getItem('ha_jira_current_user');
-      if (saved && saved.trim()) return saved.trim();
-    }
-    return 'Jacek Marchwicki';
-  })(),
+  currentUser: loadCachedUser(),
   errorMessage: null,
   rollbackQueue: {},
-  currentView: 'board',
+  currentView: loadCachedView(),
   isBacklogExpandedOnBoard: false,
   editingIssue: null,
   isCreateModalOpen: false,
   offlineOutbox: initialOutbox,
   syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
   pendingSyncCount: initialOutbox.length,
-  availableUsers: [],
+  availableUsers: initialCache?.availableUsers || [],
 
   setCurrentUser: (userName: string) => {
     const trimmed = userName.trim();
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem('ha_jira_current_user', trimmed);
-    }
+    saveCachedUser(trimmed);
     set({ currentUser: trimmed });
   },
 
@@ -225,6 +263,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   },
 
   setCurrentView: (view: DashboardView) => {
+    saveCachedView(view);
     set({ currentView: view });
   },
 
@@ -302,6 +341,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     } else {
       set({ isSyncing: true });
     }
+    // Fetch users in parallel
+    get().fetchUsers().catch(() => {});
     try {
       const res = await fetch(getApiUrl('/api/board'));
       if (res.ok) {
@@ -312,6 +353,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           jiraUrl: data.jira_url || 'https://jira.example.com',
           columns: data.columns && data.columns.length > 0 ? data.columns : DEFAULT_COLUMNS,
           issues: sortIssuesByRank(data.issues || []),
+          availableUsers: get().availableUsers,
         };
         saveCachedBoard(nextState);
         set({
@@ -320,7 +362,6 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           isLoading: false,
           isSyncing: false,
         });
-        get().fetchUsers().catch(() => {});
       } else {
         const err = await res.json().catch(() => ({}));
         set({
@@ -345,6 +386,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         const users: JiraUser[] = await res.json();
         if (Array.isArray(users)) {
           set({ availableUsers: users });
+          const cached = loadCachedBoard();
+          if (cached) {
+            saveCachedBoard({ ...cached, availableUsers: users });
+          }
         }
       }
     } catch {

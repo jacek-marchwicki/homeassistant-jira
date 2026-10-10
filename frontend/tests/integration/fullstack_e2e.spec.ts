@@ -666,6 +666,51 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     expect(homeAsUsualIndex).toBeGreaterThan(inProgressIndex);
     expect(otherIndex).toBeGreaterThan(homeAsUsualIndex);
   });
+
+  test('15. Preferences & View Persistence: "Who is Me" shows all available users and view choice persists across reload', async ({
+    page,
+  }) => {
+    // 1. Initially on Board view
+    await expect(page.getByRole('button', { name: 'Kanban Board View' })).toBeVisible();
+
+    // 2. Open "Who is Me" picker
+    const meChevron = page.getByRole('button', { name: 'Change who is Me' });
+    await expect(meChevron).toBeVisible();
+    await meChevron.click();
+
+    const listbox = page.locator('[role="listbox"][aria-label="Choose who is Me"]');
+    await expect(listbox).toBeVisible();
+
+    // Verify available users from backend /api/users are listed (e.g. Alex Lead)
+    await expect(listbox.getByText('Alex Lead')).toBeVisible();
+
+    // Click Alex Lead to change active identity
+    await listbox.getByText('Alex Lead').click();
+
+    // Verify localStorage has saved ha_jira_current_user
+    const savedUser = await page.evaluate(() => localStorage.getItem('ha_jira_current_user'));
+    expect(savedUser).toBe('Alex Lead');
+
+    // 3. Switch to People view
+    const peopleBtn = page.getByRole('button', { name: 'People View' });
+    await expect(peopleBtn).toBeVisible();
+    await peopleBtn.click();
+    await expect(page.locator('[data-testid^="people-column-"]').first()).toBeVisible();
+
+    // Verify localStorage has saved ha_jira_current_view as 'people'
+    const savedView = await page.evaluate(() => localStorage.getItem('ha_jira_current_view'));
+    expect(savedView).toBe('people');
+
+    // 4. Reload page (simulate opening browser next time)
+    await page.reload();
+
+    // 5. Verify user is still Alex Lead and view is still People
+    await expect(page.locator('[data-testid^="people-column-"]').first()).toBeVisible();
+    const reloadedUser = await page.evaluate(() => localStorage.getItem('ha_jira_current_user'));
+    expect(reloadedUser).toBe('Alex Lead');
+    const reloadedView = await page.evaluate(() => localStorage.getItem('ha_jira_current_view'));
+    expect(reloadedView).toBe('people');
+  });
 });
 
 

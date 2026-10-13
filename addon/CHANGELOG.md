@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- **Dedicated "People" Board View**: Introduced a specialized "People" board organizing tasks into assignee columns, featuring 24-hour retention for completed issues, drag-and-drop reassignment, and scoped sortable drag identifiers.
+- **Gemini AI Task Background Illustrations**: Whimsical, child-friendly task illustrations generated via Google GenAI (`gemini-3.1-flash-lite-image`) with SHA-256 deduplication, settling debouncing, daily quota caps (100/day), automatic 30-day cache pruning, and WCAG AAA readability gradient overlays.
+- **Complete Team Member Discovery in "Assigned to Me"**: Integrated assignable team members from the backend and cached storage so all household and project members are selectable in the "Who is Me" filter, even when they currently have zero tasks assigned.
+- **Browser State & View Tab Persistence**: Saved active user identity selection (`ha_jira_current_user`) and selected board view (`ha_jira_current_view`: Board, People, or Backlog) in `localStorage`, seamlessly restoring preferences across reloads and offline sessions.
+- **Streamlined Column Cards & Contextual Backlog Controls**: Removed redundant status picker dropdowns from Board and People column cards for cleaner visual design and gesture safety, while retaining universal status selectors in the Backlog view and collapsible backlog panel.
+
 ## 0.2.1
 
 - **Sidebar Visibility for Non-Admin Users**: Configured `panel_admin: false` in add-on manifest (`addon/config.yaml`), enabling the Jira dashboard panel in the Home Assistant sidebar for all household members and standard accounts without requiring administrator privileges.

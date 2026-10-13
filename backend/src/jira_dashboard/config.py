@@ -9,8 +9,9 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 DEFAULT_OPTIONS_PATH = Path("/data/options.json")
 
@@ -62,6 +63,27 @@ class JiraDashboardSettings(BaseModel):
         default=2592000,
         description="Retention duration in seconds (30 days) before unrequested images are pruned",
     )
+
+    @field_validator("gemini_api_key", mode="before")
+    @classmethod
+    def _sanitize_gemini_api_key(cls, v: Any) -> str | None:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        return str(v).strip()
+
+    @field_validator("gemini_model", mode="before")
+    @classmethod
+    def _sanitize_gemini_model(cls, v: Any) -> str:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "gemini-3.1-flash-lite-image"
+        return str(v).strip()
+
+    @field_validator("gemini_prompt_template", mode="before")
+    @classmethod
+    def _sanitize_gemini_prompt_template(cls, v: Any) -> str:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return DEFAULT_GEMINI_PROMPT_TEMPLATE
+        return str(v).strip()
 
     @property
     def background_cache_dir(self) -> Path:

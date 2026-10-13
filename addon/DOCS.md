@@ -18,7 +18,7 @@ A real-time, responsive Jira Dashboard with Optimistic UI (<50ms mutations), bid
 
 Configure the add-on through the **Configuration** tab in Home Assistant.
 
-### Example Configuration (Jira Cloud)
+### Example Configuration (Jira Cloud with Gemini AI Backgrounds)
 
 ```yaml
 jira_url: "https://mycompany.atlassian.net"
@@ -26,6 +26,11 @@ jira_email: "alex@mycompany.com"
 jira_api_token: "ATATT3xFfGF0exampletoken123"
 jira_board_id: "42"
 polling_interval_seconds: 60
+gemini_api_key: "AIzaSy..."
+gemini_model: "gemini-3.1-flash-lite-image"
+gemini_daily_limit: 100
+gemini_debounce_seconds: 300
+gemini_cache_retention_seconds: 2592000
 ```
 
 ### Configuration Options
@@ -37,6 +42,21 @@ polling_interval_seconds: 60
 | `jira_api_token` | Password | Yes | Jira Cloud API Token ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens)). |
 | `jira_board_id` | String | No | Target Jira Agile Board ID (defaults to primary board if empty). |
 | `polling_interval_seconds` | Integer | No | Fallback polling interval in seconds (default: `60`). Set `0` to disable. |
+| `gemini_api_key` | Password | No | Google GenAI / Gemini API key for AI task illustration backgrounds ([get here](https://aistudio.google.com/app/apikey)). Leave empty to disable. |
+| `gemini_model` | String | No | Gemini image model identifier (default: `gemini-3.1-flash-lite-image`). |
+| `gemini_prompt_template` | String | No | Prompt template for kid-friendly illustrations. Use `{summary}` placeholder. |
+| `gemini_daily_limit` | Integer | No | Max daily AI generations to control costs (default: `100`). |
+| `gemini_debounce_seconds` | Integer | No | Settle debounce delay in seconds after task edits (default: `300`). |
+| `gemini_cache_retention_seconds` | Integer | No | Cache retention period in seconds before pruning (default: `2592000` / 30 days). |
+
+---
+
+## How to Obtain a Gemini API Key
+
+1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Sign in with your Google account and click **Get API key** / **Create API key**.
+3. Copy the generated API key and paste it into the `gemini_api_key` field in the add-on Configuration tab.
+4. If left blank, the dashboard functions normally with solid/gradient cards without making external AI generation calls.
 
 ---
 

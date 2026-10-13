@@ -1,0 +1,34 @@
+configuration:
+  jira_url:
+    name: "Jira URL"
+    description: "Base URL of your Jira Cloud or Jira Data Center instance (e.g. https://mycompany.atlassian.net)."
+  jira_email:
+    name: "Jira Account Email"
+    description: "Your Atlassian account email address used for Jira Cloud Basic Authentication."
+  jira_api_token:
+    name: "Jira API Token"
+    description: "Jira Cloud API Token (or Jira Data Center Personal Access Token)."
+  jira_board_id:
+    name: "Jira Board ID"
+    description: "Target Jira Agile Board ID or key to display on dashboard startup."
+  polling_interval_seconds:
+    name: "Polling Interval (Seconds)"
+    description: "Interval in seconds to poll Jira for background updates (default: 60). Set to 0 to disable."
+  gemini_api_key:
+    name: "Gemini API Key"
+    description: "Google GenAI API key for generating AI task illustration backgrounds. Leave empty to disable."
+  gemini_model:
+    name: "Gemini Model"
+    description: "Gemini image generation model identifier (default: gemini-3.1-flash-lite-image)."
+  gemini_prompt_template:
+    name: "Gemini Prompt Template"
+    description: "Prompt template for generating kid-friendly task background images. Use {summary} for the task summary."
+  gemini_daily_limit:
+    name: "Gemini Daily Generation Limit"
+    description: "Maximum number of AI background illustrations generated per day to prevent unexpected API costs (default: 100)."
+  gemini_debounce_seconds:
+    name: "Gemini Debounce Time (Seconds)"
+    description: "Settle time in seconds after task edits before initiating AI image generation (default: 300)."
+  gemini_cache_retention_seconds:
+    name: "Gemini Cache Retention (Seconds)"
+    description: "Retention time in seconds before unused background images are pruned from cache (default: 2592000 / 30 days)."

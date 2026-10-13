@@ -23,9 +23,21 @@ options:
   jira_api_token: ""
   jira_board_id: "engineering-1"
   polling_interval_seconds: 60
+  gemini_api_key: ""
+  gemini_model: "gemini-3.1-flash-lite-image"
+  gemini_prompt_template: "A simple, colorful, kid-friendly storybook illustration depicting the chore or activity: '{summary}'. Clean shapes, gentle lighting, playful and clear visual cues for children, minimal background distractions, no text or words in the image."
+  gemini_daily_limit: 100
+  gemini_debounce_seconds: 300
+  gemini_cache_retention_seconds: 2592000
 schema:
   jira_url: "str?"
   jira_email: "str?"
   jira_api_token: "password?"
   jira_board_id: "str?"
   polling_interval_seconds: "int?"
+  gemini_api_key: "password?"
+  gemini_model: "str?"
+  gemini_prompt_template: "str?"
+  gemini_daily_limit: "int?"
+  gemini_debounce_seconds: "int?"
+  gemini_cache_retention_seconds: "int?"

@@ -80,3 +80,29 @@ def test_gemini_config_env_overlay(monkeypatch) -> None:
     assert settings.gemini_daily_limit == 25
     assert settings.gemini_debounce_seconds == 120
     assert settings.gemini_cache_retention_seconds == 7200
+
+
+def test_gemini_config_empty_strings_fallback(tmp_path: Path, monkeypatch) -> None:
+    """Verify empty string options from Home Assistant default configuration fall back safely."""
+    options_file = tmp_path / "options.json"
+    data = {
+        "gemini_api_key": "   ",
+        "gemini_model": "",
+        "gemini_prompt_template": "  ",
+    }
+    options_file.write_text(json.dumps(data), encoding="utf-8")
+
+    for var in (
+        "GEMINI_API_KEY",
+        "GEMINI_MODEL",
+        "GEMINI_PROMPT_TEMPLATE",
+        "GEMINI_DAILY_LIMIT",
+        "GEMINI_DEBOUNCE_SECONDS",
+        "GEMINI_CACHE_RETENTION_SECONDS",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    settings = JiraDashboardSettings.load(options_path=options_file)
+    assert settings.gemini_api_key is None
+    assert settings.gemini_model == "gemini-3.1-flash-lite-image"
+    assert "chore" in settings.gemini_prompt_template.lower()

@@ -62,6 +62,48 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
     assert "jira_board_id" in options and "jira_board_id" in schema
     assert "polling_interval_seconds" in options and "polling_interval_seconds" in schema
 
+    # Gemini AI configuration options & schema
+    assert "gemini_api_key" in options and "gemini_api_key" in schema
+    assert schema["gemini_api_key"] == "password?"
+    assert "gemini_model" in options and "gemini_model" in schema
+    assert schema["gemini_model"] == "str?"
+    assert "gemini_prompt_template" in options and "gemini_prompt_template" in schema
+    assert schema["gemini_prompt_template"] == "str?"
+    assert "gemini_daily_limit" in options and "gemini_daily_limit" in schema
+    assert schema["gemini_daily_limit"] == "int?"
+    assert "gemini_debounce_seconds" in options and "gemini_debounce_seconds" in schema
+    assert schema["gemini_debounce_seconds"] == "int?"
+    assert (
+        "gemini_cache_retention_seconds" in options and "gemini_cache_retention_seconds" in schema
+    )
+    assert schema["gemini_cache_retention_seconds"] == "int?"
+
+    # Add-on translations for Home Assistant UI
+    translations_path = PROJECT_ROOT / "addon" / "translations" / "en.yaml"
+    assert translations_path.is_file(), (
+        "addon/translations/en.yaml must exist for Home Assistant UI configuration labels"
+    )
+    with open(translations_path, encoding="utf-8") as tf:
+        translations = yaml.safe_load(tf)
+    assert "configuration" in translations
+    cfg_trans = translations["configuration"]
+    for opt in [
+        "jira_url",
+        "jira_email",
+        "jira_api_token",
+        "jira_board_id",
+        "polling_interval_seconds",
+        "gemini_api_key",
+        "gemini_model",
+        "gemini_prompt_template",
+        "gemini_daily_limit",
+        "gemini_debounce_seconds",
+        "gemini_cache_retention_seconds",
+    ]:
+        assert opt in cfg_trans, f"Option {opt} must be translated in addon/translations/en.yaml"
+        assert "name" in cfg_trans[opt]
+        assert "description" in cfg_trans[opt]
+
 
 def test_addon_build_yaml_is_valid() -> None:
     """Validate addon/build.yaml multi-architecture base image mappings."""
@@ -138,6 +180,8 @@ def test_docker_compose_configurations() -> None:
     service = compose["services"]["jira-dashboard"]
     assert "${PORT:-8000}:8000" in service["ports"]
     assert "healthcheck" in service
+    env_vars = service.get("environment", [])
+    assert any("GEMINI_API_KEY" in e for e in env_vars)
 
     # Dev compose
     dev_compose_path = PROJECT_ROOT / "docker-compose.dev.yml"
@@ -151,6 +195,8 @@ def test_docker_compose_configurations() -> None:
     dev_service = dev_compose["services"]["jira-dashboard-dev"]
     assert "${PORT:-8000}:8000" in dev_service["ports"]
     assert "volumes" in dev_service
+    dev_env_vars = dev_service.get("environment", [])
+    assert any("GEMINI_API_KEY" in e for e in dev_env_vars)
 
 
 def test_env_example_and_dockerignore() -> None:
@@ -163,6 +209,8 @@ def test_env_example_and_dockerignore() -> None:
     assert "JIRA_API_TOKEN=" in env_content
     assert "JIRA_BOARD_ID=" in env_content
     assert "POLLING_INTERVAL_SECONDS=" in env_content
+    assert "GEMINI_API_KEY=" in env_content
+    assert "GEMINI_MODEL=" in env_content
 
     dockerignore = PROJECT_ROOT / ".dockerignore"
     assert dockerignore.is_file(), ".dockerignore must exist"
@@ -284,6 +332,7 @@ def test_addon_documentation_and_assets() -> None:
     docs_text = docs_file.read_text(encoding="utf-8")
     assert "Home Assistant Ingress" in docs_text
     assert "Configuration" in docs_text
+    assert "gemini_api_key" in docs_text
 
     changelog_file = addon_dir / "CHANGELOG.md"
     assert changelog_file.is_file(), "addon/CHANGELOG.md must exist"

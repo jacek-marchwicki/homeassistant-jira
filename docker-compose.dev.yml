@@ -16,4 +16,10 @@ services:
       - JIRA_API_TOKEN=${JIRA_API_TOKEN:-}
       - JIRA_BOARD_ID=${JIRA_BOARD_ID:-engineering-1}
       - POLLING_INTERVAL_SECONDS=${POLLING_INTERVAL_SECONDS:-30}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.1-flash-lite-image}
+      - GEMINI_PROMPT_TEMPLATE=${GEMINI_PROMPT_TEMPLATE:-}
+      - GEMINI_DAILY_LIMIT=${GEMINI_DAILY_LIMIT:-100}
+      - GEMINI_DEBOUNCE_SECONDS=${GEMINI_DEBOUNCE_SECONDS:-300}
+      - GEMINI_CACHE_RETENTION_SECONDS=${GEMINI_CACHE_RETENTION_SECONDS:-2592000}
     command: ["python", "-m", "uvicorn", "jira_dashboard.presentation.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

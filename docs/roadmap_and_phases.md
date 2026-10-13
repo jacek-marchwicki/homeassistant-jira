@@ -172,5 +172,18 @@ This document details the architectural phases, delivered features, and evolutio
     - Unit tests in `FilterBar.test.tsx`, `boardStore.test.ts`, and `offlineReactivity.test.ts` verifying team member discovery, localStorage persistence, view tab restoration, and offline resilience.
     - Full-stack E2E Playwright integration test validating user switching in "Who is Me", view tab switching to "People", and persistence across browser reload.
     - 100% passing visual regression snapshot suite across 40 snapshots.
+- [x] **Phase 5.12: Home Assistant Add-on UI Gemini Configuration & Translations**
+  - [x] **Home Assistant Add-on Options & Typed Schema**:
+    - Configured complete `gemini_*` configuration options and typed schema in [`addon/config.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/config.yaml): `gemini_api_key` (`password?`), `gemini_model` (`str?`), `gemini_prompt_template` (`str?`), `gemini_daily_limit` (`int?`), `gemini_debounce_seconds` (`int?`), and `gemini_cache_retention_seconds` (`int?`).
+  - [x] **Home Assistant Add-on Configuration UI Translations**:
+    - Created [`addon/translations/en.yaml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/translations/en.yaml) providing human-readable names and explanatory descriptions for all configuration settings in the Home Assistant Add-on Configuration tab.
+  - [x] **Documentation & Container Orchestration**:
+    - Added dedicated Gemini AI configuration guide and Google AI Studio key acquisition steps to [`addon/DOCS.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/addon/DOCS.md).
+    - Documented all `GEMINI_*` variables in [`.env.example`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/.env.example) and mapped them in [`docker-compose.yml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docker-compose.yml) and [`docker-compose.dev.yml`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docker-compose.dev.yml).
+  - [x] **Robust Empty-String Sanitization & Fallback**:
+    - Added Pydantic field validators to `JiraDashboardSettings` in [`backend/src/jira_dashboard/config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/config.py) ensuring empty or whitespace-only strings from Home Assistant forms safely fallback to standard defaults (`None` for API key, default model ID, and default prompt template).
+  - [x] **Automated Test Coverage**:
+    - Added comprehensive test assertions in [`backend/tests/test_packaging_and_addon.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_packaging_and_addon.py) and [`backend/tests/test_gemini_config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_gemini_config.py).
+
 
 

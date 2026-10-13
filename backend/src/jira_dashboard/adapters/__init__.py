@@ -1,6 +1,13 @@
 """Adapter and infrastructure implementations (Jira API client, Webhooks, WebSocket hub)."""
 
 from jira_dashboard.adapters.factory import create_jira_client
+from jira_dashboard.adapters.gemini_client import (
+    GeminiImageClient,
+    GoogleGenAIImageClient,
+    MockGeminiImageClient,
+    compute_background_content_hash,
+    create_gemini_client,
+)
 from jira_dashboard.adapters.jira_client import (
     DEFAULT_COLUMNS,
     FakeJiraClient,
@@ -14,10 +21,15 @@ from jira_dashboard.adapters.sync_worker import JiraSyncWorker
 __all__ = [
     "DEFAULT_COLUMNS",
     "FakeJiraClient",
+    "GeminiImageClient",
+    "GoogleGenAIImageClient",
     "JiraAPIError",
     "JiraClientProtocol",
     "JiraCloudClient",
     "JiraSyncWorker",
+    "MockGeminiImageClient",
     "SQLiteStorage",
+    "compute_background_content_hash",
+    "create_gemini_client",
     "create_jira_client",
 ]

@@ -198,7 +198,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
               status: { id: '10003', name: 'Ready', category: 'todo' },
               recreate_after: '1d',
               start_date: '2026-10-01',
-              due_date: '2026-10-10',
+              due_date: '2028-10-10',
               updated_at: '2026-10-05T00:00:00Z',
             },
             {
@@ -1090,6 +1090,51 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(page).toHaveScreenshot('people-view-mobile.png', {
       fullPage: true,
     });
+  });
+
+  test('Capture Task Card with AI Background Illustration and Modal Banner', async ({ page }) => {
+    // 1. Mock background image endpoint with a colorful sample illustration
+    const samplePngBase64 =
+      'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA7SURBVHhe7cExAQAAAMKg9U9tDQ8gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgG8a+BwAAXg9f7EAAAAASUVORK5CYII=';
+    const sampleBuffer = Buffer.from(samplePngBase64, 'base64');
+
+    await page.route('**/api/issues/PROJ-101/background', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        headers: {
+          'Cache-Control': 'public, max-age=86400',
+        },
+        body: sampleBuffer,
+      });
+    });
+
+    // Reload page to fetch the background
+    await page.goto('/');
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+    const card = page.locator('[data-testid="issue-card-PROJ-101"]');
+    await expect(card).toBeVisible();
+
+    // Allow image load to trigger and style to apply
+    await page.waitForTimeout(300);
+
+    // Verify card component screenshot
+    await expect(card).toHaveScreenshot('component-issue-card-background.png');
+
+    // Switch to Light theme and verify card overlay
+    const lightButton = page.getByTitle('Light Mode');
+    await lightButton.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.waitForTimeout(200);
+    await expect(card).toHaveScreenshot('component-issue-card-background-light.png');
+
+    // Open Edit Issue Modal and verify modal banner with background
+    const editBtn = card.locator('button[aria-label="Edit PROJ-101"]');
+    await editBtn.click();
+    const modalHeader = page.locator('[data-testid="edit-issue-modal-header"]');
+    await expect(modalHeader).toBeVisible();
+    await page.waitForTimeout(200);
+    await expect(modalHeader).toHaveScreenshot('component-edit-modal-header-background.png');
   });
 });
 

@@ -66,8 +66,15 @@ class JiraDashboardSettings(BaseModel):
     @property
     def background_cache_dir(self) -> Path:
         """Directory where generated background images are cached on disk."""
-        data_parent = Path(self.sqlite_db_path).parent
-        return data_parent / "background_cache"
+        candidate = Path(self.sqlite_db_path).parent / "background_cache"
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except OSError:
+            # Fallback to local data/background_cache in local development / testing
+            dev_candidate = Path("./data/background_cache").resolve()
+            dev_candidate.mkdir(parents=True, exist_ok=True)
+            return dev_candidate
 
     @property
     def has_jira_credentials(self) -> bool:

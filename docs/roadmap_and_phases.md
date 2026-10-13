@@ -122,4 +122,26 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Comprehensive Test Coverage & Visual Regression Snapshots**:
     - Added unit test suites for People utilities (`boardUtils.test.ts`), column components (`PeopleColumn.test.tsx`), board view (`PeopleBoard.test.tsx`), header navigation (`Header.test.tsx`), and offline reactivity (`offlineReactivity.test.ts`).
     - Added automated Playwright visual regression snapshots capturing the People Board on Desktop (`people-view-desktop.png`) and Mobile (`people-view-mobile.png`).
+- [x] **Phase 5.9: Gemini AI Task Background Illustrations for Children**
+  - [x] **Google GenAI Image Generation Client & Test Double**:
+    - Created `GeminiImageClient` adapter interface ([`backend/src/jira_dashboard/adapters/gemini_client.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/gemini_client.py)) utilizing Google GenAI SDK (`google-genai`) with model `gemini-3.1-flash-lite-image` and aspect ratio `16:9` (`1280x720`).
+    - Enforced kid-friendly illustration prompts ("whimsical, warm, colorful, friendly storybook illustration suitable for children...").
+    - Implemented deterministic `MockGeminiImageClient` test double returning valid 1x1 PNG bytes for cost-free automated testing across backend unit, acceptance, Vitest, and visual regression suites.
+  - [x] **Content Deduplication, Settling Debounce & Persistent Caching**:
+    - Normalized SHA-256 content hashing (`compute_background_content_hash`) across issue summary, description, issue type, and labels.
+    - Tiered cache architecture storing binary image assets on filesystem (`background_cache/<sha256>.png`) and metadata links in SQLite (`background_images`, `issue_background_links`, `gemini_daily_usage`).
+    - Settling debouncing (`GEMINI_DEBOUNCE_SECONDS`, default 300s): returns existing cached images for recently updated tasks to prevent redundant AI generation while users edit descriptions.
+    - Automatic 30-day cache pruning (`GEMINI_CACHE_RETENTION_SECONDS`, default 2,592,000s) removing unlinked or expired cache files on filesystem and SQLite.
+  - [x] **Cost Controls, Daily Quota Caps & Graceful 204 Degradation**:
+    - Enforced strict daily generation caps (`GEMINI_DAILY_LIMIT`, default 100/day) tracked atomically by UTC date in SQLite.
+    - Graceful degradation: returns `204 No Content` when `GEMINI_API_KEY` is unset, daily quota is reached, or external generation encounters upstream errors, allowing frontend cards to render standard backgrounds without failure.
+  - [x] **WCAG AAA Gradient Overlays & UI Polish**:
+    - High-contrast multi-layer gradient overlays added to theme tokens (`--card-bg-overlay-light`, `--card-bg-overlay-dark`, `--card-bg-overlay-high-contrast`) in [`frontend/src/tokens/theme.css`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/tokens/theme.css) ensuring 100% WCAG AAA readability for text and status indicators across dark, light, and high-contrast modes.
+    - React hook `useTaskBackground` ([`frontend/src/utils/useTaskBackground.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/useTaskBackground.ts)) providing cached image resolution and smooth image load transitions.
+    - Consistent visual integration across Kanban issue cards ([`frontend/src/components/IssueCard.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/IssueCard.tsx)) and Edit Issue modal header banner ([`frontend/src/components/EditIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.tsx)).
+  - [x] **Comprehensive Test Verification & Visual Regression Snapshots**:
+    - Backend unit tests (`backend/tests/test_gemini_client.py`) and acceptance tests (`backend/tests/test_task_backgrounds.py`) covering deduplication, debouncing, daily quota enforcement, and pruning.
+    - Frontend unit tests for hook (`useTaskBackground.test.tsx`), card integration (`IssueCard.test.tsx`), and edit modal banner (`EditIssueModal.test.tsx`).
+    - Automated Playwright visual regression snapshots capturing cards with illustrations in dark and light themes (`component-issue-card-background.png`, `component-issue-card-background-light.png`) and the Edit Issue modal header banner (`component-edit-modal-header-background.png`).
+
 

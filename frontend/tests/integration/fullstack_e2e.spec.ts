@@ -12,6 +12,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // Reset test state and errors before each test to guarantee determinism
     await page.request.post('/api/test/reset');
     await page.goto('/');
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
   });
 
   test('1. Full-Stack Data Loading: renders board, sprint, and issues from backend', async ({ page }) => {
@@ -111,7 +112,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(proj98Article).toBeVisible();
 
     // Intercept transition request to simulate Jira rejection
-    await page.route('**/api/issues/PROJ-98/transition', async (route) => {
+    await page.route(/\/api\/issues\/PROJ-98\/transition/, async (route) => {
       await route.fulfill({
         status: 503,
         contentType: 'application/json',
@@ -130,7 +131,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // PROJ-98 should NOT be struck through (reverted back to In Progress)
     await expect(proj98Article.locator('p')).not.toHaveClass(/line-through/);
 
-    await page.unroute('**/api/issues/PROJ-98/transition');
+    await page.unroute(/\/api\/issues\/PROJ-98\/transition/);
 
     // Reset error simulation
     await page.request.post('/api/test/simulate-error', {

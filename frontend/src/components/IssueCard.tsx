@@ -20,6 +20,7 @@ import {
   isIssueExpedited,
   isIssueOverdue,
 } from '../utils/boardUtils.ts';
+import { useTaskBackground, getCardBackgroundStyle } from '../utils/useTaskBackground.ts';
 
 interface IssueCardProps {
   issue: JiraIssue;
@@ -61,10 +62,14 @@ export function IssueCard({
     },
   });
 
+  const { backgroundUrl, hasBackground } = useTaskBackground(issue.key);
+  const cardBackgroundStyle = getCardBackgroundStyle(backgroundUrl);
+
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
+    ...cardBackgroundStyle,
   };
 
   const statusOptions = getAvailableStatuses(columns);
@@ -105,7 +110,9 @@ export function IssueCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="text-xs font-bold whitespace-nowrap text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] hover:underline cursor-pointer"
+            className={`text-xs font-bold whitespace-nowrap text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] hover:underline cursor-pointer ${
+              hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
+            }`}
             title={`Open ${issue.key} in Jira`}
             aria-label={`Open ${issue.key} in Jira`}
           >
@@ -160,6 +167,8 @@ export function IssueCard({
         }}
         title={`Click to edit ${issue.key}`}
         className={`text-sm font-medium mb-3 line-clamp-2 cursor-pointer hover:underline ${
+          hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
+        } ${
           isDone
             ? 'line-through text-[var(--jira-text-secondary)] opacity-75'
             : 'text-[var(--jira-text-primary)]'

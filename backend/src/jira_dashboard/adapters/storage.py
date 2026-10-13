@@ -184,6 +184,9 @@ class SQLiteStorage:
                 conn.execute("DROP TABLE IF EXISTS cached_board_meta;")
                 conn.execute("DROP TABLE IF EXISTS cached_issues;")
                 conn.execute("DROP TABLE IF EXISTS sync_outbox;")
+                conn.execute("DROP TABLE IF EXISTS issue_background_links;")
+                conn.execute("DROP TABLE IF EXISTS background_images;")
+                conn.execute("DROP TABLE IF EXISTS gemini_daily_usage;")
 
         # 3. Re-init fresh schema
         self.init_db()

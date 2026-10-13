@@ -302,4 +302,30 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
       })
     );
   });
+
+  it('renders modal header with background banner when task background is available', async () => {
+    let triggerOnload: (() => void) | null = null;
+    const MockImg = class {
+      set onload(cb: () => void) {
+        triggerOnload = cb;
+      }
+      set onerror(_cb: () => void) {}
+      set src(_val: string) {}
+    } as unknown as typeof Image;
+    window.Image = MockImg;
+    globalThis.Image = MockImg;
+
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
+    });
+
+    await act(async () => {
+      triggerOnload?.();
+    });
+
+    const header = container.querySelector('[data-testid="edit-issue-modal-header"]') as HTMLElement;
+    expect(header).not.toBeNull();
+    expect(header.style.backgroundImage).toContain('/api/issues/PROJ-101/background');
+    expect(header.style.backgroundImage).toContain('linear-gradient');
+  });
 });

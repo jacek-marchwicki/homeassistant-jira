@@ -15,9 +15,20 @@ import time
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -25,9 +36,12 @@ from pydantic import BaseModel
 from jira_dashboard.adapters import (
     DEFAULT_COLUMNS,
     FakeJiraClient,
+    GeminiImageClient,
     JiraAPIError,
     JiraSyncWorker,
     SQLiteStorage,
+    compute_background_content_hash,
+    create_gemini_client,
     create_jira_client,
 )
 from jira_dashboard.config import JiraDashboardSettings
@@ -51,6 +65,7 @@ logger = logging.getLogger(__name__)
 
 settings = JiraDashboardSettings.load()
 jira_client = create_jira_client(settings)
+gemini_client: GeminiImageClient | None = create_gemini_client(settings)
 storage = SQLiteStorage(settings.sqlite_db_path)
 storage.init_db()
 
@@ -413,6 +428,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Pre-warm board cache asynchronously on startup so initial requests are instant
     cache_warm_task = asyncio.create_task(fetch_and_cache_board(force=True))
+
+    # Clean up expired cached background images on startup
+    try:
+        unlinked_files = storage.prune_expired_background_images(
+            retention_seconds=settings.gemini_cache_retention_seconds
+        )
+        for f in unlinked_files:
+            Path(f).unlink(missing_ok=True)
+    except Exception as exc:
+        logger.warning("Failed to prune background image cache: %s", exc)
 
     if settings.polling_interval_seconds > 0 and settings.has_jira_credentials:
         polling_task = asyncio.create_task(
@@ -970,6 +995,108 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     asyncio.create_task(sync_worker.process_next_pending())
 
     return created_issue
+
+
+def _serve_cached_file(file_path: Path | str) -> Response:
+    """Helper to serve an image file with standard cache headers."""
+    p = Path(file_path)
+    if not p.is_file():
+        return Response(status_code=204)
+    return Response(
+        content=p.read_bytes(),
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+def _serve_previous_or_204(issue_key: str) -> Response:
+    """Serve previously cached image for an issue if available, else 204 No Content."""
+    prev_hash = storage.get_issue_last_background_hash(issue_key)
+    if prev_hash:
+        prev_rec = storage.get_background_image(prev_hash)
+        if prev_rec and Path(prev_rec["file_path"]).is_file():
+            storage.touch_background_image(prev_hash)
+            return _serve_cached_file(prev_rec["file_path"])
+    return Response(status_code=204)
+
+
+@app.get("/api/issues/{key}/background")
+async def get_issue_background(key: str) -> Response:
+    """Retrieve or generate kid-friendly illustration background for an issue.
+
+    Enforces SHA-256 content deduplication, debounce settling for recently modified tasks,
+    strict daily generation limits, and graceful degradation (204 No Content).
+    """
+    # 1. Fetch issue
+    issue = storage.get_issue(key)
+    if issue is None and _cached_board_response is not None:
+        issue = next((x for x in _cached_board_response.issues if x.key == key), None)
+    if issue is None:
+        try:
+            issue = await jira_client.get_issue(key)
+        except Exception:
+            issue = None
+    if issue is None or not isinstance(issue, JiraIssue):
+        raise HTTPException(status_code=404, detail=f"Issue {key} not found")
+
+    # 2. Compute content hash
+    current_hash = compute_background_content_hash(
+        model=settings.gemini_model,
+        prompt_template=settings.gemini_prompt_template,
+        summary=issue.summary,
+        description=issue.description,
+    )
+
+    # 3. Check existing cached image
+    bg_rec = storage.get_background_image(current_hash)
+    if bg_rec:
+        file_path = Path(bg_rec["file_path"])
+        if file_path.is_file():
+            storage.touch_background_image(current_hash)
+            return _serve_cached_file(file_path)
+
+    # 4. Debounce check: if modified < debounce_seconds ago, serve previous or 204
+    now = time.time()
+    updated_epoch = issue.updated_at_epoch()
+    if updated_epoch > 0 and (now - updated_epoch) < settings.gemini_debounce_seconds:
+        return _serve_previous_or_204(key)
+
+    # 5. Check if Gemini client is enabled
+    if gemini_client is None:
+        return _serve_previous_or_204(key)
+
+    # 6. Daily quota cap check
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    daily_count = storage.get_daily_generation_count(today_str)
+    if daily_count >= settings.gemini_daily_limit:
+        return _serve_previous_or_204(key)
+
+    # 7. Generate image
+    prompt = settings.gemini_prompt_template.format(summary=issue.summary)
+    image_bytes = await gemini_client.generate_image(prompt, aspect_ratio="16:9")
+    if not image_bytes:
+        return _serve_previous_or_204(key)
+
+    # 8. Save to disk
+    cache_dir = settings.background_cache_dir
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    file_path = cache_dir / f"{current_hash}.webp"
+    file_path.write_bytes(image_bytes)
+
+    # 9. Record in DB and increment quota
+    storage.save_background_image(
+        content_hash=current_hash,
+        file_path=str(file_path),
+        byte_size=len(image_bytes),
+        issue_key=key,
+    )
+    storage.increment_daily_generation_count(today_str)
+
+    return Response(
+        content=image_bytes,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.get("/api/issues/{key}/comments", response_model=list[JiraComment])

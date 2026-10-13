@@ -218,6 +218,60 @@ describe('FilterBar component', () => {
     document.body.removeChild(container);
   });
 
+  it('renders all people from availableUsers in "Who is Me" dropdown even if they have no assigned issues', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({
+        currentUser: 'Jacek Marchwicki',
+        issues: testIssues, // only has Jacek Marchwicki and Sarah Connor
+        availableUsers: [
+          { displayName: 'Alex Lead', accountId: 'acc-alex', avatarUrl: 'https://example.com/alex.png' },
+          { displayName: 'Zoe Architect', accountId: 'acc-zoe', avatarUrl: 'https://example.com/zoe.png' },
+        ],
+      });
+      root.render(<FilterBar />);
+    });
+
+    const chevronBtn = container.querySelector(
+      'button[aria-label="Change who is Me"]'
+    ) as HTMLButtonElement;
+    expect(chevronBtn).not.toBeNull();
+
+    await act(async () => {
+      chevronBtn.click();
+    });
+
+    const dropdown = container.querySelector('[role="listbox"]');
+    expect(dropdown).not.toBeNull();
+    // Alex Lead and Zoe Architect should be visible despite having 0 issues
+    expect(dropdown?.textContent).toContain('Alex Lead');
+    expect(dropdown?.textContent).toContain('Zoe Architect');
+    expect(dropdown?.textContent).toContain('Sarah Connor');
+    expect(dropdown?.textContent).toContain('Jacek Marchwicki');
+
+    // Click Alex Lead to change "Who is Me"
+    const options = container.querySelectorAll('[role="option"]');
+    const alexOption = Array.from(options).find((opt) =>
+      opt.textContent?.includes('Alex Lead')
+    ) as HTMLElement;
+    expect(alexOption).toBeDefined();
+
+    await act(async () => {
+      alexOption.click();
+    });
+
+    expect(useBoardStore.getState().currentUser).toBe('Alex Lead');
+    expect(window.localStorage.getItem('ha_jira_current_user')).toBe('Alex Lead');
+
+    await act(async () => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
+  });
+
   it('renders single-line filter bar with flex-nowrap, z-10 stacking, and no flex-wrap', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);

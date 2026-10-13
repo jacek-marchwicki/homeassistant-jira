@@ -156,6 +156,21 @@ This document details the architectural phases, delivered features, and evolutio
     - Backend unit tests (`backend/tests/test_gemini_client.py`) and acceptance tests (`backend/tests/test_task_backgrounds.py`) covering deduplication, debouncing, daily quota enforcement, and pruning.
     - Frontend unit tests for hook (`useTaskBackground.test.tsx`), card integration (`IssueCard.test.tsx`), and edit modal banner (`EditIssueModal.test.tsx`).
     - Automated Playwright visual regression snapshots capturing cards with illustrations in dark and light themes (`component-issue-card-background.png`, `component-issue-card-background-light.png`) and the Edit Issue modal header banner (`component-edit-modal-header-background.png`).
-
+- [x] **Phase 5.11: Complete "Assigned to Me" People Discovery & Browser View/Identity Persistence**
+  - [x] **Complete Team Member Discovery in "Assigned to Me"**:
+    - Resolved issue where only people with currently assigned board issues appeared in the "Assigned to Me" picker by integrating `availableUsers` (from backend `/api/users` and cached storage) into `FilterBar` via `getAssigneesFromBoard`.
+    - All Jira assignable users and project team members are now visible in the "Who is Me" dropdown even if they currently have 0 issues assigned to them, complete with avatars and display names.
+  - [x] **Persistent "Who is Me" Active Identity**:
+    - When a user changes their "Assigned to Me" selection to another person, the choice is saved to browser `localStorage` (`ha_jira_current_user`).
+    - The setting is restored when the browser is reopened or reloaded, and persists seamlessly even during offline mode.
+  - [x] **Persistent Board View Tab ("Board", "People", or "Backlog")**:
+    - The last selected view tab ("Board", "People", or "Backlog") is tracked and persisted to browser `localStorage` (`ha_jira_current_view`).
+    - When reopening or refreshing the browser, the dashboard immediately restores the user's last selected board view with zero flicker.
+  - [x] **Offline Cache for Available Team Members**:
+    - `availableUsers` is included in `CachedBoardData` (`ha_jira_board_cache_v1`), allowing the "Who is Me" picker to display all team members immediately upon startup or when operating completely offline.
+  - [x] **Comprehensive Test Verification**:
+    - Unit tests in `FilterBar.test.tsx`, `boardStore.test.ts`, and `offlineReactivity.test.ts` verifying team member discovery, localStorage persistence, view tab restoration, and offline resilience.
+    - Full-stack E2E Playwright integration test validating user switching in "Who is Me", view tab switching to "People", and persistence across browser reload.
+    - 100% passing visual regression snapshot suite across 40 snapshots.
 
 

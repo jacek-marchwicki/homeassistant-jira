@@ -486,4 +486,23 @@ describe('Cross-View & Filter Offline Reactivity', () => {
       target_status: 'Done',
     });
   });
+
+  it('persists selected "Who is Me" user and selected view in localStorage even while offline', async () => {
+    // 1. Simulate offline environment
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    // 2. Select different user while offline
+    useBoardStore.getState().setCurrentUser('Sarah Connor');
+    expect(useBoardStore.getState().currentUser).toBe('Sarah Connor');
+    expect(window.localStorage.getItem('ha_jira_current_user')).toBe('Sarah Connor');
+
+    // 3. Switch dashboard views while offline
+    useBoardStore.getState().setCurrentView('people');
+    expect(useBoardStore.getState().currentView).toBe('people');
+    expect(window.localStorage.getItem('ha_jira_current_view')).toBe('people');
+
+    useBoardStore.getState().setCurrentView('backlog');
+    expect(useBoardStore.getState().currentView).toBe('backlog');
+    expect(window.localStorage.getItem('ha_jira_current_view')).toBe('backlog');
+  });
 });

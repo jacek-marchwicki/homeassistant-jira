@@ -3,7 +3,12 @@ import {
   useBoardStore,
   DEFAULT_COLUMNS,
   loadCachedBoard,
+  saveCachedBoard,
+  loadCachedView,
+  saveCachedView,
   LOCAL_STORAGE_BOARD_CACHE_KEY,
+  LOCAL_STORAGE_CURRENT_VIEW_KEY,
+  LOCAL_STORAGE_CURRENT_USER_KEY,
 } from './boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
 import { getAvailableStatuses } from '../utils/boardUtils.ts';
@@ -780,6 +785,82 @@ describe('Zustand BoardStore', () => {
         expect.stringContaining('/api/issues/A/rank'),
         expect.objectContaining({ method: 'PUT' })
       );
+    });
+  });
+
+  describe('Dashboard View and Current User Persistence', () => {
+    beforeEach(() => {
+      window.localStorage.clear();
+    });
+
+    it('persists currentView to localStorage when setCurrentView is called', () => {
+      expect(LOCAL_STORAGE_CURRENT_VIEW_KEY).toBe('ha_jira_current_view');
+      useBoardStore.getState().setCurrentView('people');
+      expect(useBoardStore.getState().currentView).toBe('people');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('people');
+
+      useBoardStore.getState().setCurrentView('backlog');
+      expect(useBoardStore.getState().currentView).toBe('backlog');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('backlog');
+
+      useBoardStore.getState().setCurrentView('board');
+      expect(useBoardStore.getState().currentView).toBe('board');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('board');
+    });
+
+    it('loadCachedView loads saved view from localStorage or defaults to board', () => {
+      saveCachedView('people');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('people');
+      expect(loadCachedView()).toBe('people');
+
+      saveCachedView('backlog');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('backlog');
+      expect(loadCachedView()).toBe('backlog');
+
+      saveCachedView('board');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('board');
+      expect(loadCachedView()).toBe('board');
+
+      window.localStorage.setItem(LOCAL_STORAGE_CURRENT_VIEW_KEY, 'invalid_view');
+      expect(loadCachedView()).toBe('board');
+
+      window.localStorage.removeItem(LOCAL_STORAGE_CURRENT_VIEW_KEY);
+      expect(loadCachedView()).toBe('board');
+    });
+
+    it('persists currentUser to localStorage under ha_jira_current_user', () => {
+      expect(LOCAL_STORAGE_CURRENT_USER_KEY).toBe('ha_jira_current_user');
+      useBoardStore.getState().setCurrentUser('Zoe Architect');
+      expect(useBoardStore.getState().currentUser).toBe('Zoe Architect');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_USER_KEY)).toBe('Zoe Architect');
+    });
+
+    it('persists availableUsers in saveCachedBoard and restores in loadCachedBoard', () => {
+      const customUsers = [
+        { displayName: 'Zoe Architect', accountId: 'acc-zoe', avatarUrl: 'https://example.com/zoe.png' },
+        { displayName: 'Alex Lead', accountId: 'acc-alex', avatarUrl: 'https://example.com/alex.png' },
+      ];
+
+      saveCachedBoard({
+        boardName: 'Test Board',
+        sprintName: 'Sprint 1',
+        jiraUrl: 'https://jira.example.com',
+        columns: DEFAULT_COLUMNS,
+        issues: [
+          {
+            id: '1',
+            key: 'TEST-1',
+            summary: 'Test',
+            priority: 'low',
+            status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          },
+        ],
+        availableUsers: customUsers,
+      });
+
+      const loaded = loadCachedBoard();
+      expect(loaded).not.toBeNull();
+      expect(loaded?.availableUsers).toEqual(customUsers);
     });
   });
 });

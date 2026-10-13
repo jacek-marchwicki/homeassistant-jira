@@ -2,10 +2,12 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
+import { getAssigneesFromBoard } from '../utils/boardUtils.ts';
 
 export function FilterBar() {
   const {
     issues,
+    availableUsers,
     activeFilters,
     toggleFilter,
     setActiveFilter,
@@ -24,29 +26,11 @@ export function FilterBar() {
   const isActive = activeFilters.includes('active');
   const isHideEpics = activeFilters.includes('hide_epics');
 
-  // Aggregate available assignees from board issues
-  const assignees = useMemo(() => {
-    const map = new Map<string, { displayName: string; avatarUrl?: string }>();
-    if (currentUser && currentUser.trim()) {
-      map.set(currentUser.trim().toLowerCase(), { displayName: currentUser.trim() });
-    }
-
-    for (const issue of issues) {
-      if (issue.assignee) {
-        const name = issue.assignee.displayName || issue.assignee.display_name;
-        if (name && name.trim()) {
-          const key = name.trim().toLowerCase();
-          if (!map.has(key)) {
-            map.set(key, {
-              displayName: name.trim(),
-              avatarUrl: issue.assignee.avatarUrl || issue.assignee.avatar_url,
-            });
-          }
-        }
-      }
-    }
-    return Array.from(map.values());
-  }, [issues, currentUser]);
+  // Aggregate available assignees from board issues, available users, and current user
+  const assignees = useMemo(
+    () => getAssigneesFromBoard(issues, availableUsers, currentUser),
+    [issues, availableUsers, currentUser]
+  );
 
   useEffect(() => {
     if (!isPickerOpen) return;

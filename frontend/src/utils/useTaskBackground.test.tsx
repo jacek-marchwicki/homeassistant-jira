@@ -104,8 +104,17 @@ describe('useTaskBackground hook', () => {
     const styleWithBg = getCardBackgroundStyle('/api/issues/PROJ-101/background');
     expect(styleWithBg.backgroundImage).toContain('/api/issues/PROJ-101/background');
     expect(styleWithBg.backgroundImage).toContain('linear-gradient');
+    expect(styleWithBg.backgroundImage).toContain('rgba(17, 24, 39, 0.32)');
+    expect(styleWithBg.backgroundImage).toContain('rgba(17, 24, 39, 0.8)');
     expect(styleWithBg.backgroundSize).toBe('cover');
     expect(styleWithBg.backgroundPosition).toBe('center');
+
+    // Test light theme overlay
+    document.documentElement.setAttribute('data-theme', 'light');
+    const lightStyle = getCardBackgroundStyle('/api/issues/PROJ-101/background');
+    expect(lightStyle.backgroundImage).toContain('rgba(255, 255, 255, 0.32)');
+    expect(lightStyle.backgroundImage).toContain('rgba(255, 255, 255, 0.8)');
+    document.documentElement.removeAttribute('data-theme');
 
     const styleWithoutBg = getCardBackgroundStyle(null);
     expect(styleWithoutBg).toEqual({});

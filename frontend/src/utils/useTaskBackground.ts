@@ -66,8 +66,8 @@ export function getCardBackgroundStyle(backgroundUrl: string | null): React.CSSP
   const isLight =
     typeof document !== 'undefined' &&
     document.documentElement.getAttribute('data-theme') === 'light';
-  const overlayTop = isLight ? 'rgba(255, 255, 255, 0.82)' : 'rgba(17, 24, 39, 0.78)';
-  const overlayBottom = isLight ? 'rgba(255, 255, 255, 0.92)' : 'rgba(17, 24, 39, 0.90)';
+  const overlayTop = isLight ? 'rgba(255, 255, 255, 0.32)' : 'rgba(17, 24, 39, 0.32)';
+  const overlayBottom = isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(17, 24, 39, 0.8)';
 
   return {
     backgroundImage: `linear-gradient(to bottom, ${overlayTop}, ${overlayBottom}), url(${backgroundUrl})`,

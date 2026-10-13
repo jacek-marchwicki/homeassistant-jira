@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DndContext } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { IssueCard } from './IssueCard.tsx';
+import { clearBackgroundCache } from '../utils/useTaskBackground.ts';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
 
@@ -28,25 +29,49 @@ const mockIssueDone: JiraIssue = {
   assignee: { displayName: 'Jacek Marchwicki' },
 };
 
+const choreIssue: JiraIssue = {
+  id: '103',
+  key: 'CHORE-101',
+  summary: 'Clean bedroom and fold clothes',
+  priority: 'high',
+  status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+};
+
 describe('IssueCard component', () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+  let originalImage: typeof Image;
+
   beforeEach(() => {
+    clearBackgroundCache();
+    originalImage = window.Image;
     act(() => {
       useBoardStore.setState({
-        issues: [mockIssueTodo, mockIssueDone],
+        issues: [mockIssueTodo, mockIssueDone, choreIssue],
         columns: [
-          { id: 'col-todo', name: 'To Do', category: 'todo' },
-          { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
-          { id: 'col-done', name: 'Done', category: 'done' },
+          { id: 'col-todo', name: 'To Do', category: 'todo', status_ids: ['col-todo'] },
+          { id: 'col-inprogress', name: 'In Progress', category: 'inprogress', status_ids: ['col-inprogress'] },
+          { id: 'col-done', name: 'Done', category: 'done', status_ids: ['col-done'] },
         ],
         jiraUrl: 'https://jira.example.com',
       });
     });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+    window.Image = originalImage;
+    globalThis.Image = originalImage;
+    vi.restoreAllMocks();
   });
 
   it('renders key, summary, priority, edit button, and quick Done button for todo issue', async () => {
-    const container = document.createElement('div');
-    const root = createRoot(container);
-
     await act(async () => {
       root.render(
         <DndContext>
@@ -75,16 +100,9 @@ describe('IssueCard component', () => {
     // Quick Done button
     const doneBtn = container.querySelector('button[aria-label="Mark PROJ-101 as Done"]');
     expect(doneBtn).not.toBeNull();
-
-    await act(async () => {
-      root.unmount();
-    });
   });
 
   it('does NOT render status picker dropdown in IssueCard', async () => {
-    const container = document.createElement('div');
-    const root = createRoot(container);
-
     await act(async () => {
       root.render(
         <DndContext>
@@ -104,16 +122,9 @@ describe('IssueCard component', () => {
 
     const changeStatusElem = container.querySelector('[title="Change Status"]');
     expect(changeStatusElem).toBeNull();
-
-    await act(async () => {
-      root.unmount();
-    });
   });
 
   it('does not render quick Done button for Done issue, and does not render status picker', async () => {
-    const container = document.createElement('div');
-    const root = createRoot(container);
-
     await act(async () => {
       root.render(
         <DndContext>
@@ -131,16 +142,9 @@ describe('IssueCard component', () => {
     // Status picker must not exist
     const statusSelect = container.querySelector('select[id^="status-select"]');
     expect(statusSelect).toBeNull();
-
-    await act(async () => {
-      root.unmount();
-    });
   });
 
   it('calls transitionIssueOptimistic when quick Done button is clicked', async () => {
-    const container = document.createElement('div');
-    const root = createRoot(container);
-
     const transitionSpy = vi.fn();
     act(() => {
       useBoardStore.setState({
@@ -166,16 +170,9 @@ describe('IssueCard component', () => {
     });
 
     expect(transitionSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
-
-    await act(async () => {
-      root.unmount();
-    });
   });
 
   it('calls setEditingIssue when Edit button or summary is clicked', async () => {
-    const container = document.createElement('div');
-    const root = createRoot(container);
-
     const setEditingIssueSpy = vi.fn();
     act(() => {
       useBoardStore.setState({
@@ -201,9 +198,66 @@ describe('IssueCard component', () => {
     });
 
     expect(setEditingIssueSpy).toHaveBeenCalledWith(mockIssueTodo);
+  });
+
+  it('renders default surface background styling when no background image is available', async () => {
+    let triggerOnerror: (() => void) | null = null;
+    const MockImg = class {
+      set onload(_cb: () => void) {}
+      set onerror(cb: () => void) {
+        triggerOnerror = cb;
+      }
+      set src(_val: string) {}
+    } as unknown as typeof Image;
+    window.Image = MockImg;
+    globalThis.Image = MockImg;
 
     await act(async () => {
-      root.unmount();
+      root.render(
+        <DndContext>
+          <IssueCard issue={choreIssue} />
+        </DndContext>
+      );
     });
+
+    await act(async () => {
+      triggerOnerror?.();
+    });
+
+    const card = container.querySelector('[data-testid="issue-card-CHORE-101"]') as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card.style.backgroundImage).toBe('');
+    expect(card.className).toContain('bg-[var(--jira-surface-elevated)]');
+  });
+
+  it('applies gradient overlay and background image when image loads successfully', async () => {
+    let triggerOnload: (() => void) | null = null;
+    const MockImg = class {
+      set onload(cb: () => void) {
+        triggerOnload = cb;
+      }
+      set onerror(_cb: () => void) {}
+      set src(_val: string) {}
+    } as unknown as typeof Image;
+    window.Image = MockImg;
+    globalThis.Image = MockImg;
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <IssueCard issue={choreIssue} />
+        </DndContext>
+      );
+    });
+
+    await act(async () => {
+      triggerOnload?.();
+    });
+
+    const card = container.querySelector('[data-testid="issue-card-CHORE-101"]') as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card.style.backgroundImage).toContain('/api/issues/CHORE-101/background');
+    expect(card.style.backgroundImage).toContain('linear-gradient');
+    expect(card.style.backgroundSize).toBe('cover');
   });
 });

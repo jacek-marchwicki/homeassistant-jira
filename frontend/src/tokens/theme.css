@@ -44,6 +44,10 @@
     --jira-priority-medium: #60a5fa;
     --jira-priority-low: #94a3b8;
     --jira-priority-lowest: #64748b;
+
+    /* AI Card Background Illustration Overlays (Dark Default) */
+    --jira-card-overlay-top: rgba(17, 24, 39, 0.78);
+    --jira-card-overlay-bottom: rgba(17, 24, 39, 0.90);
   }
 
   /* Standalone Light Mode */
@@ -83,6 +87,10 @@
     --jira-priority-medium: #2563eb;
     --jira-priority-low: #475569;
     --jira-priority-lowest: #64748b;
+
+    /* AI Card Background Illustration Overlays (Light Theme) */
+    --jira-card-overlay-top: rgba(255, 255, 255, 0.82);
+    --jira-card-overlay-bottom: rgba(255, 255, 255, 0.92);
   }
 
   /* True OLED Black High-Contrast Kiosk Mode for Wall Displays */
@@ -122,6 +130,10 @@
     --jira-priority-medium: #60a5fa;
     --jira-priority-low: #cbd5e1;
     --jira-priority-lowest: #94a3b8;
+
+    /* AI Card Background Illustration Overlays (Kiosk Theme) */
+    --jira-card-overlay-top: rgba(0, 0, 0, 0.80);
+    --jira-card-overlay-bottom: rgba(0, 0, 0, 0.92);
   }
 }
 

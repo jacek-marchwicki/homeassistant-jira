@@ -81,6 +81,29 @@ def validate_ci_workflow(workflow_path: Path) -> None:
         raise ValueError("Missing 'e2e-and-visual' job definition in ci.yml")
 
 
+def ensure_port_available(port: int = 8001) -> None:
+    """Ensure port is not in use by a lingering process before running tests."""
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) == 0:
+                res = subprocess.run(
+                    ["lsof", "-ti", f":{port}"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res.stdout.strip():
+                    for pid in res.stdout.strip().split():
+                        subprocess.run(
+                            ["kill", "-9", pid], capture_output=True, check=False
+                        )
+                time.sleep(0.5)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"  {YELLOW}Note: ensure_port_available encountered: {exc}{NC}")
+
+
 def run_native_pipeline(
     project_root: Path,
     run_e2e: bool = False,
@@ -149,7 +172,7 @@ def run_native_pipeline(
                 "Step 6: Running Full-Stack E2E Integration tests (Playwright)...",
                 ["npx", "pnpm", "--dir", "frontend", "test:e2e"],
                 project_root,
-                {"JIRA_USE_FAKE": "1"},
+                {"JIRA_USE_FAKE": "1", "PLAYWRIGHT_PORT": "8001"},
             )
         )
 
@@ -159,7 +182,7 @@ def run_native_pipeline(
                 "Step 7: Running Visual Screenshot tests across viewports & themes (Playwright)...",
                 ["npx", "pnpm", "--dir", "frontend", "test:visual"],
                 project_root,
-                {"JIRA_USE_FAKE": "1"},
+                {"JIRA_USE_FAKE": "1", "PLAYWRIGHT_PORT": "8002"},
             )
         )
 
@@ -168,20 +191,31 @@ def run_native_pipeline(
     for description, cmd_or_func, cwd, env in steps:
         print(f"{CYAN}{description}{NC}")
         step_start = time.perf_counter()
+        port_to_clean = (
+            int(env["PLAYWRIGHT_PORT"]) if env and "PLAYWRIGHT_PORT" in env else None
+        )
+        if port_to_clean:
+            ensure_port_available(port_to_clean)
         try:
             if callable(cmd_or_func):
                 cmd_or_func()
             else:
                 run_command(cmd_or_func, cwd=cwd, env=env)
+            if port_to_clean:
+                ensure_port_available(port_to_clean)
             duration = format_duration(time.perf_counter() - step_start)
             print(f"{GREEN}✓ Completed in {duration}.{NC}\n")
         except subprocess.CalledProcessError as exc:
+            if port_to_clean:
+                ensure_port_available(port_to_clean)
             print(f"\n{RED}{BOLD}✗ Command failed with exit code {exc.returncode}:{NC}")
             print(
                 f"  Command: {' '.join(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)])}\n"
             )
             return exc.returncode
         except (ValueError, TypeError, OSError, RuntimeError) as exc:
+            if port_to_clean:
+                ensure_port_available(port_to_clean)
             print(f"\n{RED}{BOLD}✗ Verification step failed: {exc}{NC}\n")
             return 1
 

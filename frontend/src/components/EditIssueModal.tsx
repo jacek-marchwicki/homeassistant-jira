@@ -11,6 +11,7 @@ import { StatusSelect } from './StatusSelect.tsx';
 import { CommentsSection } from './CommentsSection.tsx';
 import { RichTextEditor } from './RichTextEditor.tsx';
 import { DatePicker } from './DatePicker.tsx';
+import { useTaskBackground, getCardBackgroundStyle } from '../utils/useTaskBackground.ts';
 
 function formatDateTime(isoString?: string | null): string | null {
   if (!isoString) return null;
@@ -37,6 +38,9 @@ interface EditIssueModalProps {
 
 export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) {
   const { columns, jiraUrl, updateIssueOptimistic } = useBoardStore();
+
+  const { backgroundUrl, hasBackground } = useTaskBackground(issue?.key);
+  const modalBannerStyle = getCardBackgroundStyle(backgroundUrl);
 
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
@@ -131,17 +135,27 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
         className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-[var(--jira-surface)] border-0 sm:border border-[var(--jira-border)] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl p-4 sm:p-6 pb-8 sm:pb-6 relative overflow-y-auto overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[var(--jira-border)]">
+        {/* Modal Header / Banner */}
+        <div
+          data-testid="edit-issue-modal-header"
+          style={modalBannerStyle}
+          className={`flex items-center justify-between pb-4 border-b border-[var(--jira-border)] transition-all ${
+            hasBackground ? 'p-3 -m-4 sm:-m-6 mb-4 sm:mb-6 rounded-t-none sm:rounded-t-xl shadow-inner' : ''
+          }`}
+        >
           <div className="flex items-center gap-2">
             <IssueTypeIcon type={issueType} className="w-5 h-5" />
-            <h2 id="edit-issue-title" className="text-lg font-bold text-[var(--jira-text-primary)] flex items-center gap-2">
+            <h2 id="edit-issue-title" className={`text-lg font-bold text-[var(--jira-text-primary)] flex items-center gap-2 ${
+              hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
+            }`}>
               <span>Edit Issue</span>
               <a
                 href={issueUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-[var(--jira-primary)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                className={`font-mono text-[var(--jira-primary)] hover:underline inline-flex items-center gap-1 cursor-pointer ${
+                  hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
+                }`}
                 title={`Open ${issue.key} in Jira`}
                 aria-label={`Open ${issue.key} in Jira`}
               >

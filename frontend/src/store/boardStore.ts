@@ -32,8 +32,17 @@ export class ServerRejectionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ServerRejectionError';
+    Object.setPrototypeOf(this, ServerRejectionError.prototype);
   }
 }
+
+export function isServerRejectionError(err: unknown): err is ServerRejectionError {
+  return (
+    err instanceof ServerRejectionError ||
+    (typeof err === 'object' && err !== null && (err as any).name === 'ServerRejectionError')
+  );
+}
+
 
 export interface OfflineOutboxItem {
   id: string;
@@ -423,7 +432,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       }));
       persistCurrentBoardState(get);
     } catch (err) {
-      if (err instanceof ServerRejectionError) {
+      if (isServerRejectionError(err)) {
         // 3. Graceful Rollback on Server Rejection
         set((state) => {
           const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
@@ -583,7 +592,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       }));
       persistCurrentBoardState(get);
     } catch (err) {
-      if (err instanceof ServerRejectionError) {
+      if (isServerRejectionError(err)) {
         // 3. Graceful Rollback on Server Rejection
         set((state) => {
           const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
@@ -753,7 +762,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       persistCurrentBoardState(get);
       return finalCreated;
     } catch (err) {
-      if (err instanceof ServerRejectionError) {
+      if (isServerRejectionError(err)) {
         // 3. Graceful Rollback on Server Rejection
         set((state) => ({
           issues: state.issues.filter((item) => item.key !== tempKey),
@@ -859,7 +868,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       }));
       persistCurrentBoardState(get);
     } catch (err) {
-      if (err instanceof ServerRejectionError) {
+      if (isServerRejectionError(err)) {
         // 3. Graceful Rollback on Server Rejection
         set((state) => ({
           issues: sortIssuesByRank(

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- **Home Assistant UI Gemini AI Configuration**: Exposed all Gemini AI background configuration options (`gemini_api_key`, `gemini_model`, `gemini_prompt_template`, `gemini_daily_limit`, `gemini_debounce_seconds`, `gemini_cache_retention_seconds`) in Home Assistant Add-on manifest with typed schema (`password?`, `str?`, `int?`).
+- **Add-on UI Configuration Translations**: Added `addon/translations/en.yaml` providing clear titles and descriptive tooltips for all settings in the Home Assistant Configuration tab.
+- **Robust Field Sanitization & Defaults**: Added sanitizing field validators ensuring blank or whitespace-only inputs gracefully fall back to default behavior without error.
+- **Container Environment Templates**: Updated `.env.example`, `docker-compose.yml`, and `docker-compose.dev.yml` with `GEMINI_*` environment variables.
+
 ## 0.3.0
 
 - **Dedicated "People" Board View**: Introduced a specialized "People" board organizing tasks into assignee columns, featuring 24-hour retention for completed issues, drag-and-drop reassignment, and scoped sortable drag identifiers.

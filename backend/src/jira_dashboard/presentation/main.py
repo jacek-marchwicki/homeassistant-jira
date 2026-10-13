@@ -469,7 +469,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="Home Assistant Jira Dashboard API",
     description="Real-time backend API and WebSocket hub for Jira dashboard",
-    version="0.3.0",
+    version="0.3.1",
     lifespan=lifespan,
 )
 
@@ -495,7 +495,7 @@ app.add_middleware(
 @app.get("/api/health")
 def health() -> dict[str, str]:
     """Health check endpoint for container orchestrators and Home Assistant supervision."""
-    return {"status": "ok", "app": "homeassistant-jira", "version": "0.3.0"}
+    return {"status": "ok", "app": "homeassistant-jira", "version": "0.3.1"}
 
 
 @app.get("/api/board", response_model=BoardResponse)

@@ -11,6 +11,7 @@ import { MobileInstallBanner } from './components/MobileInstallBanner.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
 import { PeopleBoard } from './components/PeopleBoard.tsx';
 import { useBoardStore } from './store/boardStore.ts';
+import { getCurrentRoute } from './utils/navigation.ts';
 import { getWsUrl } from './utils/paths.ts';
 import { usePwaInstall } from './utils/usePwaInstall.ts';
 
@@ -22,7 +23,6 @@ export default function App() {
     errorMessage,
     currentView,
     isSettingsOpen,
-    syncSettingsFromLocation,
     isLoading,
     boardName,
     issues,
@@ -30,6 +30,9 @@ export default function App() {
     setEditingIssue,
     isCreateModalOpen,
     setCreateModalOpen,
+    applyRoute,
+    resolveRouteTask,
+    routeTaskKey,
   } = useBoardStore();
   const {
     canInstall,
@@ -41,15 +44,19 @@ export default function App() {
   } = usePwaInstall();
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Keep the full-screen Settings page in sync with the URL hash (browser back/forward)
+  // 0. URL is the source of truth for navigation: sync on back/forward and normalize root URL
   useEffect(() => {
-    window.addEventListener('hashchange', syncSettingsFromLocation);
-    window.addEventListener('popstate', syncSettingsFromLocation);
-    return () => {
-      window.removeEventListener('hashchange', syncSettingsFromLocation);
-      window.removeEventListener('popstate', syncSettingsFromLocation);
-    };
-  }, [syncSettingsFromLocation]);
+    const initial = getCurrentRoute();
+    if (initial.kind === 'root') applyRoute(initial);
+    const onPopState = () => applyRoute(getCurrentRoute());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [applyRoute]);
+
+  // Resolve /task/KEY deep links once the issue list (cache, load or websocket) is available
+  useEffect(() => {
+    resolveRouteTask();
+  }, [resolveRouteTask, routeTaskKey, issues, isLoading]);
 
   // 1. Initial Load of Board State
   useEffect(() => {

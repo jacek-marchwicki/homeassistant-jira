@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, ChevronDown, Check } from 'lucide-react';
+import { Search, ChevronDown, Check, X } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
 import { getAssigneesFromBoard } from '../utils/boardUtils.ts';
@@ -18,8 +18,10 @@ export function FilterBar() {
   } = useBoardStore();
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [pickerPosition, setPickerPosition] = useState<{ top: number; left: number } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
 
   const isAll = activeFilters.length === 0;
   const isMy = activeFilters.includes('my');
@@ -31,6 +33,12 @@ export function FilterBar() {
     () => getAssigneesFromBoard(issues, availableUsers, currentUser),
     [issues, availableUsers, currentUser]
   );
+
+  useEffect(() => {
+    if (isMobileSearchOpen && mobileSearchInputRef.current) {
+      mobileSearchInputRef.current.focus();
+    }
+  }, [isMobileSearchOpen]);
 
   useEffect(() => {
     if (!isPickerOpen) return;
@@ -68,48 +76,97 @@ export function FilterBar() {
 
   return (
     <section className="relative z-10 flex flex-nowrap items-center justify-between gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-[var(--jira-border)] bg-[var(--jira-canvas)]">
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar min-w-0 py-0.5">
-        <button
-          type="button"
-          onClick={() => setActiveFilter('all')}
-          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-full text-xs font-medium inline-flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
-            isAll
-              ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
-              : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
-          }`}
-        >
-          All Issues ({issues.length})
-        </button>
-
-        {/* Assigned to Me Filter with "Who is Me" Picker */}
-        <div className="relative inline-flex items-center rounded-full h-7 sm:h-8 shadow-xs shrink-0" ref={pickerRef}>
+      {/* Expanded Mobile Search Overlay */}
+      {isMobileSearchOpen && (
+        <div className="sm:hidden absolute inset-0 z-20 flex items-center gap-2 px-3 bg-[var(--jira-canvas)]">
+          <div className="relative flex-1 flex items-center h-8">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 text-[var(--jira-text-muted)] pointer-events-none" />
+            <input
+              ref={mobileSearchInputRef}
+              data-mobile-search="true"
+              id="filter-search-input-mobile"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsMobileSearchOpen(false);
+                }
+              }}
+              placeholder="Search key, summary, description..."
+              aria-label="Search issues by key, summary, or description"
+              className="w-full h-8 text-xs pl-8 pr-7 rounded-lg bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] placeholder-[var(--jira-text-muted)] focus:outline-none focus:border-[var(--jira-primary)]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] p-0.5 cursor-pointer"
+                aria-label="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
           <button
             type="button"
-            onClick={() => toggleFilter('my')}
-            className={`h-7 sm:h-8 inline-flex items-center gap-1 sm:gap-1.5 pl-2.5 sm:pl-3 pr-1.5 sm:pr-2 rounded-l-full text-xs font-medium transition-colors cursor-pointer ${
-              isMy
-                ? 'bg-[var(--jira-primary)] text-white font-semibold'
-                : 'bg-[var(--jira-surface-elevated)] border-y border-l border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)]'
-            }`}
-            title={`Toggle filter for Assigned to Me (${currentUser})`}
+            onClick={() => setIsMobileSearchOpen(false)}
+            className="h-8 px-2.5 rounded-lg text-xs font-medium bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] inline-flex items-center justify-center cursor-pointer shrink-0"
+            aria-label="Close search"
           >
-            <span>Assigned to Me</span>
-            <span
-              className={`text-2xs px-1.5 py-0.5 rounded-full font-bold truncate max-w-[80px] sm:max-w-[100px] leading-none inline-flex items-center ${
-                isMy ? 'bg-white/20 text-white' : 'bg-[var(--jira-canvas)] text-[var(--jira-text-secondary)]'
-              }`}
-            >
-              {currentUser.split(' ')[0]}
-            </span>
+            <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* Filter items row */}
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar min-w-0 py-0.5">
+        {/* 1. Assigned to Me / Assignee Avatars (First Item on the list) */}
+        <div
+          data-testid="assignee-avatars-group"
+          ref={pickerRef}
+          className="relative inline-flex items-center gap-1 shrink-0 p-0.5 bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] rounded-full h-7 sm:h-8"
+        >
+          {assignees.map((user) => {
+            const isUserSelected =
+              isMy && user.displayName.toLowerCase() === currentUser.toLowerCase();
+
+            return (
+              <button
+                type="button"
+                key={user.displayName}
+                onClick={() => {
+                  if (isUserSelected) {
+                    toggleFilter('my');
+                  } else {
+                    setCurrentUser(user.displayName);
+                    if (!isMy) {
+                      toggleFilter('my');
+                    }
+                  }
+                }}
+                className={`relative rounded-full transition-transform cursor-pointer p-0.5 shrink-0 ${
+                  isUserSelected
+                    ? 'ring-2 ring-[var(--jira-primary)] ring-offset-1 ring-offset-[var(--jira-surface-elevated)] scale-105 z-10'
+                    : 'opacity-80 hover:opacity-100 hover:scale-105'
+                }`}
+                title={`Filter by ${user.displayName}`}
+                aria-label={`Filter by ${user.displayName}`}
+                aria-pressed={isUserSelected}
+              >
+                <AssigneeAvatar
+                  assignee={{ displayName: user.displayName, avatarUrl: user.avatarUrl }}
+                  sizeClassName="w-5 h-5 sm:w-6 sm:h-6"
+                />
+              </button>
+            );
+          })}
+
+          {/* Quick chevron to open user picker menu */}
           <button
             type="button"
             onClick={() => setIsPickerOpen((prev) => !prev)}
-            className={`h-7 sm:h-8 w-6 sm:w-7 inline-flex items-center justify-center rounded-r-full text-xs font-medium transition-colors cursor-pointer border-l ${
-              isMy
-                ? 'bg-[var(--jira-primary)] text-white border-white/25 hover:bg-[var(--jira-primary-hover)]'
-                : 'bg-[var(--jira-surface-elevated)] border-y border-r border-l border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)]'
-            }`}
+            className="h-5 sm:h-6 w-5 sm:w-6 inline-flex items-center justify-center rounded-full text-xs text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer mr-0.5"
             title="Change who is Me"
             aria-label="Change who is Me"
             aria-expanded={isPickerOpen}
@@ -177,6 +234,20 @@ export function FilterBar() {
           )}
         </div>
 
+        {/* 2. All Issues */}
+        <button
+          type="button"
+          onClick={() => setActiveFilter('all')}
+          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-full text-xs font-medium inline-flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+            isAll
+              ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
+              : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
+          }`}
+        >
+          All Issues ({issues.length})
+        </button>
+
+        {/* 3. Active */}
         <button
           type="button"
           onClick={() => toggleFilter('active')}
@@ -189,6 +260,7 @@ export function FilterBar() {
           Active
         </button>
 
+        {/* 4. Hide Epics */}
         <button
           type="button"
           onClick={() => toggleFilter('hide_epics')}
@@ -203,9 +275,9 @@ export function FilterBar() {
         </button>
       </div>
 
-      {/* Quick Search Input */}
-      <div className="relative flex items-center shrink-0 w-28 xs:w-36 sm:w-48 md:w-64 h-7 sm:h-8">
-        <Search className="w-3.5 h-3.5 absolute left-2 sm:left-2.5 text-[var(--jira-text-muted)] pointer-events-none" />
+      {/* Desktop Quick Search Input */}
+      <div className="hidden sm:flex relative items-center shrink-0 sm:w-48 md:w-64 h-7 sm:h-8">
+        <Search className="w-3.5 h-3.5 absolute left-2.5 text-[var(--jira-text-muted)] pointer-events-none" />
         <input
           id="filter-search-input"
           type="text"
@@ -213,9 +285,24 @@ export function FilterBar() {
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search key, summary, description..."
           aria-label="Search issues by key, summary, or description"
-          className="w-full h-7 sm:h-8 text-xs pl-7 sm:pl-8 pr-2.5 sm:pr-3 rounded-lg bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] placeholder-[var(--jira-text-muted)] focus:outline-none focus:border-[var(--jira-primary)]"
+          className="w-full h-7 sm:h-8 text-xs pl-8 pr-2.5 sm:pr-3 rounded-lg bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-primary)] placeholder-[var(--jira-text-muted)] focus:outline-none focus:border-[var(--jira-primary)]"
         />
       </div>
+
+      {/* Mobile Search Button Trigger */}
+      <button
+        type="button"
+        onClick={() => setIsMobileSearchOpen(true)}
+        className={`sm:hidden h-7 w-7 rounded-full inline-flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+          searchQuery.trim()
+            ? 'bg-[var(--jira-primary)]/15 border border-[var(--jira-primary)] text-[var(--jira-primary)]'
+            : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
+        }`}
+        aria-label="Open search"
+        title="Search issues"
+      >
+        <Search className="w-3.5 h-3.5" />
+      </button>
     </section>
   );
 }

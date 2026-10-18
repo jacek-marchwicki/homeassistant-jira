@@ -10,6 +10,7 @@ import { KanbanBoard } from './components/KanbanBoard.tsx';
 import { MobileInstallBanner } from './components/MobileInstallBanner.tsx';
 import { PeopleBoard } from './components/PeopleBoard.tsx';
 import { useBoardStore } from './store/boardStore.ts';
+import { getCurrentRoute } from './utils/navigation.ts';
 import { getWsUrl } from './utils/paths.ts';
 import { usePwaInstall } from './utils/usePwaInstall.ts';
 
@@ -29,6 +30,9 @@ export default function App() {
     setEditingIssue,
     isCreateModalOpen,
     setCreateModalOpen,
+    applyRoute,
+    resolveRouteTask,
+    routeTaskKey,
   } = useBoardStore();
   const {
     canInstall,
@@ -39,6 +43,20 @@ export default function App() {
     isIOS,
   } = usePwaInstall();
   const wsRef = useRef<WebSocket | null>(null);
+
+  // 0. URL is the source of truth for navigation: sync on back/forward and normalize root URL
+  useEffect(() => {
+    const initial = getCurrentRoute();
+    if (initial.kind === 'root') applyRoute(initial);
+    const onPopState = () => applyRoute(getCurrentRoute());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [applyRoute]);
+
+  // Resolve /task/KEY deep links once the issue list (cache, load or websocket) is available
+  useEffect(() => {
+    resolveRouteTask();
+  }, [resolveRouteTask, routeTaskKey, issues, isLoading]);
 
   // 1. Initial Load of Board State
   useEffect(() => {

@@ -184,10 +184,33 @@ This document details the architectural phases, delivered features, and evolutio
     - Added Pydantic field validators to `JiraDashboardSettings` in [`backend/src/jira_dashboard/config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/config.py) ensuring empty or whitespace-only strings from Home Assistant forms safely fallback to standard defaults (`None` for API key, default model ID, and default prompt template).
   - [x] **Automated Test Coverage**:
     - Added comprehensive test assertions in [`backend/tests/test_packaging_and_addon.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_packaging_and_addon.py) and [`backend/tests/test_gemini_config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_gemini_config.py).
+- [x] **Phase 5.13: Filter Bar Style Polish: Assignee Avatars First & Mobile Expandable Search**
+  - [x] **Assignee Avatars First on Filter Bar**:
+    - Reordered the filter bar elements so that the Assignee Avatars group appears as the very first item, preceding "All Issues", "Active", and "Hide Epics".
+  - [x] **Clickable Assignee Avatars with Active State Indicators**:
+    - Rendered board assignees directly as interactive avatar buttons (`AssigneeAvatar`) on the bar with accessible tooltips and `aria-pressed` states.
+    - One-tap selection: clicking an inactive avatar selects that user and enables the assignee filter, while clicking an active avatar deselects it and toggles the user filter off.
+    - Active visual indicators: highlighted with a prominent theme ring (`ring-2 ring-[var(--jira-primary)]`) and full opacity.
+    - Preserved dropdown chevron button for picking from the full available users list.
+  - [x] **Mobile Expandable Quick Search**:
+    - Replaced the static search input on mobile viewports (`< sm`) with a compact search icon button that expands to an overlaid full search input upon touch or click.
+    - Automatically focuses the input when expanded and includes a dedicated clear/close button (`X`) and `Escape` key handler to collapse back.
+    - Displays active accent border and color on the search icon button when a query is active while collapsed.
+  - [x] **Comprehensive Test Verification & Visual Regression Snapshots**:
+    - Unit tests in `FilterBar.test.tsx` verifying avatars-first ordering, avatar click interactions, and mobile search expand/collapse.
+    - Full-stack E2E Playwright test validating assignee avatar filtering and toggle behavior.
+    - Playwright visual regression snapshots capturing mobile expanded search (`component-filterbar-mobile-search-expanded.png`) and updated filter bar snapshots across 42 tests.
 
 
 
-- [x] **Phase 5.13: Connection Status Details Popup**
+- [x] **Phase 5.13: URL-Based Navigation**
+  - [x] **Routes**: Every navigable state maps to a URL so browser back/forward work: `/board`, `/backlog`, `/people`, `/task/HOME-123` (task modal) and `/create` (create dialog). Implemented in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) using the History API (no new dependency); `/` redirects to the last used view.
+  - [x] **Store integration**: `boardStore` setters push history entries and update state immediately (optimistic, no latency); a `popstate` listener applies the URL back to state. Deep links to `/task/KEY` resolve once issues load (from offline cache, API or WebSocket); unknown keys fall back to the current view. Closing an overlay opened in-app goes back one entry so history does not grow.
+  - [x] **Ingress / standalone**: Routes are resolved relative to the Ingress base path; `index.html` sets a runtime `<base href>` so relative assets load on deep links, and the backend serves `index.html` as an SPA fallback for unknown paths (`SPAStaticFiles`).
+  - [x] **Offline**: Navigation is purely client-side and works offline using the cached board.
+  - [x] **Tests**: [`navigation.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.test.ts), URL navigation cases in `boardStore.test.ts`, and [`backend/tests/test_spa_fallback.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_spa_fallback.py).
+
+- [x] **Phase 5.14: Connection Status Details Popup**
   - [x] **Clickable Connection Badge**:
     - Clicking the header sync / live WebSocket badge opens [`ConnectionStatusModal`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.tsx) (full screen on mobile, centered dialog on larger viewports, 44px touch targets).
   - [x] **Connection Diagnostics**:

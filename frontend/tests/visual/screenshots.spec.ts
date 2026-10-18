@@ -727,6 +727,20 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(filterBar).toHaveScreenshot('component-filterbar-hide-epics.png');
   });
 
+  test('Capture Mobile Expanded Search Bar Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    const openSearchBtn = page.getByRole('button', { name: 'Open search' });
+    if (await openSearchBtn.isVisible()) {
+      await openSearchBtn.click();
+      const searchInput = page.locator('input[data-mobile-search="true"]');
+      await expect(searchInput).toBeVisible();
+      await searchInput.fill('PROJ');
+      const filterBar = page.locator('section').filter({ hasText: 'All Issues' });
+      await expect(filterBar).toHaveScreenshot('component-filterbar-mobile-search-expanded.png');
+    }
+  });
+
   test('Capture Home Assistant Ingress Viewport & Theme Bridge Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
 

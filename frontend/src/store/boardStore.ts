@@ -9,7 +9,12 @@ import {
 } from '../types/jira.ts';
 import { applyTheme, getInitialTheme, ThemeMode } from '../tokens/themeBridge.ts';
 import { getApiUrl } from '../utils/paths.ts';
-import { calculateRankBetween, sortIssuesByRank } from '../utils/boardUtils.ts';
+import {
+  AccountType,
+  AccountTypes,
+  calculateRankBetween,
+  sortIssuesByRank,
+} from '../utils/boardUtils.ts';
 
 const CATEGORY_TITLES: Record<JiraStatusCategory, string> = {
   todo: 'To Do',
@@ -29,6 +34,7 @@ export const LOCAL_STORAGE_BOARD_CACHE_KEY = 'ha_jira_board_cache_v1';
 export const LOCAL_STORAGE_OUTBOX_KEY = 'ha_jira_offline_outbox_v1';
 export const LOCAL_STORAGE_CURRENT_VIEW_KEY = 'ha_jira_current_view';
 export const LOCAL_STORAGE_CURRENT_USER_KEY = 'ha_jira_current_user';
+export const LOCAL_STORAGE_ACCOUNT_TYPES_KEY = 'ha_jira_account_types';
 
 export class ServerRejectionError extends Error {
   constructor(message: string) {
@@ -94,6 +100,33 @@ export function loadCachedUser(): string {
     // Ignore error
   }
   return 'Jacek Marchwicki';
+}
+
+export function loadCachedAccountTypes(): AccountTypes {
+  if (typeof window === 'undefined' || !window.localStorage) return {};
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_ACCOUNT_TYPES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const result: AccountTypes = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v === 'child') result[k] = 'child';
+      }
+      return result;
+    }
+  } catch {
+    // Ignore error
+  }
+  return {};
+}
+
+export function saveCachedAccountTypes(types: AccountTypes): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_ACCOUNT_TYPES_KEY, JSON.stringify(types));
+  } catch {
+    // Ignore error
+  }
 }
 
 export function saveCachedUser(userName: string): void {
@@ -181,6 +214,8 @@ export interface BoardStoreState {
   activeFilter: string;
   searchQuery: string;
   currentUser: string;
+  accountTypes: AccountTypes;
+  showChildren: boolean;
   errorMessage: string | null;
   rollbackQueue: Record<string, JiraIssue>;
   currentView: DashboardView;
@@ -200,6 +235,8 @@ export interface BoardStoreState {
   setActiveFilter: (filter: string) => void;
   setSearchQuery: (query: string) => void;
   setCurrentUser: (userName: string) => void;
+  setAccountType: (userName: string, type: AccountType) => void;
+  toggleShowChildren: () => void;
   setErrorMessage: (msg: string | null) => void;
   setCurrentView: (view: DashboardView) => void;
   toggleBacklogExpandedOnBoard: () => void;
@@ -246,6 +283,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   activeFilter: 'my,active,hide_epics',
   searchQuery: '',
   currentUser: loadCachedUser(),
+  accountTypes: loadCachedAccountTypes(),
+  showChildren: false,
   errorMessage: null,
   rollbackQueue: {},
   currentView: loadCachedView(),
@@ -261,6 +300,20 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     const trimmed = userName.trim();
     saveCachedUser(trimmed);
     set({ currentUser: trimmed });
+  },
+
+  setAccountType: (userName: string, type: AccountType) => {
+    const key = userName.trim().toLowerCase();
+    if (!key) return;
+    const next = { ...get().accountTypes };
+    if (type === 'child') next[key] = 'child';
+    else delete next[key];
+    saveCachedAccountTypes(next);
+    set({ accountTypes: next });
+  },
+
+  toggleShowChildren: () => {
+    set((state) => ({ showChildren: !state.showChildren }));
   },
 
   setEditingIssue: (issue: JiraIssue | null) => {

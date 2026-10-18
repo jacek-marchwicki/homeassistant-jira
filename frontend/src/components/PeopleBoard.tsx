@@ -41,6 +41,8 @@ export function PeopleBoard({ now = new Date() }: PeopleBoardProps) {
     columns,
     availableUsers,
     currentUser,
+    accountTypes,
+    showChildren,
     activeFilters,
     activeFilter,
     searchQuery,
@@ -192,6 +194,8 @@ export function PeopleBoard({ now = new Date() }: PeopleBoardProps) {
               activeFilter,
               searchQuery,
               now,
+              accountTypes,
+              showChildren,
             });
             const colId = person.accountId || person.displayName;
 

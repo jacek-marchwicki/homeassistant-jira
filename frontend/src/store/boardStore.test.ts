@@ -868,3 +868,20 @@ describe('Zustand BoardStore', () => {
 
 
 
+
+describe('child account store state', () => {
+  it('defaults to no child accounts and showChildren off', () => {
+    expect(useBoardStore.getState().showChildren).toBe(false);
+  });
+
+  it('sets account type, persists it, and toggles showChildren', () => {
+    useBoardStore.getState().setAccountType('Kid Kim', 'child');
+    expect(useBoardStore.getState().accountTypes['kid kim']).toBe('child');
+    expect(window.localStorage.getItem('ha_jira_account_types')).toContain('kid kim');
+    useBoardStore.getState().setAccountType('Kid Kim', 'parent');
+    expect(useBoardStore.getState().accountTypes['kid kim']).toBeUndefined();
+    useBoardStore.getState().toggleShowChildren();
+    expect(useBoardStore.getState().showChildren).toBe(true);
+    useBoardStore.getState().toggleShowChildren();
+  });
+});

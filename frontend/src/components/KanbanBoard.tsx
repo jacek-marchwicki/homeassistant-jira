@@ -43,6 +43,8 @@ export function KanbanBoard() {
     activeFilter,
     searchQuery,
     currentUser,
+    accountTypes,
+    showChildren,
     transitionIssueOptimistic,
     rankIssueOptimistic,
     moveToBacklog,
@@ -73,8 +75,15 @@ export function KanbanBoard() {
 
   // Filter & Search Logic
   const filteredIssues = useMemo(
-    () => filterIssues(issues, { activeFilters, activeFilter, searchQuery, currentUser }),
-    [issues, activeFilters, activeFilter, searchQuery, currentUser]
+    () => filterIssues(issues, {
+        activeFilters,
+        activeFilter,
+        searchQuery,
+        currentUser,
+        accountTypes,
+        showChildren,
+      }),
+    [issues, activeFilters, activeFilter, searchQuery, currentUser, accountTypes, showChildren]
   );
 
   // Active columns (excluding Backlog so it is never rendered as a Kanban column)

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
-import { getAssigneesFromBoard } from '../utils/boardUtils.ts';
+import { getAccountType, getAssigneesFromBoard } from '../utils/boardUtils.ts';
 
 export function FilterBar() {
   const {
@@ -15,6 +15,10 @@ export function FilterBar() {
     setSearchQuery,
     currentUser,
     setCurrentUser,
+    accountTypes,
+    setAccountType,
+    showChildren,
+    toggleShowChildren,
   } = useBoardStore();
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -166,9 +170,39 @@ export function FilterBar() {
                         />
                         <span className="truncate">{user.displayName}</span>
                       </div>
-                      {isSelected && (
-                        <Check className="w-3.5 h-3.5 text-[var(--jira-primary)] shrink-0 ml-auto" />
-                      )}
+                      <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                        {isSelected && (
+                          <Check className="w-3.5 h-3.5 text-[var(--jira-primary)] shrink-0" />
+                        )}
+                        <button
+                          type="button"
+                          aria-pressed={getAccountType(accountTypes, user.displayName) === 'child'}
+                          aria-label={`Mark ${user.displayName} as ${
+                            getAccountType(accountTypes, user.displayName) === 'child'
+                              ? 'parent'
+                              : 'child'
+                          }`}
+                          title="Toggle account type (Parent / Child)"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAccountType(
+                              user.displayName,
+                              getAccountType(accountTypes, user.displayName) === 'child'
+                                ? 'parent'
+                                : 'child'
+                            );
+                          }}
+                          className={`min-h-[44px] min-w-[44px] -my-2 inline-flex items-center justify-center text-2xs font-bold uppercase rounded-md cursor-pointer ${
+                            getAccountType(accountTypes, user.displayName) === 'child'
+                              ? 'text-[var(--jira-primary)]'
+                              : 'text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)]'
+                          }`}
+                        >
+                          {getAccountType(accountTypes, user.displayName) === 'child'
+                            ? 'Child'
+                            : 'Parent'}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -200,6 +234,30 @@ export function FilterBar() {
           title="Toggle filter to hide Epics"
         >
           Hide Epics
+        </button>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showChildren}
+          aria-label="Show child"
+          onClick={toggleShowChildren}
+          title="Show tasks assigned to child accounts"
+          className="h-7 sm:h-8 pl-2.5 sm:pl-3 pr-2 rounded-full text-xs font-medium inline-flex items-center gap-2 transition-colors cursor-pointer shrink-0 bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]"
+        >
+          <span>Show child</span>
+          <span
+            aria-hidden="true"
+            className={`relative inline-block w-7 h-4 rounded-full transition-colors ${
+              showChildren ? 'bg-[var(--jira-primary)]' : 'bg-[var(--jira-border)]'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                showChildren ? 'translate-x-3' : ''
+              }`}
+            />
+          </span>
         </button>
       </div>
 

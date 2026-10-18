@@ -187,3 +187,8 @@ This document details the architectural phases, delivered features, and evolutio
 
 
 
+- [x] **Phase 5.13: Child Accounts & "Show child" Switch**
+  - [x] **Account Types**: Each person can be marked "Parent" (default) or "Child" in the "Who is Me" picker. Stored client-side in `localStorage` (`ha_jira_account_types`), keyed by lower-cased display name; updates apply instantly and work offline.
+  - [x] **Filtering**: A child never sees unassigned tasks in "Assigned to Me" (Board/Backlog) or in their People column. Parents see own + unassigned tasks.
+  - [x] **Show child switch**: Off-by-default switch in the filter bar (Board and People views) that adds child-assigned tasks to parents' views.
+  - [x] **Tests**: `boardUtils.test.ts`, `boardStore.test.ts`, `FilterBar.test.tsx`.

@@ -1,0 +1,38 @@
+#!/bin/sh
+# Git post-checkout hook to ensure worktrees reuse the shared data directory.
+
+# Only run on branch/worktree checkout (3rd argument is 1)
+[ "$3" != "1" ] && exit 0
+
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null)
+
+if [ -n "$GIT_DIR" ] && [ -n "$GIT_COMMON" ]; then
+    RESOLVED_GIT_DIR=$(cd "$GIT_DIR" 2>/dev/null && pwd -P)
+    RESOLVED_GIT_COMMON=$(cd "$GIT_COMMON" 2>/dev/null && pwd -P)
+
+    # In a linked worktree, GIT_DIR != GIT_COMMON
+    if [ "$RESOLVED_GIT_DIR" != "$RESOLVED_GIT_COMMON" ]; then
+        MAIN_REPO=$(cd "$RESOLVED_GIT_COMMON/.." && pwd -P)
+        MAIN_DATA="$MAIN_REPO/data"
+        mkdir -p "$MAIN_DATA/background_cache"
+
+        WORKTREE_ROOT=$(pwd -P)
+        REL_DATA=$(python3 -c "import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$MAIN_DATA" "$WORKTREE_ROOT" 2>/dev/null || echo "$MAIN_DATA")
+
+        if [ -L "data" ]; then
+            TARGET=$(readlink "data")
+            if [ "$TARGET" != "$REL_DATA" ] && [ "$TARGET" != "$MAIN_DATA" ]; then
+                ln -sfn "$REL_DATA" data
+            fi
+        elif [ -d "data" ]; then
+            if [ -d "data/background_cache" ]; then
+                cp -n data/background_cache/*.webp "$MAIN_DATA/background_cache/" 2>/dev/null || true
+            fi
+            rm -rf data
+            ln -s "$REL_DATA" data
+        elif [ ! -e "data" ]; then
+            ln -s "$REL_DATA" data
+        fi
+    fi
+fi

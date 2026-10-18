@@ -79,7 +79,8 @@ secrets.yaml
 *.secrets.yaml
 options.json
 
-# Home Assistant local testing
+# Home Assistant local testing & worktree shared data
+data
 data/
 *.local.env
 

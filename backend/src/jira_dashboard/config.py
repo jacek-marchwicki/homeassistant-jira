@@ -22,6 +22,56 @@ DEFAULT_GEMINI_PROMPT_TEMPLATE = (
 )
 
 
+def ensure_local_data_dir(base_dir: Path | None = None) -> Path:
+    """Ensure local ./data directory exists, automatically symlinking to main repo in git worktrees.
+
+    When running inside a linked Git worktree, this automatically links ./data
+    to the main repository's data directory so that SQLite schemas, cached Jira
+    issues, and the AI background pictures cache are shared and reused seamlessly.
+    """
+    root = (base_dir or Path.cwd()).resolve()
+    data_dir = root / "data"
+
+    if data_dir.is_symlink() or data_dir.is_dir():
+        return data_dir
+
+    # Check if running inside a Git worktree (in a worktree, .git is a text file)
+    git_file = root / ".git"
+    if git_file.is_file():
+        try:
+            content = git_file.read_text(encoding="utf-8").strip()
+            if content.startswith("gitdir:"):
+                raw_git_dir = content.split(":", 1)[1].strip()
+                git_dir = (root / raw_git_dir).resolve()
+
+                # If commondir file exists, resolve common git dir from it
+                common_dir_file = git_dir / "commondir"
+                if common_dir_file.is_file():
+                    common_rel = common_dir_file.read_text(encoding="utf-8").strip()
+                    common_git = (git_dir / common_rel).resolve()
+                else:
+                    # Standard worktree layout: <main_repo>/.git/worktrees/<name>
+                    common_git = git_dir.parent.parent.resolve()
+
+                main_repo = common_git.parent.resolve()
+                main_data = (main_repo / "data").resolve()
+                main_data.mkdir(parents=True, exist_ok=True)
+                (main_data / "background_cache").mkdir(parents=True, exist_ok=True)
+
+                try:
+                    rel_target = os.path.relpath(main_data, root)
+                    data_dir.symlink_to(rel_target)
+                except Exception:
+                    data_dir.symlink_to(main_data)
+                return data_dir
+        except Exception:
+            pass
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "background_cache").mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
 class JiraDashboardSettings(BaseModel):
     """Application settings for Jira Dashboard."""
 
@@ -94,7 +144,8 @@ class JiraDashboardSettings(BaseModel):
             return candidate
         except OSError:
             # Fallback to local data/background_cache in local development / testing
-            dev_candidate = Path("./data/background_cache").resolve()
+            dev_data = ensure_local_data_dir()
+            dev_candidate = (dev_data / "background_cache").resolve()
             dev_candidate.mkdir(parents=True, exist_ok=True)
             return dev_candidate
 

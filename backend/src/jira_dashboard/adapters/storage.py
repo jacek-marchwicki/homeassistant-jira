@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from jira_dashboard.config import ensure_local_data_dir
 from jira_dashboard.domain import (
     BoardColumn,
     IssueType,
@@ -32,11 +33,21 @@ class SQLiteStorage:
     def __init__(self, db_path: Path | str = ":memory:") -> None:
         self.db_path = str(db_path)
         if self.db_path != ":memory:":
-            try:
+            target_path = Path(self.db_path)
+            # If path targets relative data/ directory, ensure worktree symlink is established
+            if not target_path.is_absolute() and (
+                target_path.parts[:1] == ("data",) or target_path.parts[:2] == (".", "data")
+            ):
+                dev_data = ensure_local_data_dir()
+                self.db_path = str((dev_data / target_path.name).resolve())
                 Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-            except OSError:
-                self.db_path = str(Path("./data/jira_dashboard.sqlite3").resolve())
-                Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+            else:
+                try:
+                    Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+                except OSError:
+                    dev_data = ensure_local_data_dir()
+                    self.db_path = str((dev_data / "jira_dashboard.sqlite3").resolve())
+                    Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._conn: sqlite3.Connection | None = None
 

@@ -57,12 +57,14 @@ Before modifying or creating any code, establish an isolated workspace:
    ```bash
    git check-ignore -q .worktrees || echo ".worktrees/ not ignored!"
    ```
-3. **Create Worktree**:
+3. **Create Worktree & Re-use Shared Data**:
    ```bash
    BRANCH_NAME="feat/<feature-name>"  # or fix/<issue-name>
    git worktree add ".worktrees/${BRANCH_NAME#*/}" -b "$BRANCH_NAME"
    cd ".worktrees/${BRANCH_NAME#*/}"
    ```
+   > [!NOTE]
+   > The repository's Git `post-checkout` hook automatically links `data -> ../../data`, allowing the SQLite schema, cached Jira issues, and AI background pictures cache to be reused across all worktrees. If the worktree was generated without hooks, run `python3 scripts/setup_worktree_data.py` to establish the symlink.
 4. **All Subsequent Work Happens Here**: Every file edit, test run, documentation change, and commit MUST occur within this isolated worktree directory.
 5. **Verify Clean Baseline**:
    Run `./scripts/run_ci_locally.py` to ensure all tests and builds pass before making changes.

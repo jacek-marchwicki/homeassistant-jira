@@ -7,7 +7,6 @@ import { EditIssueModal } from './components/EditIssueModal.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { Header } from './components/Header.tsx';
 import { InstallHelpModal } from './components/InstallHelpModal.tsx';
-import { KanbanBoard } from './components/KanbanBoard.tsx';
 import { MobileInstallBanner } from './components/MobileInstallBanner.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
 import { PeopleBoard } from './components/PeopleBoard.tsx';
@@ -201,10 +200,8 @@ export default function App() {
       {/* Quick Filters & Search */}
       <FilterBar />
 
-      {/* Main View: Kanban Board, People Board, or Dedicated Backlog List View */}
-      {currentView === 'board' ? (
-        <KanbanBoard />
-      ) : currentView === 'people' ? (
+      {/* Main View: People Board or Dedicated Backlog List View */}
+      {currentView === 'people' ? (
         <PeopleBoard />
       ) : (
         <BacklogView />

@@ -17,7 +17,7 @@ describe('Header component', () => {
         sprintName: 'Active Sprint 42',
         wsConnected: true,
         theme: 'dark',
-        currentView: 'board',
+        currentView: 'people',
         issues: [],
         columns: [],
       });
@@ -108,14 +108,14 @@ describe('Header component', () => {
     expect(titleContainer?.className).toContain('sm:block');
   });
 
-  it('renders all key mobile navigation controls (Board, Backlog, Create, WebSocket, Themes)', async () => {
+  it('renders all key mobile navigation controls (People, Backlog, Create, WebSocket, Themes)', async () => {
     await act(async () => {
       root.render(<Header />);
     });
 
-    expect(container.querySelector('button[aria-label="Kanban Board View"]')).not.toBeNull();
-    expect(container.querySelector('button[aria-label="Backlog View"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Kanban Board View"]')).toBeNull();
     expect(container.querySelector('button[aria-label="People View"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Backlog View"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Theme Selection"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Dark Mode"]')).not.toBeNull();
@@ -123,10 +123,21 @@ describe('Header component', () => {
     expect(container.querySelector('button[aria-label="Kiosk Mode"]')).not.toBeNull();
   });
 
-  it('switches currentView to "people" when People button is clicked', async () => {
+  it('switches currentView between "people" and "backlog" when view buttons are clicked', async () => {
     await act(async () => {
       root.render(<Header />);
     });
+
+    const backlogBtn = container.querySelector(
+      'button[aria-label="Backlog View"]'
+    ) as HTMLButtonElement;
+    expect(backlogBtn).not.toBeNull();
+
+    await act(async () => {
+      backlogBtn.click();
+    });
+
+    expect(useBoardStore.getState().currentView).toBe('backlog');
 
     const peopleBtn = container.querySelector(
       'button[aria-label="People View"]'

@@ -85,16 +85,16 @@ export interface CachedBoardData {
 }
 
 export function loadCachedView(): DashboardView {
-  if (typeof window === 'undefined' || !window.localStorage) return 'board';
+  if (typeof window === 'undefined' || !window.localStorage) return 'people';
   try {
     const saved = window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY);
-    if (saved === 'board' || saved === 'backlog' || saved === 'people') {
+    if (saved === 'backlog' || saved === 'people') {
       return saved;
     }
   } catch {
     // Ignore error
   }
-  return 'board';
+  return 'people';
 }
 
 export function saveCachedView(view: DashboardView): void {
@@ -213,7 +213,7 @@ export function saveCachedOutbox(items: OfflineOutboxItem[]): void {
   }
 }
 
-export type DashboardView = 'board' | 'backlog' | 'people';
+export type DashboardView = 'people' | 'backlog';
 
 export interface BoardStoreState {
   theme: ThemeMode;

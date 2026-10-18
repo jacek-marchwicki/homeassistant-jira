@@ -4,7 +4,6 @@ import {
   ChevronDown,
   CloudOff,
   Download,
-  LayoutGrid,
   Layers,
   ListTodo,
   Loader2,
@@ -117,30 +116,8 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
           </div>
         </div>
 
-        {/* View Switcher: Board vs People vs Backlog - Text hidden on mobile in favor of icons */}
+        {/* View Switcher: People vs Backlog - Text hidden on mobile in favor of icons */}
         <div className="flex items-center p-0.5 sm:p-1 rounded-lg border border-[var(--jira-border)] bg-[var(--jira-canvas)] shrink-0">
-          <button
-            onClick={() => setCurrentView('board')}
-            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs transition-colors cursor-pointer min-h-[32px] sm:min-h-[36px] ${
-              currentView === 'board'
-                ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
-                : 'text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
-            }`}
-            title="Kanban Board View"
-            aria-label="Kanban Board View"
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Board</span>
-            <span
-              className={`ml-0.5 px-1.5 py-0.5 rounded-full text-2xs font-bold ${
-                currentView === 'board'
-                  ? 'bg-black/20 text-white'
-                  : 'bg-[var(--jira-surface)] text-[var(--jira-text-secondary)]'
-              }`}
-            >
-              {boardIssues.length}
-            </span>
-          </button>
 
           <button
             onClick={() => setCurrentView('people')}

@@ -218,14 +218,14 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     await page.goto('/');
 
-    const readyColumn = page.getByTestId('column-col-ready');
+    const readyColumn = page.locator('[data-testid^="people-column-"]').first();
     await expect(readyColumn).toBeVisible();
 
-    const overdueSection = page.getByTestId('ready-section-overdue');
-    const expeditedSection = page.getByTestId('ready-section-expedited');
-    const inProgressSection = page.getByTestId('ready-section-inprogress');
-    const homeAsUsualSection = page.getByTestId('ready-section-home-as-usual');
-    const otherSection = page.getByTestId('ready-section-other');
+    const overdueSection = page.getByTestId('people-section-overdue').first();
+    const expeditedSection = page.getByTestId('people-section-expedited').first();
+    const inProgressSection = page.getByTestId('people-section-inprogress').first();
+    const homeAsUsualSection = page.getByTestId('people-section-home-as-usual').first();
+    const otherSection = page.getByTestId('people-section-other').first();
 
     await expect(overdueSection).toBeVisible();
     await expect(expeditedSection).toBeVisible();
@@ -245,15 +245,15 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     // 4. Capture Home as Usual section snapshot
     await expect(homeAsUsualSection).toHaveScreenshot('ready-section-home-as-usual.png');
 
-    // 5. Capture full Ready column snapshot with all sub-sections
+    // 5. Capture full person column snapshot with all sub-sections
     await expect(readyColumn).toHaveScreenshot('ready-column-sections.png');
   });
 
-  test('Capture Header-Integrated In Progress Drop Target during Drag Snapshot', async ({ page }) => {
+  test('Capture People Column Drop Target during Drag Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
 
-    const card = page.locator('article', { hasText: 'PROJ-101' });
+    const card = page.locator('article', { hasText: 'PROJ-101' }).first();
     await expect(card).toBeVisible();
 
     const box = await card.boundingBox();
@@ -265,31 +265,19 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 25);
     }
 
-    // Verify intermediate In Progress column is never rendered on the board
-    await expect(page.getByTestId('column-col-inprogress')).not.toBeAttached();
+    const targetColumn = page.getByTestId('people-column-usr-2');
+    await expect(targetColumn).toBeVisible();
 
-    // Verify drop target is integrated into the Ready column header
-    const dropTarget = page.getByTestId('ready-drop-target-inprogress');
-    await expect(dropTarget).toBeVisible();
-    await expect(dropTarget).toContainText('In Progress');
-    await expect(dropTarget).toContainText('Drop target');
-
-    const readyColumn = page.getByTestId('column-col-todo');
-    await expect(readyColumn).toBeVisible();
-
-    const readyHeader = readyColumn.locator('div.border-b').first();
-    await expect(readyHeader.locator(dropTarget)).toBeAttached();
-
-    await expect(readyHeader).toHaveScreenshot('ready-header-drop-target-inprogress.png');
-
-    await expect(readyColumn).toHaveScreenshot('ready-drop-target-inprogress-column.png');
-
-    // Hover over drop target to verify active drag-over state interactivity
-    const targetBox = await dropTarget.boundingBox();
+    const targetBox = await targetColumn.boundingBox();
     if (targetBox) {
       await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
     }
     await page.waitForTimeout(100);
+
+    const dropBadge = targetColumn.getByTestId('drop-badge-usr-2');
+    await expect(dropBadge).toBeVisible();
+    await expect(dropBadge).toHaveScreenshot('ready-header-drop-target-inprogress.png');
+    await expect(targetColumn).toHaveScreenshot('ready-drop-target-inprogress-column.png');
 
     await page.mouse.up();
   });
@@ -299,23 +287,21 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
 
-    const card1 = page.locator('article', { hasText: 'PROJ-85' });
-    const card2 = page.locator('article', { hasText: 'PROJ-101' });
+    const card1 = page.locator('article', { hasText: 'PROJ-85' }).first();
+    const card2 = page.locator('article', { hasText: 'PROJ-101' }).first();
     await expect(card1).toBeVisible();
     await expect(card2).toBeVisible();
 
     await card1.scrollIntoViewIfNeeded();
 
-    const readyColumn = page.getByTestId('column-col-todo');
+    const readyColumn = page.locator('[data-testid^="people-column-"]').first();
     const colBoxBefore = await readyColumn.boundingBox();
     const initialBox2 = await card2.boundingBox();
     expect(colBoxBefore).not.toBeNull();
     expect(initialBox2).not.toBeNull();
     const initialRelativeY = (initialBox2?.y ?? 0) - (colBoxBefore?.y ?? 0);
 
-    const headerBefore = await readyColumn.locator('div.border-b').first().boundingBox();
-
-    // Initiate drag on first card (move 15px horizontally to activate drag without sortable collision on card2)
+    // Initiate drag on first card
     const box1 = await card1.boundingBox();
     expect(box1).not.toBeNull();
     if (box1) {
@@ -323,10 +309,6 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       await page.mouse.down();
       await page.mouse.move(box1.x + box1.width / 2 + 15, box1.y + box1.height / 2, { steps: 5 });
     }
-
-    // Verify drop target appears in header
-    const dropTarget = page.getByTestId('ready-drop-target-inprogress');
-    await expect(dropTarget).toBeVisible();
 
     // Verify secondary card has not shifted relative to the column header (layout shift <= 2px)
     const colBoxAfter = await readyColumn.boundingBox();
@@ -337,7 +319,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
     expect(Math.abs(currentRelativeY - initialRelativeY)).toBeLessThanOrEqual(2);
 
-    // Capture mobile screen with active drag and header drop target
+    // Capture mobile screen with active drag
     await expect(page).toHaveScreenshot('mobile-touch-dnd-zero-shift.png');
 
     await page.mouse.up();
@@ -706,7 +688,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(hideEpicsBtn).toBeVisible();
     await hideEpicsBtn.click();
 
-    const epicCard = page.locator('article', { hasText: 'HOME-2200' });
+    const epicCard = page.locator('article', { hasText: 'HOME-2200' }).first();
     await expect(epicCard).toBeVisible();
     const epicIcon = epicCard.locator('[aria-label="Epic"]');
     await expect(epicIcon).toBeVisible();
@@ -1053,10 +1035,10 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await submitBtn.click();
     await expect(modal).not.toBeVisible();
 
-    // Verify the newly created card is displayed at the top of the Ready/To Do column (above PROJ-101)
-    const readyColumn = page.getByTestId('column-col-todo');
-    await expect(readyColumn).toBeVisible();
-    const otherSection = readyColumn.locator('[data-testid="ready-section-other"]');
+    // Verify the newly created card is displayed in Alex Lead's column under To Do
+    const alexColumn = page.getByTestId('people-column-usr-2');
+    await expect(alexColumn).toBeVisible();
+    const otherSection = alexColumn.locator('[data-testid="people-section-other"]');
     const firstCard = otherSection.locator('article').first();
     await expect(firstCard).toContainText('Urgent Hotfix Top Priority Task');
     await expect(firstCard).toContainText('AL');

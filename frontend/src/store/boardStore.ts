@@ -54,6 +54,14 @@ export interface OfflineOutboxItem {
   createdAt: number;
 }
 
+export interface ConnectionDetails {
+  lastError: string | null;
+  lastConnectedAt: number | null;
+  lastDisconnectedAt: number | null;
+  nextRetryAt: number | null;
+  retryAttempt: number;
+}
+
 export interface CachedBoardData {
   boardName: string;
   sprintName: string;
@@ -190,6 +198,9 @@ export interface BoardStoreState {
   offlineOutbox: OfflineOutboxItem[];
   syncStatus: 'synced' | 'syncing' | 'offline';
   pendingSyncCount: number;
+  syncError: string | null;
+  connectionDetails: ConnectionDetails;
+  setConnectionDetails: (details: Partial<ConnectionDetails>) => void;
   availableUsers: JiraUser[];
 
   // Actions
@@ -255,6 +266,14 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   offlineOutbox: initialOutbox,
   syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
   pendingSyncCount: initialOutbox.length,
+  syncError: null,
+  connectionDetails: {
+    lastError: null,
+    lastConnectedAt: null,
+    lastDisconnectedAt: null,
+    nextRetryAt: null,
+    retryAttempt: 0,
+  },
   availableUsers: initialCache?.availableUsers || [],
 
   setCurrentUser: (userName: string) => {
@@ -302,6 +321,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
   setWsConnected: (connected: boolean) => {
     set({ wsConnected: connected });
+  },
+
+  setConnectionDetails: (details: Partial<ConnectionDetails>) => {
+    set((state) => ({ connectionDetails: { ...state.connectionDetails, ...details } }));
   },
 
   setActiveFilters: (filters: string[]) => {
@@ -963,7 +986,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       return;
     }
 
-    set({ syncStatus: 'syncing' });
+    set({ syncStatus: 'syncing', syncError: null });
     const remainingOutbox = [...currentQueue];
 
     for (const item of currentQueue) {
@@ -1062,10 +1085,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           pendingSyncCount: remainingOutbox.length,
         });
         persistCurrentBoardState(get);
-      } catch {
+      } catch (err) {
         // Network fetch error: still offline! Stop draining queue.
         saveCachedOutbox(remainingOutbox);
         set({
+          syncError: err instanceof Error ? err.message : 'Network request failed',
           offlineOutbox: [...remainingOutbox],
           pendingSyncCount: remainingOutbox.length,
           syncStatus: 'offline',

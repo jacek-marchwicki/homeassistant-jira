@@ -13,6 +13,8 @@ import { useBoardStore } from './store/boardStore.ts';
 import { getWsUrl } from './utils/paths.ts';
 import { usePwaInstall } from './utils/usePwaInstall.ts';
 
+const RECONNECT_DELAY_MS = 3000;
+
 export default function App() {
   const {
     loadBoard,
@@ -54,6 +56,12 @@ export default function App() {
 
       socket.onopen = () => {
         setWsConnected(true);
+        useBoardStore.getState().setConnectionDetails({
+          lastConnectedAt: Date.now(),
+          lastError: null,
+          nextRetryAt: null,
+          retryAttempt: 0,
+        });
       };
 
       socket.onmessage = (event) => {
@@ -65,13 +73,27 @@ export default function App() {
         }
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         setWsConnected(false);
-        // Exponential / periodic reconnect attempt
-        reconnectTimer = setTimeout(connectWs, 3000);
+        const details = useBoardStore.getState().connectionDetails;
+        useBoardStore.getState().setConnectionDetails({
+          lastDisconnectedAt: Date.now(),
+          lastError:
+            details.lastError ??
+            `Connection closed (code ${event?.code ?? 'unknown'}${
+              event?.reason ? `: ${event.reason}` : ''
+            })`,
+          nextRetryAt: Date.now() + RECONNECT_DELAY_MS,
+          retryAttempt: details.retryAttempt + 1,
+        });
+        // Periodic reconnect attempt
+        reconnectTimer = setTimeout(connectWs, RECONNECT_DELAY_MS);
       };
 
       socket.onerror = () => {
+        useBoardStore.getState().setConnectionDetails({
+          lastError: 'WebSocket connection failed',
+        });
         socket.close();
       };
     };

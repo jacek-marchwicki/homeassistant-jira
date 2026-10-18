@@ -17,6 +17,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
+import { ConnectionStatusModal } from './ConnectionStatusModal.tsx';
 import { isDoneIssueWithinDays, splitIssuesByBacklog } from '../utils/boardUtils.ts';
 
 export interface HeaderProps {
@@ -41,6 +42,7 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
     setCreateModalOpen,
   } = useBoardStore();
 
+  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const [themeMenuPos, setThemeMenuPos] = useState<{ top: number; left: number } | null>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
@@ -187,7 +189,14 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
         </div>
 
         {/* Sync & Live WebSocket Status */}
-        <div className="flex items-center shrink-0">
+        <button
+          type="button"
+          onClick={() => setIsConnectionModalOpen(true)}
+          className="flex items-center shrink-0 cursor-pointer min-h-[44px] sm:min-h-0 rounded-full"
+          title="Connection status details"
+          aria-haspopup="dialog"
+          data-testid="connection-status-button"
+        >
           {syncStatus === 'offline' && (
             <div
               className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/25 shrink-0 mr-1.5"
@@ -235,7 +244,12 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
               </>
             )}
           </div>
-        </div>
+        </button>
+
+        <ConnectionStatusModal
+          isOpen={isConnectionModalOpen}
+          onClose={() => setIsConnectionModalOpen(false)}
+        />
 
         {/* Dark/Light/Kiosk Theme Switcher: Dropdown on Mobile */}
         <div className="sm:hidden relative shrink-0" ref={themeMenuRef}>

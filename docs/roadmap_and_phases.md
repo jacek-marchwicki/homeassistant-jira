@@ -187,3 +187,13 @@ This document details the architectural phases, delivered features, and evolutio
 
 
 
+- [x] **Phase 5.13: Connection Status Details Popup**
+  - [x] **Clickable Connection Badge**:
+    - Clicking the header sync / live WebSocket badge opens [`ConnectionStatusModal`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.tsx) (full screen on mobile, centered dialog on larger viewports, 44px touch targets).
+  - [x] **Connection Diagnostics**:
+    - Shows connected / reconnecting state, cause of the last failure (WebSocket error or close code, last sync error), live retry countdown, failed attempt count, and last connected / disconnected times.
+    - `boardStore` tracks `connectionDetails` and `syncError`, populated by the WebSocket lifecycle in `App.tsx` and `flushOfflineQueue`.
+  - [x] **Pending Changes**:
+    - Lists every queued `offlineOutbox` mutation (action, issue key, time) or "Nothing pending". Read-only; no effect on optimistic latency or FIFO replay.
+  - [x] **Test Coverage**:
+    - `ConnectionStatusModal.test.tsx` covers closed, connected, disconnected-with-pending, close action and Header integration.

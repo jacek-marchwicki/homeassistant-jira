@@ -21,6 +21,8 @@ export default function App() {
     setWsConnected,
     errorMessage,
     currentView,
+    isSettingsOpen,
+    syncSettingsFromLocation,
     isLoading,
     boardName,
     issues,
@@ -38,6 +40,16 @@ export default function App() {
     isIOS,
   } = usePwaInstall();
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Keep the full-screen Settings page in sync with the URL hash (browser back/forward)
+  useEffect(() => {
+    window.addEventListener('hashchange', syncSettingsFromLocation);
+    window.addEventListener('popstate', syncSettingsFromLocation);
+    return () => {
+      window.removeEventListener('hashchange', syncSettingsFromLocation);
+      window.removeEventListener('popstate', syncSettingsFromLocation);
+    };
+  }, [syncSettingsFromLocation]);
 
   // 1. Initial Load of Board State
   useEffect(() => {
@@ -134,6 +146,10 @@ export default function App() {
     );
   }
 
+  if (isSettingsOpen) {
+    return <SettingsView />;
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]">
       {/* Header with Board & Backlog Navigation + PWA Install */}
@@ -151,15 +167,13 @@ export default function App() {
       )}
 
       {/* Quick Filters & Search */}
-      {currentView !== 'settings' && <FilterBar />}
+      <FilterBar />
 
       {/* Main View: Kanban Board, People Board, or Dedicated Backlog List View */}
       {currentView === 'board' ? (
         <KanbanBoard />
       ) : currentView === 'people' ? (
         <PeopleBoard />
-      ) : currentView === 'settings' ? (
-        <SettingsView />
       ) : (
         <BacklogView />
       )}

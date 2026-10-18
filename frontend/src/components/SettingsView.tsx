@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
 import { AccountType, getAccountType, getAssigneesFromBoard } from '../utils/boardUtils.ts';
@@ -9,11 +10,13 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 ];
 
 /**
- * Dedicated Settings screen. Currently lets the user mark each account as
- * "Parent" (default) or "Child".
+ * Dedicated full-screen Settings page. Currently lets the user mark each account
+ * as "Parent" (default) or "Child". The choice is stored on the backend and shared
+ * by every app member.
  */
 export function SettingsView() {
-  const { issues, availableUsers, currentUser, accountTypes, setAccountType } = useBoardStore();
+  const { issues, availableUsers, currentUser, accountTypes, setAccountType, closeSettings, errorMessage } =
+    useBoardStore();
 
   const people = useMemo(
     () => getAssigneesFromBoard(issues, availableUsers, currentUser),
@@ -21,8 +24,25 @@ export function SettingsView() {
   );
 
   return (
-    <main className="flex-1 p-4 sm:p-6 max-w-3xl w-full mx-auto" aria-label="Settings">
-      <h1 className="text-lg font-bold text-[var(--jira-text-primary)]">Settings</h1>
+    <div className="min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]">
+    <main className="p-4 sm:p-6 max-w-3xl w-full mx-auto" aria-label="Settings">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={closeSettings}
+          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer"
+          aria-label="Back to board"
+          title="Back"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-lg font-bold text-[var(--jira-text-primary)]">Settings</h1>
+      </div>
+      {errorMessage && (
+        <div role="alert" className="mt-3 text-xs text-red-400">
+          {errorMessage}
+        </div>
+      )}
 
       <section className="mt-4" aria-labelledby="settings-accounts-heading">
         <h2
@@ -34,7 +54,7 @@ export function SettingsView() {
         <p className="text-xs text-[var(--jira-text-secondary)] mt-1">
           Children don&apos;t see unassigned tasks in &quot;Assigned to Me&quot; or on the People
           board. Parents can reveal children&apos;s tasks with the &quot;Show child&quot; switch.
-          Stored in this browser.
+          Shared with everyone using this app.
         </p>
 
         <ul className="mt-3 divide-y divide-[var(--jira-border)] rounded-xl border border-[var(--jira-border)] bg-[var(--jira-surface)]">
@@ -83,5 +103,6 @@ export function SettingsView() {
         </ul>
       </section>
     </main>
+    </div>
   );
 }

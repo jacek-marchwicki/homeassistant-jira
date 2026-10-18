@@ -870,18 +870,51 @@ describe('Zustand BoardStore', () => {
 
 
 describe('child account store state', () => {
+  beforeEach(() => {
+    useBoardStore.setState({ accountTypes: {}, showChildren: false, errorMessage: null });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+  });
+
   it('defaults to no child accounts and showChildren off', () => {
     expect(useBoardStore.getState().showChildren).toBe(false);
   });
 
-  it('sets account type, persists it, and toggles showChildren', () => {
-    useBoardStore.getState().setAccountType('Kid Kim', 'child');
+  it('sets account type optimistically, PUTs to backend and caches it', async () => {
+    const p = useBoardStore.getState().setAccountType('Kid Kim', 'child');
     expect(useBoardStore.getState().accountTypes['kid kim']).toBe('child');
+    await p;
     expect(window.localStorage.getItem('ha_jira_account_types')).toContain('kid kim');
-    useBoardStore.getState().setAccountType('Kid Kim', 'parent');
+    await useBoardStore.getState().setAccountType('Kid Kim', 'parent');
     expect(useBoardStore.getState().accountTypes['kid kim']).toBeUndefined();
+  });
+
+  it('loads account types from backend and applies websocket updates', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ account_types: { 'kid kim': 'child' } }),
+    });
+    await useBoardStore.getState().fetchAccountTypes();
+    expect(useBoardStore.getState().accountTypes).toEqual({ 'kid kim': 'child' });
+    useBoardStore.getState().handleWsMessage({ event: 'account_types_updated', account_types: {} });
+    expect(useBoardStore.getState().accountTypes).toEqual({});
+  });
+
+  it('keeps cached account types when backend is unreachable', async () => {
+    useBoardStore.setState({ accountTypes: { x: 'child' } });
+    global.fetch = vi.fn().mockRejectedValue(new Error('offline'));
+    await useBoardStore.getState().fetchAccountTypes();
+    expect(useBoardStore.getState().accountTypes).toEqual({ x: 'child' });
+  });
+
+  it('toggles showChildren and opens/closes the settings page', () => {
     useBoardStore.getState().toggleShowChildren();
     expect(useBoardStore.getState().showChildren).toBe(true);
     useBoardStore.getState().toggleShowChildren();
+    useBoardStore.getState().openSettings();
+    expect(useBoardStore.getState().isSettingsOpen).toBe(true);
+    expect(window.location.hash).toBe('#/settings');
+    useBoardStore.getState().closeSettings();
+    expect(useBoardStore.getState().isSettingsOpen).toBe(false);
+    expect(window.location.hash).toBe('');
   });
 });

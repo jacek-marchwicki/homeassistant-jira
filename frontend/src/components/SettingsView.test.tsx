@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SettingsView } from './SettingsView.tsx';
@@ -21,8 +21,45 @@ const issues: JiraIssue[] = [
 describe('SettingsView', () => {
   beforeEach(() => {
     act(() => {
-      useBoardStore.setState({ issues, accountTypes: {}, currentUser: 'Jacek Marchwicki' });
+      useBoardStore.setState({
+        issues,
+        accountTypes: {},
+        currentUser: 'Jacek Marchwicki',
+        errorMessage: null,
+        isSettingsOpen: true,
+      });
     });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+  });
+
+  it('closes via the back button', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<SettingsView />);
+    });
+    await act(async () => {
+      (container.querySelector('[aria-label="Back to board"]') as HTMLElement).click();
+    });
+    expect(useBoardStore.getState().isSettingsOpen).toBe(false);
+    act(() => root.unmount());
+  });
+
+  it('rolls back and shows an error when the backend rejects the change', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<SettingsView />);
+    });
+    await act(async () => {
+      (container.querySelector('[aria-label="Sarah Connor Child"]') as HTMLElement).click();
+    });
+    expect(useBoardStore.getState().accountTypes['sarah connor']).toBeUndefined();
+    expect(container.querySelector('[role="alert"]')).toBeTruthy();
+    act(() => root.unmount());
   });
 
   it('lists accounts as Parent by default and switches one to Child', async () => {
@@ -40,6 +77,10 @@ describe('SettingsView', () => {
       childBtn.click();
     });
     expect(useBoardStore.getState().accountTypes['sarah connor']).toBe('child');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/account-types'),
+      expect.objectContaining({ method: 'PUT' })
+    );
     expect(childBtn.getAttribute('aria-checked')).toBe('true');
     await act(async () => {
       parentBtn.click();

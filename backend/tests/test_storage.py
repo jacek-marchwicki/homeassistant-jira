@@ -367,3 +367,24 @@ def test_storage_migration_adds_rank_column(temp_db_path: Path) -> None:
     fetched = storage.get_issue("PROJ-1")
     assert fetched is not None
     assert fetched.rank == "0|i00001:"
+
+
+def test_account_types_persist_across_connections(temp_db_path: Path) -> None:
+    storage = SQLiteStorage(temp_db_path)
+    storage.init_db()
+    assert storage.get_account_types() == {}
+    assert storage.set_account_type(" Kid Kim ", "child") == {"kid kim": "child"}
+    storage.close()
+
+    reopened = SQLiteStorage(temp_db_path)
+    reopened.init_db()
+    assert reopened.get_account_types() == {"kid kim": "child"}
+    assert reopened.set_account_type("KID KIM", "parent") == {}
+    with pytest.raises(ValueError):
+        reopened.set_account_type("x", "robot")
+    with pytest.raises(ValueError):
+        reopened.set_account_type("  ", "child")
+    reopened.set_account_type("a", "child")
+    reopened.clear_account_types()
+    assert reopened.get_account_types() == {}
+    reopened.close()

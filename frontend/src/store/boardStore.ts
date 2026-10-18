@@ -73,7 +73,7 @@ export function loadCachedView(): DashboardView {
   if (typeof window === 'undefined' || !window.localStorage) return 'board';
   try {
     const saved = window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY);
-    if (saved === 'board' || saved === 'backlog' || saved === 'people' || saved === 'settings') {
+    if (saved === 'board' || saved === 'backlog' || saved === 'people') {
       return saved;
     }
   } catch {
@@ -198,7 +198,13 @@ export function saveCachedOutbox(items: OfflineOutboxItem[]): void {
   }
 }
 
-export type DashboardView = 'board' | 'backlog' | 'people' | 'settings';
+export type DashboardView = 'board' | 'backlog' | 'people';
+
+export const SETTINGS_HASH = '#/settings';
+
+function isSettingsHash(): boolean {
+  return typeof window !== 'undefined' && window.location.hash === SETTINGS_HASH;
+}
 
 export interface BoardStoreState {
   theme: ThemeMode;
@@ -216,6 +222,7 @@ export interface BoardStoreState {
   currentUser: string;
   accountTypes: AccountTypes;
   showChildren: boolean;
+  isSettingsOpen: boolean;
   errorMessage: string | null;
   rollbackQueue: Record<string, JiraIssue>;
   currentView: DashboardView;
@@ -235,7 +242,11 @@ export interface BoardStoreState {
   setActiveFilter: (filter: string) => void;
   setSearchQuery: (query: string) => void;
   setCurrentUser: (userName: string) => void;
-  setAccountType: (userName: string, type: AccountType) => void;
+  setAccountType: (userName: string, type: AccountType) => Promise<void>;
+  fetchAccountTypes: () => Promise<void>;
+  openSettings: () => void;
+  closeSettings: () => void;
+  syncSettingsFromLocation: () => void;
   toggleShowChildren: () => void;
   setErrorMessage: (msg: string | null) => void;
   setCurrentView: (view: DashboardView) => void;
@@ -285,6 +296,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   currentUser: loadCachedUser(),
   accountTypes: loadCachedAccountTypes(),
   showChildren: false,
+  isSettingsOpen: isSettingsHash(),
   errorMessage: null,
   rollbackQueue: {},
   currentView: loadCachedView(),
@@ -302,14 +314,69 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     set({ currentUser: trimmed });
   },
 
-  setAccountType: (userName: string, type: AccountType) => {
+  setAccountType: async (userName: string, type: AccountType) => {
     const key = userName.trim().toLowerCase();
     if (!key) return;
-    const next = { ...get().accountTypes };
+    const previous = get().accountTypes;
+    const next = { ...previous };
     if (type === 'child') next[key] = 'child';
     else delete next[key];
+    // Optimistic update; the backend (shared SQL storage) is the source of truth.
     saveCachedAccountTypes(next);
     set({ accountTypes: next });
+    try {
+      const res = await fetch(getApiUrl('/api/account-types'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: userName.trim(), account_type: type }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      saveCachedAccountTypes(previous);
+      set({
+        accountTypes: previous,
+        errorMessage: `Could not save account type for ${userName.trim()}. Change reverted.`,
+      });
+    }
+  },
+
+  fetchAccountTypes: async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/account-types'));
+      if (res.ok) {
+        const data = (await res.json()) as { account_types?: Record<string, string> };
+        if (data && data.account_types && typeof data.account_types === 'object') {
+          const types: AccountTypes = {};
+          for (const [k, v] of Object.entries(data.account_types)) {
+            if (v === 'child') types[k] = 'child';
+          }
+          saveCachedAccountTypes(types);
+          set({ accountTypes: types });
+        }
+      }
+    } catch {
+      // offline: keep locally cached account types
+    }
+  },
+
+  openSettings: () => {
+    if (typeof window !== 'undefined') window.location.hash = SETTINGS_HASH;
+    set({ isSettingsOpen: true });
+  },
+
+  closeSettings: () => {
+    if (typeof window !== 'undefined' && isSettingsHash()) {
+      window.history.pushState(
+        null,
+        '',
+        window.location.pathname + window.location.search
+      );
+    }
+    set({ isSettingsOpen: false });
+  },
+
+  syncSettingsFromLocation: () => {
+    set({ isSettingsOpen: isSettingsHash() });
   },
 
   toggleShowChildren: () => {
@@ -405,6 +472,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
     // Fetch users in parallel
     get().fetchUsers().catch(() => {});
+    get().fetchAccountTypes().catch(() => {});
     try {
       const res = await fetch(getApiUrl('/api/board'));
       if (res.ok) {
@@ -1139,6 +1207,16 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   handleWsMessage: (data: unknown) => {
     if (!data || typeof data !== 'object') return;
     const msg = data as Record<string, unknown>;
+
+    if (msg.event === 'account_types_updated' && msg.account_types) {
+      const types: AccountTypes = {};
+      for (const [k, v] of Object.entries(msg.account_types as Record<string, unknown>)) {
+        if (v === 'child') types[k] = 'child';
+      }
+      saveCachedAccountTypes(types);
+      set({ accountTypes: types });
+      return;
+    }
 
     if (msg.event === 'issue_created' && msg.issue) {
       const incomingIssue = msg.issue as JiraIssue;

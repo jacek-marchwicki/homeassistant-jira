@@ -37,6 +37,7 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
     setTheme,
     currentView,
     setCurrentView,
+    openSettings,
     issues,
     columns,
     setCreateModalOpen,
@@ -185,20 +186,6 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
               {backlogIssues.length}
             </span>
           </button>
-
-          <button
-            onClick={() => setCurrentView('settings')}
-            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs transition-colors cursor-pointer min-h-[32px] sm:min-h-[36px] ${
-              currentView === 'settings'
-                ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
-                : 'text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
-            }`}
-            title="Settings"
-            aria-label="Settings"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Settings</span>
-          </button>
         </div>
 
         {/* Sync & Live WebSocket Status */}
@@ -251,6 +238,17 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
             )}
           </div>
         </div>
+
+        {/* Settings: icon-only button that opens the full-screen Settings page */}
+        <button
+          type="button"
+          onClick={openSettings}
+          className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer shrink-0"
+          title="Settings"
+          aria-label="Settings"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
 
         {/* Dark/Light/Kiosk Theme Switcher: Dropdown on Mobile */}
         <div className="sm:hidden relative shrink-0" ref={themeMenuRef}>

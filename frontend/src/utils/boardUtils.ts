@@ -586,6 +586,35 @@ export interface FilterIssuesOptions {
   searchQuery?: string;
   now?: Date;
   currentUser?: string;
+  /** Account types keyed by lower-cased display name (missing = parent). */
+  accountTypes?: AccountTypes;
+  /** When true, parents also see tasks assigned to child accounts. */
+  showChildren?: boolean;
+}
+
+export type AccountType = 'parent' | 'child';
+export type AccountTypes = Record<string, AccountType>;
+
+/**
+ * Returns the account type for a person (defaults to 'parent').
+ */
+export function getAccountType(
+  accountTypes: AccountTypes | undefined,
+  displayName: string
+): AccountType {
+  return accountTypes?.[displayName.trim().toLowerCase()] === 'child' ? 'child' : 'parent';
+}
+
+function getAssigneeName(issue: JiraIssue): string {
+  return (issue.assignee?.displayName || issue.assignee?.display_name || '').trim();
+}
+
+/**
+ * Returns true if the issue is assigned to someone with the 'child' account type.
+ */
+export function isAssignedToChild(issue: JiraIssue, accountTypes?: AccountTypes): boolean {
+  const name = getAssigneeName(issue);
+  return name !== '' && getAccountType(accountTypes, name) === 'child';
 }
 
 /**
@@ -625,7 +654,17 @@ export function filterIssues(
 
     // 2. Assigned to Me / Unassigned Filter
     if (filters.has('my')) {
-      if (!isAssignedToMeOrUnassigned(issue, currentUser)) {
+      const isChildUser = getAccountType(options.accountTypes, currentUser) === 'child';
+      if (isChildUser) {
+        // Children never see unassigned tasks.
+        const name = getAssigneeName(issue);
+        if (!name || !name.toLowerCase().includes(currentUser.toLowerCase())) {
+          return false;
+        }
+      } else if (
+        !isAssignedToMeOrUnassigned(issue, currentUser) &&
+        !(options.showChildren && isAssignedToChild(issue, options.accountTypes))
+      ) {
         return false;
       }
     }
@@ -1147,7 +1186,19 @@ export function filterIssuesForPeopleColumn(
     }
 
     // 2. Assignee match for this Person (assigned to person OR unassigned)
-    if (!isAssignedToPersonOrUnassigned(issue, person.displayName, person.accountId)) {
+    const isChildPerson = getAccountType(options.accountTypes, person.displayName) === 'child';
+    if (isChildPerson) {
+      // Children's columns never list unassigned tasks.
+      if (
+        !getAssigneeName(issue) ||
+        !isAssignedToPersonOrUnassigned(issue, person.displayName, person.accountId)
+      ) {
+        return false;
+      }
+    } else if (
+      !isAssignedToPersonOrUnassigned(issue, person.displayName, person.accountId) &&
+      !(options.showChildren && isAssignedToChild(issue, options.accountTypes))
+    ) {
       return false;
     }
 

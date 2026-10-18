@@ -17,7 +17,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import (
     FastAPI,
@@ -406,6 +406,19 @@ class CommentUpdateRequest(BaseModel):
     body: str
 
 
+class AccountTypeRequest(BaseModel):
+    """Request body for setting an account as 'parent' or 'child'."""
+
+    display_name: str
+    account_type: Literal["parent", "child"]
+
+
+class AccountTypesResponse(BaseModel):
+    """Shared account types keyed by lower-cased display name (missing = parent)."""
+
+    account_types: dict[str, str]
+
+
 class SimulateErrorRequest(BaseModel):
     """Configuration to simulate Jira API errors for testing."""
 
@@ -551,6 +564,23 @@ async def get_users() -> list[JiraUser]:
         logger.debug("Failed fetching client users: %s", exc)
 
     return list(users_map.values())
+
+
+@app.get("/api/account-types", response_model=AccountTypesResponse)
+def get_account_types() -> AccountTypesResponse:
+    """Return shared account types (child accounts) used by all app members."""
+    return AccountTypesResponse(account_types=storage.get_account_types())
+
+
+@app.put("/api/account-types", response_model=AccountTypesResponse)
+async def set_account_type(request: AccountTypeRequest) -> AccountTypesResponse:
+    """Mark an account as 'parent' or 'child' and broadcast the change to all clients."""
+    try:
+        updated = storage.set_account_type(request.display_name, request.account_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await ws_hub.broadcast({"event": "account_types_updated", "account_types": updated})
+    return AccountTypesResponse(account_types=updated)
 
 
 @app.post("/api/issues/{key}/transition", response_model=JiraIssue)
@@ -1256,6 +1286,7 @@ def reset_test_state() -> dict[str, Any]:
         _board_cache_timestamp = 0.0
         storage.rebuild_schema_preserving_outbox()
         storage.clear_outbox()
+        storage.clear_account_types()
         storage.save_issues(list(jira_client._issues.values()))
         storage.save_board_meta(
             board_id=settings.jira_board_id,

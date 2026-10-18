@@ -157,6 +157,14 @@ class SQLiteStorage:
                     );
                     """
                 )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS account_types (
+                        name_key TEXT PRIMARY KEY,
+                        account_type TEXT NOT NULL CHECK (account_type IN ('child'))
+                    );
+                    """
+                )
                 conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION};")
 
     def get_schema_version(self) -> int:
@@ -684,6 +692,50 @@ class SQLiteStorage:
                 )
                 row = cur.fetchone()
                 return int(row["generation_count"]) if row else 1
+
+    @staticmethod
+    def _account_name_key(display_name: str) -> str:
+        return display_name.strip().lower()
+
+    def get_account_types(self) -> dict[str, str]:
+        """Return shared account types keyed by lower-cased display name.
+
+        Only non-default ('child') accounts are stored; everyone else is a parent.
+        """
+        with self._lock:
+            conn = self._get_connection()
+            cur = conn.execute("SELECT name_key, account_type FROM account_types;")
+            return {row["name_key"]: row["account_type"] for row in cur.fetchall()}
+
+    def set_account_type(self, display_name: str, account_type: str) -> dict[str, str]:
+        """Set an account to 'child' or 'parent' (parent removes the stored row).
+
+        Returns the full updated mapping.
+        """
+        if account_type not in ("child", "parent"):
+            raise ValueError(f"Invalid account type: {account_type!r}")
+        key = self._account_name_key(display_name)
+        if not key:
+            raise ValueError("display_name must not be empty")
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                if account_type == "child":
+                    conn.execute(
+                        "INSERT OR REPLACE INTO account_types (name_key, account_type) "
+                        "VALUES (?, 'child');",
+                        (key,),
+                    )
+                else:
+                    conn.execute("DELETE FROM account_types WHERE name_key = ?;", (key,))
+        return self.get_account_types()
+
+    def clear_account_types(self) -> None:
+        """Remove all stored account types (used by test resets)."""
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                conn.execute("DELETE FROM account_types;")
 
     def prune_expired_background_images(self, retention_seconds: int) -> list[str]:
         """Prune background images unrequested for longer than retention_seconds.

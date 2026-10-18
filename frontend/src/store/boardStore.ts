@@ -10,13 +10,18 @@ import {
 import { applyTheme, getInitialTheme, ThemeMode } from '../tokens/themeBridge.ts';
 import { getApiUrl } from '../utils/paths.ts';
 import {
+  AccountType,
+  AccountTypes,
+  calculateRankBetween,
+  sortIssuesByRank,
+} from '../utils/boardUtils.ts';
+import {
   Route,
   closeOverlayRoute,
   getCurrentRoute,
   pushRoute,
   replaceRoute,
 } from '../utils/navigation.ts';
-import { calculateRankBetween, sortIssuesByRank } from '../utils/boardUtils.ts';
 
 const CATEGORY_TITLES: Record<JiraStatusCategory, string> = {
   todo: 'To Do',
@@ -36,6 +41,7 @@ export const LOCAL_STORAGE_BOARD_CACHE_KEY = 'ha_jira_board_cache_v1';
 export const LOCAL_STORAGE_OUTBOX_KEY = 'ha_jira_offline_outbox_v1';
 export const LOCAL_STORAGE_CURRENT_VIEW_KEY = 'ha_jira_current_view';
 export const LOCAL_STORAGE_CURRENT_USER_KEY = 'ha_jira_current_user';
+export const LOCAL_STORAGE_ACCOUNT_TYPES_KEY = 'ha_jira_account_types';
 
 export class ServerRejectionError extends Error {
   constructor(message: string) {
@@ -109,6 +115,33 @@ export function loadCachedUser(): string {
     // Ignore error
   }
   return 'Jacek Marchwicki';
+}
+
+export function loadCachedAccountTypes(): AccountTypes {
+  if (typeof window === 'undefined' || !window.localStorage) return {};
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_ACCOUNT_TYPES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const result: AccountTypes = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v === 'child') result[k] = 'child';
+      }
+      return result;
+    }
+  } catch {
+    // Ignore error
+  }
+  return {};
+}
+
+export function saveCachedAccountTypes(types: AccountTypes): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_ACCOUNT_TYPES_KEY, JSON.stringify(types));
+  } catch {
+    // Ignore error
+  }
 }
 
 export function saveCachedUser(userName: string): void {
@@ -196,6 +229,9 @@ export interface BoardStoreState {
   activeFilter: string;
   searchQuery: string;
   currentUser: string;
+  accountTypes: AccountTypes;
+  showChildren: boolean;
+  isSettingsOpen: boolean;
   errorMessage: string | null;
   rollbackQueue: Record<string, JiraIssue>;
   currentView: DashboardView;
@@ -221,6 +257,11 @@ export interface BoardStoreState {
   setActiveFilter: (filter: string) => void;
   setSearchQuery: (query: string) => void;
   setCurrentUser: (userName: string) => void;
+  setAccountType: (userName: string, type: AccountType) => Promise<void>;
+  fetchAccountTypes: () => Promise<void>;
+  openSettings: () => void;
+  closeSettings: () => void;
+  toggleShowChildren: () => void;
   setErrorMessage: (msg: string | null) => void;
   setCurrentView: (view: DashboardView) => void;
   toggleBacklogExpandedOnBoard: () => void;
@@ -273,6 +314,9 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   activeFilter: 'my,active,hide_epics',
   searchQuery: '',
   currentUser: loadCachedUser(),
+  accountTypes: loadCachedAccountTypes(),
+  showChildren: false,
+  isSettingsOpen: initialRoute.kind === 'settings',
   errorMessage: null,
   rollbackQueue: {},
   currentView: initialRoute.kind === 'view' ? initialRoute.view : loadCachedView(),
@@ -298,6 +342,67 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     const trimmed = userName.trim();
     saveCachedUser(trimmed);
     set({ currentUser: trimmed });
+  },
+
+  setAccountType: async (userName: string, type: AccountType) => {
+    const key = userName.trim().toLowerCase();
+    if (!key) return;
+    const previous = get().accountTypes;
+    const next = { ...previous };
+    if (type === 'child') next[key] = 'child';
+    else delete next[key];
+    // Optimistic update; the backend (shared SQL storage) is the source of truth.
+    saveCachedAccountTypes(next);
+    set({ accountTypes: next });
+    try {
+      const res = await fetch(getApiUrl('/api/account-types'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: userName.trim(), account_type: type }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'network error';
+      saveCachedAccountTypes(previous);
+      set({
+        accountTypes: previous,
+        errorMessage: `Could not save account type for ${userName.trim()} (${reason}). Change reverted.`,
+      });
+    }
+  },
+
+  fetchAccountTypes: async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/account-types'));
+      if (res.ok) {
+        const data = (await res.json()) as { account_types?: Record<string, string> };
+        if (data && data.account_types && typeof data.account_types === 'object') {
+          const types: AccountTypes = {};
+          for (const [k, v] of Object.entries(data.account_types)) {
+            if (v === 'child') types[k] = 'child';
+          }
+          saveCachedAccountTypes(types);
+          set({ accountTypes: types });
+        }
+      }
+    } catch {
+      // offline: keep locally cached account types
+    }
+  },
+
+  openSettings: () => {
+    pushRoute({ kind: 'settings' });
+    set({ isSettingsOpen: true, editingIssue: null, routeTaskKey: null, isCreateModalOpen: false });
+  },
+
+  closeSettings: () => {
+    const wasOpen = get().isSettingsOpen;
+    set({ isSettingsOpen: false });
+    if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
+  },
+
+  toggleShowChildren: () => {
+    set((state) => ({ showChildren: !state.showChildren }));
   },
 
   setEditingIssue: (issue: JiraIssue | null) => {
@@ -357,15 +462,33 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       routeTaskKey: null,
       isCreateModalOpen: false,
       isConnectionModalOpen: false,
+      isSettingsOpen: false,
     });
   },
 
   applyRoute: (route: Route) => {
-    if (route.kind === 'task') {
+    if (route.kind === 'settings') {
+      set({
+        isSettingsOpen: true,
+        isConnectionModalOpen: false,
+        editingIssue: null,
+        routeTaskKey: null,
+        isCreateModalOpen: false,
+      });
+    } else if (route.kind === 'status') {
+      set({
+        isConnectionModalOpen: true,
+        isSettingsOpen: false,
+        isCreateModalOpen: false,
+        editingIssue: null,
+        routeTaskKey: null,
+      });
+    } else if (route.kind === 'task') {
       set({
         routeTaskKey: route.key,
         isCreateModalOpen: false,
         isConnectionModalOpen: false,
+        isSettingsOpen: false,
         editingIssue: null,
       });
       get().resolveRouteTask();
@@ -373,13 +496,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       set({
         isCreateModalOpen: true,
         isConnectionModalOpen: false,
-        editingIssue: null,
-        routeTaskKey: null,
-      });
-    } else if (route.kind === 'status') {
-      set({
-        isConnectionModalOpen: true,
-        isCreateModalOpen: false,
+        isSettingsOpen: false,
         editingIssue: null,
         routeTaskKey: null,
       });
@@ -391,6 +508,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         routeTaskKey: null,
         isCreateModalOpen: false,
         isConnectionModalOpen: false,
+        isSettingsOpen: false,
       });
     } else {
       // Root: show the last used view, with no overlays.
@@ -402,6 +520,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         routeTaskKey: null,
         isCreateModalOpen: false,
         isConnectionModalOpen: false,
+        isSettingsOpen: false,
       });
     }
   },
@@ -499,6 +618,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
     // Fetch users in parallel
     get().fetchUsers().catch(() => {});
+    get().fetchAccountTypes().catch(() => {});
     try {
       const res = await fetch(getApiUrl('/api/board'));
       if (res.ok) {
@@ -1239,6 +1359,16 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   handleWsMessage: (data: unknown) => {
     if (!data || typeof data !== 'object') return;
     const msg = data as Record<string, unknown>;
+
+    if (msg.event === 'account_types_updated' && msg.account_types) {
+      const types: AccountTypes = {};
+      for (const [k, v] of Object.entries(msg.account_types as Record<string, unknown>)) {
+        if (v === 'child') types[k] = 'child';
+      }
+      saveCachedAccountTypes(types);
+      set({ accountTypes: types });
+      return;
+    }
 
     if (msg.event === 'issue_created' && msg.issue) {
       const incomingIssue = msg.issue as JiraIssue;

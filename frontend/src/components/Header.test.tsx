@@ -209,3 +209,25 @@ describe('Header component', () => {
   });
 });
 
+
+describe('Header settings icon', () => {
+  it('renders an icon-only Settings button that opens the settings page', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<Header />);
+    });
+    const btn = container.querySelector('button[aria-label="Settings"]') as HTMLElement;
+    expect(btn).toBeTruthy();
+    expect(btn.textContent?.trim()).toBe('');
+    await act(async () => {
+      btn.click();
+    });
+    expect(useBoardStore.getState().isSettingsOpen).toBe(true);
+    act(() => {
+      useBoardStore.getState().closeSettings();
+      root.unmount();
+    });
+  });
+});

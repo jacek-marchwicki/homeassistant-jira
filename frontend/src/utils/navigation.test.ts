@@ -70,4 +70,10 @@ describe('navigation history', () => {
     replaceRoute({ kind: 'view', view: 'backlog' });
     expect(window.location.pathname).toBe('/backlog');
   });
+
+  it('parses and builds the settings route', () => {
+    expect(parseRoute('/settings')).toEqual({ kind: 'settings' });
+    expect(parseRoute('/settings/extra')).toEqual({ kind: 'root' });
+    expect(buildPath({ kind: 'settings' })).toBe('/settings');
+  });
 });

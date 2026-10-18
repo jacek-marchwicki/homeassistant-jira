@@ -10,6 +10,7 @@ import {
   Loader2,
   Moon,
   Plus,
+  Settings,
   Sun,
   Tv,
   Users,
@@ -36,6 +37,7 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
     setTheme,
     currentView,
     setCurrentView,
+    openSettings,
     issues,
     columns,
     setCreateModalOpen,
@@ -243,6 +245,17 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
               </>
             )}
           </span>
+        </button>
+
+        {/* Settings: icon-only button that opens the full-screen Settings page */}
+        <button
+          type="button"
+          onClick={openSettings}
+          className="flex items-center justify-center min-h-[32px] sm:min-h-[36px] min-w-[32px] sm:min-w-[36px] rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer shrink-0"
+          title="Settings"
+          aria-label="Settings"
+        >
+          <Settings className="w-4 h-4" />
         </button>
 
         {/* Dark/Light/Kiosk Theme Switcher: Dropdown on Mobile */}

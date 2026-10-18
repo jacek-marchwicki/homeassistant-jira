@@ -209,14 +209,22 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Ingress / standalone**: Routes are resolved relative to the Ingress base path; `index.html` sets a runtime `<base href>` so relative assets load on deep links, and the backend serves `index.html` as an SPA fallback for unknown paths (`SPAStaticFiles`).
   - [x] **Offline**: Navigation is purely client-side and works offline using the cached board.
   - [x] **Tests**: [`navigation.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.test.ts), URL navigation cases in `boardStore.test.ts`, and [`backend/tests/test_spa_fallback.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_spa_fallback.py).
+- [x] **Phase 5.14: Child Accounts & "Show child" Switch**
+  - [x] **Account Types**: Each person can be marked "Parent" (default) or "Child" in the "Who is Me" picker. Stored client-side in `localStorage` (`ha_jira_account_types`), keyed by lower-cased display name; updates apply instantly and work offline.
+  - [x] **Filtering**: A child never sees unassigned tasks in "Assigned to Me" (Board/Backlog) or in their People column. Parents see own + unassigned tasks.
+  - [x] **Show child switch**: Off-by-default switch in the filter bar (Board and People views) that adds child-assigned tasks to parents' views.
+  - [x] **Tests**: `boardUtils.test.ts`, `boardStore.test.ts`, `FilterBar.test.tsx`.
+  - [x] **Settings screen**: Account types are now managed in a dedicated "Settings" view (header gear button) instead of the "Who is Me" drop-down, which is back to its original behavior. Tests: `SettingsView.test.tsx`.
+  - [x] **Full-screen Settings & shared backend storage**: Settings is now a full-screen page opened from an icon-only gear button in the header (route `/settings`, part of URL-based navigation; browser back returns to the previous screen). Account types are persisted in the backend SQLite `account_types` table (`GET/PUT /api/account-types`), broadcast to all clients via the `account_types_updated` WebSocket event, applied optimistically with rollback on failure, and cached in `localStorage` for offline start-up.
 
-- [x] **Phase 5.14: Connection Status Details Popup**
-  - [x] **Clickable Connection Badge**:
+- [x] **Phase 5.15: Connection Status Details Popup**
+  - [x] **Clickable Connection Badge & /status Route**:
     - Clicking the header sync / live WebSocket badge opens [`ConnectionStatusModal`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.tsx) (full screen on mobile, centered dialog on larger viewports, 44px touch targets).
+    - Mapped to `/status` URL route with browser back/forward and Escape key support, matching the new navigation and overlay architecture.
   - [x] **Connection Diagnostics**:
     - Shows connected / reconnecting state, cause of the last failure (WebSocket error or close code, last sync error), live retry countdown, failed attempt count, and last connected / disconnected times.
     - `boardStore` tracks `connectionDetails` and `syncError`, populated by the WebSocket lifecycle in `App.tsx` and `flushOfflineQueue`.
   - [x] **Pending Changes**:
     - Lists every queued `offlineOutbox` mutation (action, issue key, time) or "Nothing pending". Read-only; no effect on optimistic latency or FIFO replay.
   - [x] **Test Coverage**:
-    - `ConnectionStatusModal.test.tsx` covers closed, connected, disconnected-with-pending, close action and Header integration.
+    - `ConnectionStatusModal.test.tsx`, `navigation.test.ts`, and `boardStore.test.ts` covering closed, connected, disconnected-with-pending, close action, Escape key, and URL routing.

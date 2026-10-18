@@ -2,7 +2,7 @@
  * URL-based navigation helpers.
  *
  * Every navigable state of the dashboard (board / backlog / people views, an open task,
- * the create-issue dialog) maps to a URL so the browser back/forward buttons work.
+ * the create-issue dialog, the full-screen settings page) maps to a URL so the browser back/forward buttons work.
  * All paths are resolved relative to the dynamic base path (Home Assistant Ingress prefix).
  */
 import { getBasePath } from './paths.ts';
@@ -14,6 +14,7 @@ export type Route =
   | { kind: 'task'; key: string }
   | { kind: 'create' }
   | { kind: 'status' }
+  | { kind: 'settings' }
   | { kind: 'root' };
 
 const VIEWS: RouteView[] = ['board', 'backlog', 'people'];
@@ -43,6 +44,7 @@ export function parseRoute(pathname: string): Route {
   }
   if (first === 'create' && segments.length === 1) return { kind: 'create' };
   if (first === 'status' && segments.length === 1) return { kind: 'status' };
+  if (first === 'settings' && segments.length === 1) return { kind: 'settings' };
   if (segments.length === 1 && (VIEWS as string[]).includes(first)) {
     return { kind: 'view', view: first as RouteView };
   }
@@ -60,6 +62,8 @@ export function buildPath(route: Route): string {
       return '/create';
     case 'status':
       return '/status';
+    case 'settings':
+      return '/settings';
     default:
       return '/';
   }
@@ -96,7 +100,7 @@ export function replaceRoute(route: Route): void {
 }
 
 /**
- * Leaves an overlay route (task / create). If the overlay was opened from within the app
+ * Leaves an overlay route (task / create / settings). If the overlay was opened from within the app
  * we go back one entry so history does not grow; otherwise (deep link) we replace the URL.
  */
 export function closeOverlayRoute(fallback: Route): void {

@@ -32,6 +32,7 @@ import {
   filterIssuesForPeopleColumn,
   extractIssueKey,
   handlePeopleDragEnd,
+  getAccountType,
 } from './boardUtils.ts';
 import { BoardColumn, JiraIssue } from '../types/jira.ts';
 
@@ -1526,3 +1527,76 @@ describe('boardUtils', () => {
 
 
 
+
+describe('child accounts', () => {
+  const mk = (key: string, assignee?: string): JiraIssue => ({
+    id: key,
+    key,
+    summary: key,
+    priority: 'medium',
+    status: { id: '1', name: 'To Do', category: 'todo' },
+    assignee: assignee ? { displayName: assignee } : undefined,
+  });
+  const issues = [mk('P-1', 'Parent Pat'), mk('P-2'), mk('P-3', 'Kid Kim'), mk('P-4', 'Other Olly')];
+  const accountTypes = { 'kid kim': 'child' as const };
+  const keys = (list: JiraIssue[]) => list.map((i) => i.key);
+
+  it('defaults to parent account type', () => {
+    expect(getAccountType({}, 'Anyone')).toBe('parent');
+    expect(getAccountType(accountTypes, ' Kid Kim ')).toBe('child');
+  });
+
+  it('parent "my" filter keeps own and unassigned, hides child tasks by default', () => {
+    const res = filterIssues(issues, {
+      activeFilters: ['my'],
+      currentUser: 'Parent Pat',
+      accountTypes,
+    });
+    expect(keys(res)).toEqual(['P-1', 'P-2']);
+  });
+
+  it('parent "my" filter includes child tasks when showChildren is on', () => {
+    const res = filterIssues(issues, {
+      activeFilters: ['my'],
+      currentUser: 'Parent Pat',
+      accountTypes,
+      showChildren: true,
+    });
+    expect(keys(res)).toEqual(['P-1', 'P-2', 'P-3']);
+  });
+
+  it('child "my" filter excludes unassigned issues', () => {
+    const res = filterIssues(issues, {
+      activeFilters: ['my'],
+      currentUser: 'Kid Kim',
+      accountTypes,
+      showChildren: true,
+    });
+    expect(keys(res)).toEqual(['P-3']);
+  });
+
+  it('child people column excludes unassigned issues', () => {
+    const res = filterIssuesForPeopleColumn(
+      issues,
+      { displayName: 'Kid Kim' },
+      { activeFilters: [], accountTypes }
+    );
+    expect(keys(res)).toEqual(['P-3']);
+  });
+
+  it('parent people column keeps unassigned and optionally shows child tasks', () => {
+    const person = { displayName: 'Parent Pat' };
+    expect(
+      keys(filterIssuesForPeopleColumn(issues, person, { activeFilters: [], accountTypes }))
+    ).toEqual(['P-1', 'P-2']);
+    expect(
+      keys(
+        filterIssuesForPeopleColumn(issues, person, {
+          activeFilters: [],
+          accountTypes,
+          showChildren: true,
+        })
+      )
+    ).toEqual(['P-1', 'P-2', 'P-3']);
+  });
+});

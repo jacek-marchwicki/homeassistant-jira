@@ -15,6 +15,8 @@ export function FilterBar() {
     setSearchQuery,
     currentUser,
     setCurrentUser,
+    showChildren,
+    toggleShowChildren,
   } = useBoardStore();
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -272,6 +274,30 @@ export function FilterBar() {
           title="Toggle filter to hide Epics"
         >
           Hide Epics
+        </button>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showChildren}
+          aria-label="Show child"
+          onClick={toggleShowChildren}
+          title="Show tasks assigned to child accounts"
+          className="h-7 sm:h-8 pl-2.5 sm:pl-3 pr-2 rounded-full text-xs font-medium inline-flex items-center gap-2 transition-colors cursor-pointer shrink-0 bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]"
+        >
+          <span>Show child</span>
+          <span
+            aria-hidden="true"
+            className={`relative inline-block w-7 h-4 rounded-full transition-colors ${
+              showChildren ? 'bg-[var(--jira-primary)]' : 'bg-[var(--jira-border)]'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                showChildren ? 'translate-x-3' : ''
+              }`}
+            />
+          </span>
         </button>
       </div>
 

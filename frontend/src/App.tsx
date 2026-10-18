@@ -9,6 +9,7 @@ import { Header } from './components/Header.tsx';
 import { InstallHelpModal } from './components/InstallHelpModal.tsx';
 import { KanbanBoard } from './components/KanbanBoard.tsx';
 import { MobileInstallBanner } from './components/MobileInstallBanner.tsx';
+import { SettingsView } from './components/SettingsView.tsx';
 import { PeopleBoard } from './components/PeopleBoard.tsx';
 import { useBoardStore } from './store/boardStore.ts';
 import { getCurrentRoute } from './utils/navigation.ts';
@@ -24,6 +25,7 @@ export default function App() {
     setWsConnected,
     errorMessage,
     currentView,
+    isSettingsOpen,
     isLoading,
     boardName,
     issues,
@@ -174,6 +176,10 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (isSettingsOpen) {
+    return <SettingsView />;
   }
 
   return (

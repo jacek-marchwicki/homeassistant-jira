@@ -411,3 +411,26 @@ describe('FilterBar component', () => {
   });
 });
 
+
+describe('FilterBar child accounts', () => {
+  it('renders Show child switch (off by default) and toggles it', async () => {
+    act(() => {
+      useBoardStore.setState({ issues: testIssues, showChildren: false, accountTypes: {} });
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<FilterBar />);
+    });
+    const sw = container.querySelector('[role="switch"][aria-label="Show child"]') as HTMLElement;
+    expect(sw).toBeTruthy();
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    await act(async () => {
+      sw.click();
+    });
+    expect(useBoardStore.getState().showChildren).toBe(true);
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    act(() => root.unmount());
+  });
+});

@@ -148,6 +148,66 @@ class TestPresentationApi(unittest.TestCase):
         self.assertGreater(len(users), 0)
         self.assertTrue(any(u["display_name"] == "Jacek Marchwicki" for u in users))
 
+    def test_account_types_shared_settings(self) -> None:
+        """Verify account types persist in the backend and default to parent."""
+        self.assertEqual(self.client.get("/api/account-types").json(), {"account_types": {}})
+        res = self.client.put(
+            "/api/account-types",
+            json={"display_name": " Kid Kim ", "account_type": "child"},
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"account_types": {"kid kim": "child"}})
+        self.assertEqual(
+            self.client.get("/api/account-types").json(),
+            {"account_types": {"kid kim": "child"}},
+        )
+        res = self.client.put(
+            "/api/account-types",
+            json={"display_name": "Kid Kim", "account_type": "parent"},
+        )
+        self.assertEqual(res.json(), {"account_types": {}})
+
+    def test_account_types_accepts_dotted_usernames(self) -> None:
+        """Regression: names like 'luna.marchwicka' (as sent by the frontend) must save."""
+        res = self.client.put(
+            "/api/account-types",
+            json={"display_name": "luna.marchwicka", "account_type": "child"},
+        )
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json(), {"account_types": {"luna.marchwicka": "child"}})
+
+    def test_account_types_route_registered_for_get_and_put(self) -> None:
+        """Guards against a backend missing the endpoint (404/405) the frontend relies on."""
+        self.assertNotIn(self.client.get("/api/account-types").status_code, (404, 405))
+        self.assertNotIn(
+            self.client.put(
+                "/api/account-types", json={"display_name": "a", "account_type": "parent"}
+            ).status_code,
+            (404, 405),
+        )
+
+    def test_account_types_validation(self) -> None:
+        """Invalid type or empty name is rejected."""
+        bad_type = self.client.put(
+            "/api/account-types", json={"display_name": "A", "account_type": "robot"}
+        )
+        self.assertEqual(bad_type.status_code, 422)
+        empty = self.client.put(
+            "/api/account-types", json={"display_name": "  ", "account_type": "child"}
+        )
+        self.assertEqual(empty.status_code, 422)
+
+    def test_account_types_broadcast_over_websocket(self) -> None:
+        """Changing an account type notifies connected clients."""
+        with self.client.websocket_connect("/ws") as ws:
+            self.assertEqual(ws.receive_json()["event"], "connected")
+            self.client.put(
+                "/api/account-types", json={"display_name": "Kid", "account_type": "child"}
+            )
+            msg = ws.receive_json()
+            self.assertEqual(msg["event"], "account_types_updated")
+            self.assertEqual(msg["account_types"], {"kid": "child"})
+
     def test_comments_crud_lifecycle(self) -> None:
         """Verify viewing, adding, updating, and deleting comments on an issue."""
         # 1. View comments

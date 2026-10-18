@@ -869,6 +869,82 @@ describe('Zustand BoardStore', () => {
 
 
 
+describe('child account store state', () => {
+  beforeEach(() => {
+    useBoardStore.setState({ accountTypes: {}, showChildren: false, errorMessage: null });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+  });
+
+  it('defaults to no child accounts and showChildren off', () => {
+    expect(useBoardStore.getState().showChildren).toBe(false);
+  });
+
+  it('sets account type optimistically, PUTs to backend and caches it', async () => {
+    const p = useBoardStore.getState().setAccountType('Kid Kim', 'child');
+    expect(useBoardStore.getState().accountTypes['kid kim']).toBe('child');
+    await p;
+    expect(window.localStorage.getItem('ha_jira_account_types')).toContain('kid kim');
+    await useBoardStore.getState().setAccountType('Kid Kim', 'parent');
+    expect(useBoardStore.getState().accountTypes['kid kim']).toBeUndefined();
+  });
+
+  it('sends the exact request contract the backend expects (dotted names included)', async () => {
+    await useBoardStore.getState().setAccountType(' luna.marchwicka ', 'child');
+    const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/account-types$/);
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(JSON.parse(init.body)).toEqual({
+      display_name: 'luna.marchwicka',
+      account_type: 'child',
+    });
+    expect(useBoardStore.getState().errorMessage).toBeNull();
+  });
+
+  it('reports the failure reason and reverts when the backend lacks the endpoint', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 405 });
+    await useBoardStore.getState().setAccountType('luna.marchwicka', 'child');
+    expect(useBoardStore.getState().accountTypes).toEqual({});
+    expect(useBoardStore.getState().errorMessage).toContain('HTTP 405');
+    expect(useBoardStore.getState().errorMessage).toContain('luna.marchwicka');
+  });
+
+  it('loads account types from backend and applies websocket updates', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ account_types: { 'kid kim': 'child' } }),
+    });
+    await useBoardStore.getState().fetchAccountTypes();
+    expect(useBoardStore.getState().accountTypes).toEqual({ 'kid kim': 'child' });
+    useBoardStore.getState().handleWsMessage({ event: 'account_types_updated', account_types: {} });
+    expect(useBoardStore.getState().accountTypes).toEqual({});
+  });
+
+  it('keeps cached account types when backend is unreachable', async () => {
+    useBoardStore.setState({ accountTypes: { x: 'child' } });
+    global.fetch = vi.fn().mockRejectedValue(new Error('offline'));
+    await useBoardStore.getState().fetchAccountTypes();
+    expect(useBoardStore.getState().accountTypes).toEqual({ x: 'child' });
+  });
+
+  it('toggles showChildren and opens/closes the settings page', () => {
+    useBoardStore.getState().toggleShowChildren();
+    expect(useBoardStore.getState().showChildren).toBe(true);
+    useBoardStore.getState().toggleShowChildren();
+    useBoardStore.getState().openSettings();
+    expect(useBoardStore.getState().isSettingsOpen).toBe(true);
+    expect(window.location.pathname).toMatch(/\/settings$/);
+    // browser back (popstate -> applyRoute) leaves settings
+    useBoardStore.getState().applyRoute({ kind: 'view', view: 'board' });
+    expect(useBoardStore.getState().isSettingsOpen).toBe(false);
+    useBoardStore.getState().applyRoute({ kind: 'settings' });
+    expect(useBoardStore.getState().isSettingsOpen).toBe(true);
+    useBoardStore.getState().closeSettings();
+    expect(useBoardStore.getState().isSettingsOpen).toBe(false);
+    expect(useBoardStore.getState().isSettingsOpen).toBe(false);
+  });
+});
+
 describe('URL navigation', () => {
   const issue = {
     id: '1',

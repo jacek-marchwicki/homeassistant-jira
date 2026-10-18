@@ -1155,5 +1155,27 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await page.waitForTimeout(200);
     await expect(modalHeader).toHaveScreenshot('component-edit-modal-header-background.png');
   });
+
+  test('Capture Connection Status Modal (Desktop and Mobile Fullscreen)', async ({ page }) => {
+    // 1. Desktop (Centered dialog)
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const connBtn = page.locator('button[data-testid="connection-status-button"]');
+    await expect(connBtn).toBeVisible();
+    await connBtn.click();
+
+    const dialog = page.locator('div[role="dialog"][aria-labelledby="connection-modal-title"]');
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveScreenshot('modal-connection-status-desktop.png');
+
+    // Close via escape
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+
+    // 2. Mobile (Fullscreen popup)
+    await page.setViewportSize({ width: 375, height: 667 });
+    await connBtn.click();
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveScreenshot('modal-connection-status-mobile.png');
+  });
 });
 

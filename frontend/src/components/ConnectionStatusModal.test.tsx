@@ -107,11 +107,20 @@ describe('ConnectionStatusModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('opens from Header connection badge', async () => {
+  it('calls onClose on Escape key', async () => {
+    const onClose = vi.fn();
+    await act(async () => {
+      root.render(<ConnectionStatusModal isOpen={true} onClose={onClose} />);
+    });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('opens from Header connection badge and sets store state', async () => {
+    expect(useBoardStore.getState().isConnectionModalOpen).toBe(false);
     await act(async () => {
       root.render(<Header />);
     });
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
     const btn = container.querySelector(
       'button[data-testid="connection-status-button"]'
     ) as HTMLButtonElement;
@@ -119,6 +128,6 @@ describe('ConnectionStatusModal', () => {
     await act(async () => {
       btn.click();
     });
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(useBoardStore.getState().isConnectionModalOpen).toBe(true);
   });
 });

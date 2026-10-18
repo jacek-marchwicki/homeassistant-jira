@@ -13,6 +13,7 @@ export type Route =
   | { kind: 'view'; view: RouteView }
   | { kind: 'task'; key: string }
   | { kind: 'create' }
+  | { kind: 'status' }
   | { kind: 'root' };
 
 const VIEWS: RouteView[] = ['board', 'backlog', 'people'];
@@ -41,6 +42,7 @@ export function parseRoute(pathname: string): Route {
     }
   }
   if (first === 'create' && segments.length === 1) return { kind: 'create' };
+  if (first === 'status' && segments.length === 1) return { kind: 'status' };
   if (segments.length === 1 && (VIEWS as string[]).includes(first)) {
     return { kind: 'view', view: first as RouteView };
   }
@@ -56,6 +58,8 @@ export function buildPath(route: Route): string {
       return `/task/${encodeURIComponent(route.key)}`;
     case 'create':
       return '/create';
+    case 'status':
+      return '/status';
     default:
       return '/';
   }

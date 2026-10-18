@@ -43,6 +43,16 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
     return () => clearInterval(id);
   }, [isOpen]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const retrySeconds =
@@ -56,14 +66,14 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
       role="dialog"
       aria-modal="true"
       aria-labelledby="connection-modal-title"
-      className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex sm:items-center sm:justify-center sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md h-full sm:h-auto sm:max-h-[85vh] overflow-y-auto bg-[var(--jira-surface)] sm:border border-[var(--jira-border)] sm:rounded-xl shadow-2xl p-5 text-[var(--jira-text-primary)]"
+        className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-md bg-[var(--jira-surface)] border-0 sm:border border-[var(--jira-border)] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl p-4 sm:p-6 pb-8 sm:pb-6 relative overflow-y-auto overscroll-contain text-[var(--jira-text-primary)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between pb-3 border-b border-[var(--jira-border)]">
+        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-[var(--jira-border)]">
           <div className="flex items-center gap-2.5">
             <div
               className={`p-2 rounded-lg ${
@@ -74,7 +84,7 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
             >
               <StatusIcon className="w-5 h-5" />
             </div>
-            <h2 id="connection-modal-title" className="text-base font-bold">
+            <h2 id="connection-modal-title" className="text-base sm:text-lg font-bold">
               {wsConnected ? 'Connected' : 'Reconnecting'}
             </h2>
           </div>
@@ -82,7 +92,7 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-[var(--jira-text-secondary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer"
+            className="p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

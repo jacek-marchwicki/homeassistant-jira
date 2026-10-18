@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { BacklogView } from './components/BacklogView.tsx';
+import { ConnectionStatusModal } from './components/ConnectionStatusModal.tsx';
 import { CreateIssueModal } from './components/CreateIssueModal.tsx';
 import { EditIssueModal } from './components/EditIssueModal.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
@@ -30,6 +31,8 @@ export default function App() {
     setEditingIssue,
     isCreateModalOpen,
     setCreateModalOpen,
+    isConnectionModalOpen,
+    setConnectionModalOpen,
     applyRoute,
     resolveRouteTask,
     routeTaskKey,
@@ -220,6 +223,12 @@ export default function App() {
       <CreateIssueModal
         isOpen={isCreateModalOpen}
         onClose={() => setCreateModalOpen(false)}
+      />
+
+      {/* Connection Status Modal */}
+      <ConnectionStatusModal
+        isOpen={isConnectionModalOpen}
+        onClose={() => setConnectionModalOpen(false)}
       />
     </div>
   );

@@ -17,6 +17,7 @@ describe('navigation routes', () => {
     expect(parseRoute('/people')).toEqual({ kind: 'view', view: 'people' });
     expect(parseRoute('/task/HOME-123')).toEqual({ kind: 'task', key: 'HOME-123' });
     expect(parseRoute('/create')).toEqual({ kind: 'create' });
+    expect(parseRoute('/status')).toEqual({ kind: 'status' });
     expect(parseRoute('/nonsense')).toEqual({ kind: 'root' });
     expect(parseRoute('/task')).toEqual({ kind: 'root' });
     expect(parseRoute('/task/%E0%A4%A')).toEqual({ kind: 'root' });
@@ -26,6 +27,7 @@ describe('navigation routes', () => {
     expect(buildPath({ kind: 'task', key: 'HOME-123' })).toBe('/task/HOME-123');
     expect(buildPath({ kind: 'view', view: 'people' })).toBe('/people');
     expect(buildPath({ kind: 'create' })).toBe('/create');
+    expect(buildPath({ kind: 'status' })).toBe('/status');
     expect(buildPath({ kind: 'root' })).toBe('/');
     expect(parseRoute(buildPath({ kind: 'task', key: 'A B-1' }))).toEqual({
       kind: 'task',

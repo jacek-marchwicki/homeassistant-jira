@@ -202,6 +202,7 @@ export interface BoardStoreState {
   isBacklogExpandedOnBoard: boolean;
   editingIssue: JiraIssue | null;
   isCreateModalOpen: boolean;
+  isConnectionModalOpen: boolean;
   /** Task key requested by the URL (/task/KEY) that is not yet resolved to an issue. */
   routeTaskKey: string | null;
   offlineOutbox: OfflineOutboxItem[];
@@ -225,6 +226,7 @@ export interface BoardStoreState {
   toggleBacklogExpandedOnBoard: () => void;
   setEditingIssue: (issue: JiraIssue | null) => void;
   setCreateModalOpen: (open: boolean) => void;
+  setConnectionModalOpen: (open: boolean) => void;
   /** Applies a URL route to UI state without touching browser history. */
   applyRoute: (route: Route) => void;
   /** Resolves a pending /task/KEY route once issues are available. */
@@ -277,6 +279,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   isBacklogExpandedOnBoard: false,
   editingIssue: null,
   isCreateModalOpen: initialRoute.kind === 'create',
+  isConnectionModalOpen: initialRoute.kind === 'status',
   routeTaskKey: initialRoute.kind === 'task' ? initialRoute.key : null,
   offlineOutbox: initialOutbox,
   syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
@@ -300,7 +303,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   setEditingIssue: (issue: JiraIssue | null) => {
     if (issue) {
       pushRoute({ kind: 'task', key: issue.key });
-      set({ editingIssue: issue, routeTaskKey: issue.key, isCreateModalOpen: false });
+      set({
+        editingIssue: issue,
+        routeTaskKey: issue.key,
+        isCreateModalOpen: false,
+        isConnectionModalOpen: false,
+      });
     } else {
       const wasOpen = Boolean(get().editingIssue) || get().routeTaskKey !== null;
       set({ editingIssue: null, routeTaskKey: null });
@@ -311,7 +319,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   setCreateModalOpen: (open: boolean) => {
     if (open) {
       pushRoute({ kind: 'create' });
-      set({ isCreateModalOpen: true, editingIssue: null, routeTaskKey: null });
+      set({
+        isCreateModalOpen: true,
+        editingIssue: null,
+        routeTaskKey: null,
+        isConnectionModalOpen: false,
+      });
     } else {
       const wasOpen = get().isCreateModalOpen;
       set({ isCreateModalOpen: false });
@@ -319,18 +332,57 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 
+  setConnectionModalOpen: (open: boolean) => {
+    if (open) {
+      pushRoute({ kind: 'status' });
+      set({
+        isConnectionModalOpen: true,
+        editingIssue: null,
+        routeTaskKey: null,
+        isCreateModalOpen: false,
+      });
+    } else {
+      const wasOpen = get().isConnectionModalOpen;
+      set({ isConnectionModalOpen: false });
+      if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
+    }
+  },
+
   setCurrentView: (view: DashboardView) => {
     saveCachedView(view);
     pushRoute({ kind: 'view', view });
-    set({ currentView: view, editingIssue: null, routeTaskKey: null, isCreateModalOpen: false });
+    set({
+      currentView: view,
+      editingIssue: null,
+      routeTaskKey: null,
+      isCreateModalOpen: false,
+      isConnectionModalOpen: false,
+    });
   },
 
   applyRoute: (route: Route) => {
     if (route.kind === 'task') {
-      set({ routeTaskKey: route.key, isCreateModalOpen: false, editingIssue: null });
+      set({
+        routeTaskKey: route.key,
+        isCreateModalOpen: false,
+        isConnectionModalOpen: false,
+        editingIssue: null,
+      });
       get().resolveRouteTask();
     } else if (route.kind === 'create') {
-      set({ isCreateModalOpen: true, editingIssue: null, routeTaskKey: null });
+      set({
+        isCreateModalOpen: true,
+        isConnectionModalOpen: false,
+        editingIssue: null,
+        routeTaskKey: null,
+      });
+    } else if (route.kind === 'status') {
+      set({
+        isConnectionModalOpen: true,
+        isCreateModalOpen: false,
+        editingIssue: null,
+        routeTaskKey: null,
+      });
     } else if (route.kind === 'view') {
       saveCachedView(route.view);
       set({
@@ -338,12 +390,19 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         editingIssue: null,
         routeTaskKey: null,
         isCreateModalOpen: false,
+        isConnectionModalOpen: false,
       });
     } else {
       // Root: show the last used view, with no overlays.
       const view = loadCachedView();
       replaceRoute({ kind: 'view', view });
-      set({ currentView: view, editingIssue: null, routeTaskKey: null, isCreateModalOpen: false });
+      set({
+        currentView: view,
+        editingIssue: null,
+        routeTaskKey: null,
+        isCreateModalOpen: false,
+        isConnectionModalOpen: false,
+      });
     }
   },
 

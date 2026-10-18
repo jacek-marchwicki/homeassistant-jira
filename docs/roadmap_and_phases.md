@@ -241,7 +241,7 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Test Coverage**:
     - `ConnectionStatusModal.test.tsx`, `navigation.test.ts`, and `boardStore.test.ts` covering closed, connected, disconnected-with-pending, close action, Escape key, and URL routing.
 
-- [x] **Phase 5.17: Streamlined Board Card Interaction & Direct Details Navigation**
+- [x] **Phase 5.18: Streamlined Board Card Interaction & Direct Details Navigation**
   - [x] **Direct Ticket Details Navigation on Card Click**:
     - Clicking anywhere on an issue card on the board now opens the ticket details screen (`EditIssueModal`), streamlining user workflow.
     - Preserved isolated pointer and click event propagation on the quick "Done" action button so marking a task complete transitions it without triggering the details modal.
@@ -253,13 +253,13 @@ This document details the architectural phases, delivered features, and evolutio
     - Full-stack E2E integration tests in [`fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts).
     - Playwright visual regression snapshots updated across 43 scenarios in [`screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts).
 
-- [x] **Phase 5.18: Worktrees Data Reusability & Shared Caches**
+- [x] **Phase 5.19: Worktrees Data Reusability & Shared Caches**
   - [x] **Shared Data Symlinking for Isolated Worktrees**:
     - Introduced [`scripts/setup_worktree_data.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/setup_worktree_data.py) and Git `post-checkout` hook linking worktree `data -> ../../data`.
     - Enables automatic sharing of SQLite database, schema migrations, and cached background pictures across all parallel branches and worktrees.
     - Tested in [`backend/tests/test_worktree_data_setup.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_worktree_data_setup.py).
 
-- [x] **Phase 5.19: Removal of Kanban Board View & People Board Default**
+- [x] **Phase 5.20: Removal of Kanban Board View & People Board Default**
   - [x] **Removal of Kanban Board (`/board`)**:
     - Completely removed the "Board" view and deprecated components (`KanbanBoard.tsx`, `KanbanColumn.tsx`, and associated tests).
     - Updated navigation routing in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) so `VIEWS = ['people', 'backlog']`; requests to `/board` automatically resolve to the root route and redirect to `/people`.

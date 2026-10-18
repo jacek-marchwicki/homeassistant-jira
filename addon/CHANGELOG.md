@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- **People Board as Default View**: Streamlined dashboard views by establishing the People board as the primary default view alongside Backlog, retiring the separate status-column Kanban board. Navigating to `/board` or using legacy saved preferences smoothly redirects to `/people`.
+- **Direct Card Details Navigation**: Clicking anywhere on an issue card directly opens the ticket details dialog (`EditIssueModal`), removing the redundant pencil edit icon and decluttering card headers while preserving isolated one-tap completion on the "Done" action button.
+- **External Jira Link Streamlining**: Consolidated direct Jira navigation (`https://<domain>/browse/<KEY>`) into the ticket details dialog header, avoiding accidental tab opens during card clicks and touch scrolling.
+
 ## 0.4.0
 
 - **URL-Based Navigation & Deep Linking**: Full browser history integration (History API) with dedicated URL routes for `/board`, `/backlog`, `/people`, `/task/{key}`, `/create`, `/settings`, and `/status`. Deep links resolve gracefully after cache/API load, browser back/forward buttons seamlessly update state without page reload, and SPA fallback serves `index.html` across all dynamic subpaths.

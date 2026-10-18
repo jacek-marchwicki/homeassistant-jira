@@ -177,12 +177,12 @@ describe('Zustand BoardStore', () => {
     expect(issue?.status.category).toBe('todo');
   });
 
-  it('switches current view between board and backlog', () => {
-    expect(useBoardStore.getState().currentView).toBe('board');
+  it('switches current view between people and backlog', () => {
+    expect(useBoardStore.getState().currentView).toBe('people');
     useBoardStore.getState().setCurrentView('backlog');
     expect(useBoardStore.getState().currentView).toBe('backlog');
-    useBoardStore.getState().setCurrentView('board');
-    expect(useBoardStore.getState().currentView).toBe('board');
+    useBoardStore.getState().setCurrentView('people');
+    expect(useBoardStore.getState().currentView).toBe('people');
   });
 
   it('toggles isBacklogExpandedOnBoard state', () => {
@@ -795,37 +795,33 @@ describe('Zustand BoardStore', () => {
 
     it('persists currentView to localStorage when setCurrentView is called', () => {
       expect(LOCAL_STORAGE_CURRENT_VIEW_KEY).toBe('ha_jira_current_view');
-      useBoardStore.getState().setCurrentView('people');
-      expect(useBoardStore.getState().currentView).toBe('people');
-      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('people');
-
       useBoardStore.getState().setCurrentView('backlog');
       expect(useBoardStore.getState().currentView).toBe('backlog');
       expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('backlog');
 
-      useBoardStore.getState().setCurrentView('board');
-      expect(useBoardStore.getState().currentView).toBe('board');
-      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('board');
+      useBoardStore.getState().setCurrentView('people');
+      expect(useBoardStore.getState().currentView).toBe('people');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('people');
     });
 
-    it('loadCachedView loads saved view from localStorage or defaults to board', () => {
-      saveCachedView('people');
-      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('people');
-      expect(loadCachedView()).toBe('people');
-
+    it('loadCachedView loads saved view from localStorage or defaults to people', () => {
       saveCachedView('backlog');
       expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('backlog');
       expect(loadCachedView()).toBe('backlog');
 
-      saveCachedView('board');
-      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('board');
-      expect(loadCachedView()).toBe('board');
+      saveCachedView('people');
+      expect(window.localStorage.getItem(LOCAL_STORAGE_CURRENT_VIEW_KEY)).toBe('people');
+      expect(loadCachedView()).toBe('people');
+
+      // Legacy 'board' value in localStorage should fall back to 'people'
+      window.localStorage.setItem(LOCAL_STORAGE_CURRENT_VIEW_KEY, 'board');
+      expect(loadCachedView()).toBe('people');
 
       window.localStorage.setItem(LOCAL_STORAGE_CURRENT_VIEW_KEY, 'invalid_view');
-      expect(loadCachedView()).toBe('board');
+      expect(loadCachedView()).toBe('people');
 
       window.localStorage.removeItem(LOCAL_STORAGE_CURRENT_VIEW_KEY);
-      expect(loadCachedView()).toBe('board');
+      expect(loadCachedView()).toBe('people');
     });
 
     it('persists currentUser to localStorage under ha_jira_current_user', () => {
@@ -935,7 +931,7 @@ describe('child account store state', () => {
     expect(useBoardStore.getState().isSettingsOpen).toBe(true);
     expect(window.location.pathname).toMatch(/\/settings$/);
     // browser back (popstate -> applyRoute) leaves settings
-    useBoardStore.getState().applyRoute({ kind: 'view', view: 'board' });
+    useBoardStore.getState().applyRoute({ kind: 'view', view: 'people' });
     expect(useBoardStore.getState().isSettingsOpen).toBe(false);
     useBoardStore.getState().applyRoute({ kind: 'settings' });
     expect(useBoardStore.getState().isSettingsOpen).toBe(true);
@@ -955,14 +951,14 @@ describe('URL navigation', () => {
   } as unknown as JiraIssue;
 
   beforeEach(() => {
-    window.history.replaceState(null, '', '/board');
+    window.history.replaceState(null, '', '/people');
     useBoardStore.setState({
       issues: [issue],
       isLoading: false,
       editingIssue: null,
       routeTaskKey: null,
       isCreateModalOpen: false,
-      currentView: 'board',
+      currentView: 'people',
     });
   });
 
@@ -973,13 +969,13 @@ describe('URL navigation', () => {
     useBoardStore.getState().setEditingIssue(null);
     expect(useBoardStore.getState().editingIssue).toBeNull();
     await new Promise((r) => setTimeout(r, 20));
-    expect(window.location.pathname).toBe('/board');
+    expect(window.location.pathname).toBe('/people');
   });
 
   it('switching views updates the URL', () => {
-    useBoardStore.getState().setCurrentView('people');
-    expect(window.location.pathname).toBe('/people');
-    expect(useBoardStore.getState().currentView).toBe('people');
+    useBoardStore.getState().setCurrentView('backlog');
+    expect(window.location.pathname).toBe('/backlog');
+    expect(useBoardStore.getState().currentView).toBe('backlog');
   });
 
   it('create modal uses /create', () => {
@@ -995,7 +991,7 @@ describe('URL navigation', () => {
 
     useBoardStore.getState().setConnectionModalOpen(false);
     expect(useBoardStore.getState().isConnectionModalOpen).toBe(false);
-    expect(window.location.pathname).toBe('/board');
+    expect(window.location.pathname).toBe('/people');
   });
 
   it('applyRoute for status opens connection modal', () => {
@@ -1020,7 +1016,7 @@ describe('URL navigation', () => {
   it('unknown task falls back to the view URL', () => {
     window.history.replaceState(null, '', '/task/NOPE-1');
     useBoardStore.getState().applyRoute({ kind: 'task', key: 'NOPE-1' });
-    expect(window.location.pathname).toBe('/board');
+    expect(window.location.pathname).toBe('/people');
     expect(useBoardStore.getState().editingIssue).toBeNull();
   });
 

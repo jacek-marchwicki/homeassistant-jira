@@ -24,21 +24,17 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(page.getByText('Live WebSocket')).toBeVisible();
 
     // 3. Validate Columns and Seed Issues (by default "Assigned to Me" and "Active" are selected)
-    await expect(page.getByText('PROJ-101')).toBeVisible();
-    await expect(page.getByText('Configure Home Assistant Ingress dynamic proxy support')).toBeVisible();
-    await expect(page.getByText('PROJ-85')).toBeVisible();
-    await expect(page.getByText('PROJ-72')).toBeVisible();
-    // PROJ-98 is assigned to Alex Lead, so it is filtered out under default "Assigned to Me"
-    await expect(page.locator('article', { hasText: 'PROJ-98' })).not.toBeVisible();
-
-    // Click "All Issues" to view all cards including other assignees
-    await page.getByRole('button', { name: /All Issues/ }).click();
-    await expect(page.getByText('PROJ-98')).toBeVisible();
+    await expect(page.locator('article', { hasText: 'PROJ-101' }).first()).toBeVisible();
+    await expect(page.getByText('Configure Home Assistant Ingress dynamic proxy support').first()).toBeVisible();
+    await expect(page.locator('article', { hasText: 'PROJ-85' }).first()).toBeVisible();
+    await expect(page.locator('article', { hasText: 'PROJ-72' }).first()).toBeVisible();
+    // PROJ-98 is visible in Alex Lead's column on the People board
+    await expect(page.locator('article', { hasText: 'PROJ-98' }).first()).toBeVisible();
   });
 
   test('2. User Interaction: one-tap "Done" triggers optimistic mutation and syncs with backend', async ({ page }) => {
     // Locate card PROJ-101 in To Do column
-    const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' }).first();
     await expect(proj101Article).toBeVisible();
 
     // Intercept transition request to verify backend communication
@@ -60,7 +56,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
 
   test('3. Real-Time Webhook Push: incoming Jira webhook updates UI automatically via WebSocket', async ({ page }) => {
     // Verify PROJ-85 is initially on board (not line-through)
-    const proj85Article = page.locator('article', { hasText: 'PROJ-85' });
+    const proj85Article = page.locator('article', { hasText: 'PROJ-85' }).first();
     await expect(proj85Article).toBeVisible();
     await expect(proj85Article.locator('p')).not.toHaveClass(/line-through/);
 
@@ -139,35 +135,27 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     });
   });
 
-  test('5. Dynamic Workflow Columns: merges unfinished workflow cards into To Do and displays Done column', async ({
+  test('5. People Board Sub-Sections: renders In Progress, Expedited, and Done sections for assignees', async ({
     page,
   }) => {
-    // Show all issues to inspect cards across all dynamic columns
+    // Show all issues to inspect cards across all people columns
     await page.getByRole('button', { name: /All Issues/ }).click();
 
-    // 1. Verify visible columns: To Do and Done are rendered; intermediate columns (In Progress, In Review) are merged into To Do and hidden by default
-    await expect(page.locator('h2', { hasText: 'To Do' })).toBeVisible();
-    await expect(page.locator('h2', { hasText: 'Done' })).toBeVisible();
-    await expect(page.locator('h2', { hasText: 'In Progress' })).not.toBeVisible();
-    await expect(page.locator('h2', { hasText: 'In Review' })).not.toBeVisible();
+    // 1. Verify visible people columns are rendered
+    await expect(page.locator('h2', { hasText: 'Jacek Marchwicki' })).toBeVisible();
+    await expect(page.locator('h2', { hasText: 'Alex Lead' })).toBeVisible();
 
-    // 2. Verify that unfinished cards appear within the To Do column container
-    const todoColumn = page.getByTestId('column-col-todo');
-    await expect(todoColumn.locator('article', { hasText: 'PROJ-101' })).toBeVisible();
-    await expect(todoColumn.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
-    await expect(todoColumn.locator('article', { hasText: 'PROJ-85' })).toBeVisible();
+    // 2. Verify In Progress section renders in-progress issues (PROJ-85)
+    const inProgressSection = page.getByTestId('people-section-inprogress');
+    await expect(inProgressSection.first().locator('article', { hasText: 'PROJ-85' })).toBeVisible();
 
-    // Verify In Progress sub-section inside To Do column renders in-progress issues (PROJ-85)
-    const inProgressSection = page.getByTestId('ready-section-inprogress');
-    await expect(inProgressSection.locator('article', { hasText: 'PROJ-85' })).toBeVisible();
-
-    // Verify Expedited sub-section inside To Do column renders expedited issues (highest priority PROJ-98)
-    const expeditedSection = page.getByTestId('ready-section-expedited');
+    // 3. Verify Expedited section renders expedited issues (highest priority PROJ-98 in Alex Lead column)
+    const expeditedSection = page.getByTestId('people-section-expedited');
     await expect(expeditedSection.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
 
-    // Verify completed cards appear in Done column
-    const doneColumn = page.getByTestId('column-col-done');
-    await expect(doneColumn.locator('article', { hasText: 'PROJ-72' })).toBeVisible();
+    // 4. Verify completed cards appear in Done section
+    const doneSection = page.getByTestId('people-section-done');
+    await expect(doneSection.first().locator('article', { hasText: 'PROJ-72' })).toBeVisible();
   });
 
   test('6. Status Dropdown Transition: Board & People columns have no status select, Backlog retains status dropdown', async ({
@@ -176,20 +164,13 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // 0. Ensure all issues are visible (clear filters)
     await page.getByRole('button', { name: /All Issues/ }).click();
 
-    // 1. Verify Board column cards do NOT contain a status dropdown
-    const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
+    // 1. Verify People column cards do NOT contain a status dropdown
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' }).first();
     await expect(proj101Article).toBeVisible();
     await expect(proj101Article.locator('select[id^="status-select"]')).toHaveCount(0);
     await expect(proj101Article.locator('[role="combobox"][aria-label^="Change status"]')).toHaveCount(0);
 
-    // 2. Verify People column cards do NOT contain a status dropdown
-    await page.locator('header button[aria-label="People View"]').click();
-    const peopleCard = page.locator('article', { hasText: 'PROJ-101' });
-    await expect(peopleCard).toBeVisible();
-    await expect(peopleCard.locator('select[id^="status-select"]')).toHaveCount(0);
-    await expect(peopleCard.locator('[role="combobox"][aria-label^="Change status"]')).toHaveCount(0);
-
-    // 3. Switch to Backlog View and verify status select dropdown is present and functional
+    // 2. Switch to Backlog View and verify status select dropdown is present and functional
     await page.locator('header button[aria-label="Backlog View"]').click();
     const proj104Row = page.locator('[data-testid="backlog-row-PROJ-104"]');
     await expect(proj104Row).toBeVisible();
@@ -212,8 +193,8 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // Verify select value is now updated
     await expect(backlogStatusSelect).toHaveValue('In Progress');
 
-    // 4. Return to Board view and verify bottom Backlog panel also retains status dropdown
-    await page.locator('header button[aria-label="Kanban Board View"]').click();
+    // 3. Return to People view and verify bottom Backlog panel also retains status dropdown
+    await page.locator('header button[aria-label="People View"]').click();
     const expandBacklogBtn = page.locator('button[aria-label="Expand Backlog list"]');
     await expect(expandBacklogBtn).toBeVisible();
     await expandBacklogBtn.click();
@@ -247,6 +228,9 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
   test('8. Quick Filters: "Assigned to Me", "Active", and "Hide Epics" toggle correctly and filter issues', async ({
     page,
   }) => {
+    // Switch to Backlog View to test issue filtering by quick filters
+    await page.locator('header button[aria-label="Backlog View"]').click();
+
     // By default: "Assigned to Me" (current user avatar), "Active", and "Hide Epics" are selected
     const myBtn = page.getByRole('button', { name: /Filter by Jacek|Assigned to Me/i });
     const activeBtn = page.getByRole('button', { name: 'Active' });
@@ -259,19 +243,19 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(allBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
 
     // PROJ-101 (Jacek) and PROJ-85 (unassigned) are visible; PROJ-98 (Alex) is hidden
-    await expect(page.locator('article', { hasText: 'PROJ-101' })).toBeVisible();
-    await expect(page.locator('article', { hasText: 'PROJ-85' })).toBeVisible();
-    await expect(page.locator('article', { hasText: 'PROJ-98' })).not.toBeVisible();
+    await expect(page.locator('div', { hasText: 'PROJ-101' }).first()).toBeVisible();
+    await expect(page.locator('div', { hasText: 'PROJ-85' }).first()).toBeVisible();
+    await expect(page.locator('div', { hasText: 'PROJ-98' })).not.toBeVisible();
 
     // Toggle "Assigned to Me" off -> PROJ-98 should become visible
     await myBtn.click();
     await expect(myBtn).not.toHaveClass(/ring-\[var\(--jira-primary\)\]|bg-\[var\(--jira-primary\)\]/);
-    await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
+    await expect(page.locator('div', { hasText: 'PROJ-98' }).first()).toBeVisible();
 
     // Toggle "Assigned to Me" back on -> PROJ-98 should be hidden again
     await myBtn.click();
     await expect(myBtn).toHaveClass(/ring-\[var\(--jira-primary\)\]|bg-\[var\(--jira-primary\)\]/);
-    await expect(page.locator('article', { hasText: 'PROJ-98' })).not.toBeVisible();
+    await expect(page.locator('div', { hasText: 'PROJ-98' })).not.toBeVisible();
 
     // Click "All Issues" -> all filters cleared, all issues visible
     await allBtn.click();
@@ -279,7 +263,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(myBtn).not.toHaveClass(/ring-\[var\(--jira-primary\)\]|bg-\[var\(--jira-primary\)\]/);
     await expect(activeBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(hideEpicsBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
-    await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
+    await expect(page.locator('div', { hasText: 'PROJ-98' }).first()).toBeVisible();
   });
 
   test('9. PWA Installability: serves valid manifest, icons, service worker, and mobile install prompt', async ({
@@ -430,7 +414,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     expect(postRes.ok()).toBeTruthy();
 
     // Verify newly created issue appears on board
-    await expect(page.locator('article', { hasText: 'Automated E2E Created Issue' })).toBeVisible();
+    await expect(page.locator('article', { hasText: 'Automated E2E Created Issue' }).first()).toBeVisible();
   });
 
   test('12. Done Column Filter: displays recently updated Done issues and hides Done issues older than 2 days', async ({
@@ -439,7 +423,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // Wait for the board to be fully loaded and WebSocket connected
     await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
     await expect(page.getByText('Live WebSocket')).toBeVisible();
-    await expect(page.locator('article', { hasText: 'PROJ-101' })).toBeVisible();
+    await expect(page.locator('article', { hasText: 'PROJ-101' }).first()).toBeVisible();
 
     // 1. Post webhook with a Done issue completed 5 days ago
     const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
@@ -490,21 +474,24 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await allBtn.click();
 
     // 4. Verify recently completed issue is displayed in the Done column
-    await expect(page.locator('article', { hasText: 'PROJ-991' })).toBeVisible();
+    await expect(page.locator('article', { hasText: 'PROJ-991' }).first()).toBeVisible();
 
     // 5. Verify issue completed 5 days ago is NOT displayed in the Done column
     await expect(page.locator('article', { hasText: 'PROJ-990' })).not.toBeVisible();
   });
 
-  test('13. Drag-and-Drop: dragging issue to In Progress drop target at top of Ready transitions it to In Progress', async ({
+  test('13. Drag-and-Drop: dragging issue to another person column reassigns it', async ({
     page,
   }) => {
     // Wait for the board to be fully loaded and WebSocket connected
     await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
     await expect(page.getByText('Live WebSocket')).toBeVisible();
 
-    // Locate card PROJ-101 in Ready/To Do column
-    const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
+    // Show all issues so all people columns are visible
+    await page.getByRole('button', { name: /All Issues/ }).click();
+
+    // Locate card PROJ-101
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' }).first();
     await expect(proj101Article).toBeVisible();
 
     const box = await proj101Article.boundingBox();
@@ -516,15 +503,11 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 25, { steps: 5 });
     }
 
-    // In Progress column must never be rendered on the board
-    await expect(page.getByTestId('column-col-inprogress')).not.toBeAttached();
+    // Locate Alex Lead column
+    const alexColumn = page.getByTestId('people-column-usr-2');
+    await expect(alexColumn).toBeVisible();
 
-    // Drop target must appear at top of Ready list
-    const dropTarget = page.getByTestId('ready-drop-target-inprogress');
-    await expect(dropTarget).toBeVisible();
-
-    // Hover over drop target
-    const targetBox = await dropTarget.boundingBox();
+    const targetBox = await alexColumn.boundingBox();
     expect(targetBox).not.toBeNull();
     if (targetBox) {
       await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 5 });
@@ -532,22 +515,16 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
 
     await page.waitForTimeout(100);
 
-    // Re-target exact center after any DOM layout shift settles
-    const settledBox = await dropTarget.boundingBox();
-    if (settledBox) {
-      await page.mouse.move(settledBox.x + settledBox.width / 2, settledBox.y + settledBox.height / 2, { steps: 2 });
-    }
-
-    const transitionPromise = page.waitForResponse(
-      (res) => res.url().includes('/api/issues/PROJ-101/transition') && res.status() === 200
+    const updatePromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues/PROJ-101') && res.request().method() === 'PUT' && res.status() === 200
     );
 
     await page.mouse.up();
 
-    const transitionResponse = await transitionPromise;
-    expect(transitionResponse.ok()).toBeTruthy();
-    const responseJson = await transitionResponse.json();
-    expect(responseJson.status.name).toBe('In Progress');
+    const updateResponse = await updatePromise;
+    expect(updateResponse.ok()).toBeTruthy();
+    const responseJson = await updateResponse.json();
+    expect(responseJson.assignee.display_name).toBe('Alex Lead');
   });
 
   test('14. DatePicker in Edit Modal: selects date via popover, enters date manually, clears date via clear button, and syncs to backend', async ({
@@ -612,15 +589,11 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     expect(patchJson.due_date).toBeNull();
   });
 
-  test('15. Home as Usual Section: displays active tasks with recreate_after == "1d" in Ready column between In Progress and Other', async ({
+  test('15. Home as Usual Section: displays active tasks with recreate_after == "1d" in People column between In Progress and Other', async ({
     page,
   }) => {
     // Show all issues
     await page.getByRole('button', { name: /All Issues/ }).click();
-
-    // Initially, verify sections in Ready (To Do) column
-    const todoColumn = page.getByTestId('column-col-todo');
-    await expect(todoColumn).toBeVisible();
 
     // Post a webhook creating a daily routine task: Active (start_date in past) and recreate_after: '1d'
     const dailyWebhookRes = await page.request.post('/api/webhooks/jira', {
@@ -646,23 +619,24 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     });
     expect(dailyWebhookRes.ok()).toBeTruthy();
 
-    // Verify "Home as Usual" sub-section appears in Ready column
-    const homeAsUsualSection = todoColumn.getByTestId('ready-section-home-as-usual');
+    // Verify "Home as Usual" sub-section appears in People column
+    const homeAsUsualSection = page.getByTestId('people-section-home-as-usual').first();
     await expect(homeAsUsualSection).toBeVisible();
     await expect(homeAsUsualSection).toContainText('Home as Usual');
     await expect(homeAsUsualSection.locator('article', { hasText: 'PROJ-888' })).toBeVisible();
 
-    // Verify sub-section order in Ready column
-    const sections = todoColumn.locator('[data-testid^="ready-section-"]');
+    // Verify sub-section order in People column
+    const personColumn = page.getByTestId('people-column-usr-1');
+    const sections = personColumn.locator('[data-testid^="people-section-"]');
     const count = await sections.count();
     const testIds: string[] = [];
     for (let i = 0; i < count; i++) {
       testIds.push((await sections.nth(i).getAttribute('data-testid')) || '');
     }
 
-    const inProgressIndex = testIds.indexOf('ready-section-inprogress');
-    const homeAsUsualIndex = testIds.indexOf('ready-section-home-as-usual');
-    const otherIndex = testIds.indexOf('ready-section-other');
+    const inProgressIndex = testIds.indexOf('people-section-inprogress');
+    const homeAsUsualIndex = testIds.indexOf('people-section-home-as-usual');
+    const otherIndex = testIds.indexOf('people-section-other');
 
     expect(homeAsUsualIndex).toBeGreaterThan(inProgressIndex);
     expect(otherIndex).toBeGreaterThan(homeAsUsualIndex);
@@ -671,8 +645,8 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
   test('15. Preferences & View Persistence: "Who is Me" shows all available users and view choice persists across reload', async ({
     page,
   }) => {
-    // 1. Initially on Board view
-    await expect(page.getByRole('button', { name: 'Kanban Board View' })).toBeVisible();
+    // 1. Initially on People view
+    await expect(page.getByRole('button', { name: 'People View' })).toBeVisible();
 
     // 2. Open "Who is Me" picker
     const meChevron = page.getByRole('button', { name: 'Change who is Me' });
@@ -692,25 +666,25 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const savedUser = await page.evaluate(() => localStorage.getItem('ha_jira_current_user'));
     expect(savedUser).toBe('Alex Lead');
 
-    // 3. Switch to People view
-    const peopleBtn = page.getByRole('button', { name: 'People View' });
-    await expect(peopleBtn).toBeVisible();
-    await peopleBtn.click();
-    await expect(page.locator('[data-testid^="people-column-"]').first()).toBeVisible();
+    // 3. Switch to Backlog view
+    const backlogBtn = page.locator('header button[aria-label="Backlog View"]');
+    await expect(backlogBtn).toBeVisible();
+    await backlogBtn.click();
+    await expect(page.locator('[data-testid^="backlog-row-"]').first()).toBeVisible();
 
-    // Verify localStorage has saved ha_jira_current_view as 'people'
+    // Verify localStorage has saved ha_jira_current_view as 'backlog'
     const savedView = await page.evaluate(() => localStorage.getItem('ha_jira_current_view'));
-    expect(savedView).toBe('people');
+    expect(savedView).toBe('backlog');
 
     // 4. Reload page (simulate opening browser next time)
     await page.reload();
 
-    // 5. Verify user is still Alex Lead and view is still People
-    await expect(page.locator('[data-testid^="people-column-"]').first()).toBeVisible();
+    // 5. Verify user is still Alex Lead and view is still Backlog
+    await expect(page.locator('[data-testid^="backlog-row-"]').first()).toBeVisible();
     const reloadedUser = await page.evaluate(() => localStorage.getItem('ha_jira_current_user'));
     expect(reloadedUser).toBe('Alex Lead');
     const reloadedView = await page.evaluate(() => localStorage.getItem('ha_jira_current_view'));
-    expect(reloadedView).toBe('people');
+    expect(reloadedView).toBe('backlog');
   });
 
   test('Account types: saving a Child account succeeds, no error, and is stored on the backend', async ({

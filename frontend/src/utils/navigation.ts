@@ -7,7 +7,7 @@
  */
 import { getBasePath } from './paths.ts';
 
-export type RouteView = 'board' | 'backlog' | 'people';
+export type RouteView = 'people' | 'backlog';
 
 export type Route =
   | { kind: 'view'; view: RouteView }
@@ -17,7 +17,7 @@ export type Route =
   | { kind: 'settings' }
   | { kind: 'root' };
 
-const VIEWS: RouteView[] = ['board', 'backlog', 'people'];
+const VIEWS: RouteView[] = ['people', 'backlog'];
 
 /** history.state marker identifying entries pushed by the app itself. */
 const NAV_STATE_MARKER = 'appNav';

@@ -12,7 +12,7 @@ import {
 describe('navigation routes', () => {
   it('parses view, task, create and root routes', () => {
     expect(parseRoute('/')).toEqual({ kind: 'root' });
-    expect(parseRoute('/board')).toEqual({ kind: 'view', view: 'board' });
+    expect(parseRoute('/board')).toEqual({ kind: 'root' });
     expect(parseRoute('/backlog/')).toEqual({ kind: 'view', view: 'backlog' });
     expect(parseRoute('/people')).toEqual({ kind: 'view', view: 'people' });
     expect(parseRoute('/task/HOME-123')).toEqual({ kind: 'task', key: 'HOME-123' });
@@ -45,7 +45,7 @@ describe('navigation routes', () => {
 
 describe('navigation history', () => {
   beforeEach(() => {
-    window.history.replaceState(null, '', '/board');
+    window.history.replaceState(null, '', '/people');
   });
 
   it('pushes entries and reads the current route', () => {
@@ -56,14 +56,14 @@ describe('navigation history', () => {
 
   it('does not push duplicate entries', () => {
     const before = window.history.length;
-    pushRoute({ kind: 'view', view: 'board' });
+    pushRoute({ kind: 'view', view: 'people' });
     expect(window.history.length).toBe(before);
   });
 
   it('replaces the URL on deep-linked overlay close', () => {
     window.history.replaceState(null, '', '/task/HOME-1');
-    closeOverlayRoute({ kind: 'view', view: 'board' });
-    expect(window.location.pathname).toBe('/board');
+    closeOverlayRoute({ kind: 'view', view: 'people' });
+    expect(window.location.pathname).toBe('/people');
   });
 
   it('replaceRoute swaps the current URL', () => {

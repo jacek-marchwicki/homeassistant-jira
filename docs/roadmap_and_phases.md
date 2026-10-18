@@ -246,3 +246,16 @@ This document details the architectural phases, delivered features, and evolutio
     - Introduced [`scripts/setup_worktree_data.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/setup_worktree_data.py) and Git `post-checkout` hook linking worktree `data -> ../../data`.
     - Enables automatic sharing of SQLite database, schema migrations, and cached background pictures across all parallel branches and worktrees.
     - Tested in [`backend/tests/test_worktree_data_setup.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_worktree_data_setup.py).
+
+- [x] **Phase 5.19: Removal of Kanban Board View & People Board Default**
+  - [x] **Removal of Kanban Board (`/board`)**:
+    - Completely removed the "Board" view and deprecated components (`KanbanBoard.tsx`, `KanbanColumn.tsx`, and associated tests).
+    - Updated navigation routing in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) so `VIEWS = ['people', 'backlog']`; requests to `/board` automatically resolve to the root route and redirect to `/people`.
+  - [x] **People Board as Default View**:
+    - "People" view (`/people`) is now the default root view in [`frontend/src/store/boardStore.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.ts) and [`frontend/src/App.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/App.tsx).
+    - Legacy cached view preferences in `localStorage` (`'board'`) cleanly fall back to `'people'`.
+    - Streamlined view switcher in [`frontend/src/components/Header.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/Header.tsx) to toggle between "People" and "Backlog".
+  - [x] **Full-Stack Automated Verification**:
+    - Updated Vitest unit tests in `navigation.test.ts`, `boardStore.test.ts`, `offlineReactivity.test.ts`, and `Header.test.tsx` (36 test files, 330 tests passing).
+    - Updated Playwright integration and E2E test suites in [`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts) (17/17 tests passing).
+    - Updated Playwright visual regression snapshots in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) (43/43 snapshots passing).

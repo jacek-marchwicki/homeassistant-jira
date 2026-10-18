@@ -97,9 +97,9 @@ describe('Cross-View & Filter Offline Reactivity', () => {
     expect(doneColumnIssues.length).toBe(1);
     expect(doneColumnIssues[0].key).toBe('PROJ-201');
 
-    // 8. Switching current view to 'board'
-    useBoardStore.getState().setCurrentView('board');
-    expect(useBoardStore.getState().currentView).toBe('board');
+    // 8. Switching current view to 'people'
+    useBoardStore.getState().setCurrentView('people');
+    expect(useBoardStore.getState().currentView).toBe('people');
 
     // 9. Verify offline mutation is queued in localStorage outbox
     const outbox = useBoardStore.getState().offlineOutbox;

@@ -184,7 +184,6 @@ This document details the architectural phases, delivered features, and evolutio
     - Added Pydantic field validators to `JiraDashboardSettings` in [`backend/src/jira_dashboard/config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/config.py) ensuring empty or whitespace-only strings from Home Assistant forms safely fallback to standard defaults (`None` for API key, default model ID, and default prompt template).
   - [x] **Automated Test Coverage**:
     - Added comprehensive test assertions in [`backend/tests/test_packaging_and_addon.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_packaging_and_addon.py) and [`backend/tests/test_gemini_config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_gemini_config.py).
-<<<<<<< HEAD
 - [x] **Phase 5.13: Filter Bar Style Polish: Assignee Avatars First & Mobile Expandable Search**
   - [x] **Assignee Avatars First on Filter Bar**:
     - Reordered the filter bar elements so that the Assignee Avatars group appears as the very first item, preceding "All Issues", "Active", and "Hide Epics".
@@ -202,20 +201,22 @@ This document details the architectural phases, delivered features, and evolutio
     - Full-stack E2E Playwright test validating assignee avatar filtering and toggle behavior.
     - Playwright visual regression snapshots capturing mobile expanded search (`component-filterbar-mobile-search-expanded.png`) and updated filter bar snapshots across 42 tests.
 
-- [x] **Phase 5.13: URL-Based Navigation**
-  - [x] **Routes**: Every navigable state maps to a URL so browser back/forward work: `/board`, `/backlog`, `/people`, `/task/HOME-123` (task modal) and `/create` (create dialog). Implemented in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) using the History API (no new dependency); `/` redirects to the last used view.
+- [x] **Phase 5.14: URL-Based Navigation**
+  - [x] **Routes**: Every navigable state maps to a URL so browser back/forward work: `/board`, `/backlog`, `/people`, `/task/HOME-123` (task modal), `/create` (create dialog), `/settings` (settings view), and `/status` (connection status modal). Implemented in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) using the History API (no new dependency); `/` redirects to the last used view.
   - [x] **Store integration**: `boardStore` setters push history entries and update state immediately (optimistic, no latency); a `popstate` listener applies the URL back to state. Deep links to `/task/KEY` resolve once issues load (from offline cache, API or WebSocket); unknown keys fall back to the current view. Closing an overlay opened in-app goes back one entry so history does not grow.
   - [x] **Ingress / standalone**: Routes are resolved relative to the Ingress base path; `index.html` sets a runtime `<base href>` so relative assets load on deep links, and the backend serves `index.html` as an SPA fallback for unknown paths (`SPAStaticFiles`).
   - [x] **Offline**: Navigation is purely client-side and works offline using the cached board.
   - [x] **Tests**: [`navigation.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.test.ts), URL navigation cases in `boardStore.test.ts`, and [`backend/tests/test_spa_fallback.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_spa_fallback.py).
-- [x] **Phase 5.14: Child Accounts & "Show child" Switch**
+
+- [x] **Phase 5.15: Child Accounts & "Show child" Switch**
   - [x] **Account Types**: Each person can be marked "Parent" (default) or "Child" in the "Who is Me" picker. Stored client-side in `localStorage` (`ha_jira_account_types`), keyed by lower-cased display name; updates apply instantly and work offline.
   - [x] **Filtering**: A child never sees unassigned tasks in "Assigned to Me" (Board/Backlog) or in their People column. Parents see own + unassigned tasks.
   - [x] **Show child switch**: Off-by-default switch in the filter bar (Board and People views) that adds child-assigned tasks to parents' views.
   - [x] **Tests**: `boardUtils.test.ts`, `boardStore.test.ts`, `FilterBar.test.tsx`.
   - [x] **Settings screen**: Account types are now managed in a dedicated "Settings" view (header gear button) instead of the "Who is Me" drop-down, which is back to its original behavior. Tests: `SettingsView.test.tsx`.
   - [x] **Full-screen Settings & shared backend storage**: Settings is now a full-screen page opened from an icon-only gear button in the header (route `/settings`, part of URL-based navigation; browser back returns to the previous screen). Account types are persisted in the backend SQLite `account_types` table (`GET/PUT /api/account-types`), broadcast to all clients via the `account_types_updated` WebSocket event, applied optimistically with rollback on failure, and cached in `localStorage` for offline start-up.
-- [x] **Phase 5.15: Jira Rich Formatting (ADF <-> Markdown) for Descriptions & Comments**
+
+- [x] **Phase 5.16: Jira Rich Formatting (ADF <-> Markdown) for Descriptions & Comments**
   - [x] **Bidirectional Atlassian Document Format (ADF) Engine**:
     - Implemented [`backend/src/jira_dashboard/adapters/adf.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/adf.py) for lossless bidirectional conversion between Jira Cloud ADF JSON structures and Markdown text.
     - Preserves headings, bold, italics, strikethrough, inline code, links, bulleted lists, numbered lists, blockquotes, fenced code blocks, task list items, and horizontal rules.
@@ -228,7 +229,7 @@ This document details the architectural phases, delivered features, and evolutio
     - Frontend component tests in [`frontend/src/components/RichTextEditor.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/RichTextEditor.test.tsx).
     - 100% passing local CI verification across all backend and frontend test suites.
 
-- [x] **Phase 5.16: Connection Status Details Popup**
+- [x] **Phase 5.17: Connection Status Details Popup**
   - [x] **Clickable Connection Badge & /status Route**:
     - Clicking the header sync / live WebSocket badge opens [`ConnectionStatusModal`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.tsx) (full screen on mobile, centered dialog on larger viewports, 44px touch targets).
     - Mapped to `/status` URL route with browser back/forward and Escape key support, matching the new navigation and overlay architecture.
@@ -239,3 +240,9 @@ This document details the architectural phases, delivered features, and evolutio
     - Lists every queued `offlineOutbox` mutation (action, issue key, time) or "Nothing pending". Read-only; no effect on optimistic latency or FIFO replay.
   - [x] **Test Coverage**:
     - `ConnectionStatusModal.test.tsx`, `navigation.test.ts`, and `boardStore.test.ts` covering closed, connected, disconnected-with-pending, close action, Escape key, and URL routing.
+
+- [x] **Phase 5.18: Worktrees Data Reusability & Shared Caches**
+  - [x] **Shared Data Symlinking for Isolated Worktrees**:
+    - Introduced [`scripts/setup_worktree_data.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/setup_worktree_data.py) and Git `post-checkout` hook linking worktree `data -> ../../data`.
+    - Enables automatic sharing of SQLite database, schema migrations, and cached background pictures across all parallel branches and worktrees.
+    - Tested in [`backend/tests/test_worktree_data_setup.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_worktree_data_setup.py).

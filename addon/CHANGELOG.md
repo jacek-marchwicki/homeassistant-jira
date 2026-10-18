@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- **URL-Based Navigation & Deep Linking**: Full browser history integration (History API) with dedicated URL routes for `/board`, `/backlog`, `/people`, `/task/{key}`, `/create`, `/settings`, and `/status`. Deep links resolve gracefully after cache/API load, browser back/forward buttons seamlessly update state without page reload, and SPA fallback serves `index.html` across all dynamic subpaths.
+- **Dedicated Settings View & Account Classification**: Full-screen Settings screen (`/settings`) allowing classification of household/team members as Parent (default) or Child. Account types are persisted in backend SQLite storage (`/api/account-types`) and synchronized real-time via WebSocket events (`account_types_updated`) with offline caching.
+- **"Show child" Filter Toggle**: One-tap filter toggle on Board and People views enabling parents to view tasks assigned to children in addition to their own and unassigned tasks, while ensuring child accounts only see tasks assigned directly to them.
+- **Connection Status Diagnostics Modal**: Dedicated connection status dialog (`/status`) accessible by clicking the header connection badge, providing live WebSocket status, failure cause diagnostics, automatic reconnect retry countdown, and inspection of pending offline outbox mutations.
+- **Bidirectional Atlassian Document Format (ADF) Engine**: Lossless conversion between Jira Cloud ADF JSON structures and Markdown text, supporting headings, bold, italics, strikethrough (`~~text~~`), inline code, links, bulleted/numbered lists, blockquotes, code blocks, horizontal rules, and task list checkboxes across issue descriptions and comments.
+- **Filter Bar Avatars-First Visual Polish**: Positioned assignee avatars first in the filter bar with interactive click selection, visual ring indicators, and responsive mobile expandable quick-search input.
+- **Shared Worktree Data & Developer Experience**: Automated symlinking and sharing of data directory, SQLite database schemas, and AI image cache across Git worktrees via `.githooks/post-checkout` and `scripts/setup_worktree_data.py`.
+
 ## 0.3.1
 
 - **Home Assistant UI Gemini AI Configuration**: Exposed all Gemini AI background configuration options (`gemini_api_key`, `gemini_model`, `gemini_prompt_template`, `gemini_daily_limit`, `gemini_debounce_seconds`, `gemini_cache_retention_seconds`) in Home Assistant Add-on manifest with typed schema (`password?`, `str?`, `int?`).

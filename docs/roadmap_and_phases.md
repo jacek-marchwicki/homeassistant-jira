@@ -184,6 +184,7 @@ This document details the architectural phases, delivered features, and evolutio
     - Added Pydantic field validators to `JiraDashboardSettings` in [`backend/src/jira_dashboard/config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/config.py) ensuring empty or whitespace-only strings from Home Assistant forms safely fallback to standard defaults (`None` for API key, default model ID, and default prompt template).
   - [x] **Automated Test Coverage**:
     - Added comprehensive test assertions in [`backend/tests/test_packaging_and_addon.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_packaging_and_addon.py) and [`backend/tests/test_gemini_config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_gemini_config.py).
+<<<<<<< HEAD
 - [x] **Phase 5.13: Filter Bar Style Polish: Assignee Avatars First & Mobile Expandable Search**
   - [x] **Assignee Avatars First on Filter Bar**:
     - Reordered the filter bar elements so that the Assignee Avatars group appears as the very first item, preceding "All Issues", "Active", and "Hide Epics".
@@ -200,10 +201,6 @@ This document details the architectural phases, delivered features, and evolutio
     - Unit tests in `FilterBar.test.tsx` verifying avatars-first ordering, avatar click interactions, and mobile search expand/collapse.
     - Full-stack E2E Playwright test validating assignee avatar filtering and toggle behavior.
     - Playwright visual regression snapshots capturing mobile expanded search (`component-filterbar-mobile-search-expanded.png`) and updated filter bar snapshots across 42 tests.
-
-
-
-
 - [x] **Phase 5.13: URL-Based Navigation**
   - [x] **Routes**: Every navigable state maps to a URL so browser back/forward work: `/board`, `/backlog`, `/people`, `/task/HOME-123` (task modal) and `/create` (create dialog). Implemented in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) using the History API (no new dependency); `/` redirects to the last used view.
   - [x] **Store integration**: `boardStore` setters push history entries and update state immediately (optimistic, no latency); a `popstate` listener applies the URL back to state. Deep links to `/task/KEY` resolve once issues load (from offline cache, API or WebSocket); unknown keys fall back to the current view. Closing an overlay opened in-app goes back one entry so history does not grow.
@@ -217,3 +214,15 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Tests**: `boardUtils.test.ts`, `boardStore.test.ts`, `FilterBar.test.tsx`.
   - [x] **Settings screen**: Account types are now managed in a dedicated "Settings" view (header gear button) instead of the "Who is Me" drop-down, which is back to its original behavior. Tests: `SettingsView.test.tsx`.
   - [x] **Full-screen Settings & shared backend storage**: Settings is now a full-screen page opened from an icon-only gear button in the header (route `/settings`, part of URL-based navigation; browser back returns to the previous screen). Account types are persisted in the backend SQLite `account_types` table (`GET/PUT /api/account-types`), broadcast to all clients via the `account_types_updated` WebSocket event, applied optimistically with rollback on failure, and cached in `localStorage` for offline start-up.
+- [x] **Phase 5.15: Jira Rich Formatting (ADF <-> Markdown) for Descriptions & Comments**
+  - [x] **Bidirectional Atlassian Document Format (ADF) Engine**:
+    - Implemented [`backend/src/jira_dashboard/adapters/adf.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/adf.py) for lossless bidirectional conversion between Jira Cloud ADF JSON structures and Markdown text.
+    - Preserves headings, bold, italics, strikethrough, inline code, links, bulleted lists, numbered lists, blockquotes, fenced code blocks, task list items, and horizontal rules.
+    - Replaced legacy text squashing in [`backend/src/jira_dashboard/adapters/jira_cloud_client.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/jira_cloud_client.py) where Jira descriptions and comments were flattened into space-delimited text.
+  - [x] **Frontend Rich Text Formatting Polish**:
+    - Extended `renderRichText` in [`frontend/src/components/RichTextEditor.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/RichTextEditor.tsx) to support strikethrough (`~~text~~`), horizontal rules (`---`), and interactive task list checkboxes (`- [ ]`, `- [x]`).
+    - Connected `renderRichText` into [`frontend/src/components/CommentsSection.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CommentsSection.tsx) so comments render with full markdown formatting.
+  - [x] **Comprehensive Test Verification**:
+    - Backend unit tests in [`backend/tests/test_adf.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_adf.py) and [`backend/tests/test_jira_cloud_client.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_jira_cloud_client.py) verifying ADF parsing, serialization, and roundtripping.
+    - Frontend component tests in [`frontend/src/components/RichTextEditor.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/RichTextEditor.test.tsx).
+    - 100% passing local CI verification across all backend and frontend test suites.

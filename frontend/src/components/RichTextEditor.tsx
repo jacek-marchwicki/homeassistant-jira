@@ -63,10 +63,10 @@ export function renderRichText(markdown: string): React.ReactNode {
   };
 
   const parseInline = (text: string): React.ReactNode[] => {
-    // Basic inline markdown: bold, italic, code, link
+    // Basic inline markdown: bold, italic, code, link, strikethrough
     const parts: React.ReactNode[] = [];
-    // Regex matching: links [text](url), code `text`, bold **text**, italic *text*
-    const tokenRegex = /(\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*)/g;
+    // Regex matching: links [text](url), code `text`, bold **text**, italic *text*, strikethrough ~~text~~
+    const tokenRegex = /(\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|~~([^~]+)~~)/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
@@ -113,6 +113,13 @@ export function renderRichText(markdown: string): React.ReactNode {
           <em key={`inline-${match.index}`} className="italic text-[var(--jira-text-primary)]">
             {match[6]}
           </em>
+        );
+      } else if (match[7]) {
+        // Strikethrough ~~text~~
+        parts.push(
+          <del key={`inline-${match.index}`} className="line-through text-[var(--jira-text-secondary)]">
+            {match[7]}
+          </del>
         );
       }
 
@@ -183,6 +190,15 @@ export function renderRichText(markdown: string): React.ReactNode {
       continue;
     }
 
+    // Horizontal Rule (--- or ***)
+    if (line.trim() === '---' || line.trim() === '***' || line.trim() === '___') {
+      flushList();
+      elements.push(
+        <hr key={`hr-${i}`} className="my-2.5 border-[var(--jira-border)]" />
+      );
+      continue;
+    }
+
     // Blockquote
     if (line.startsWith('> ')) {
       flushList();
@@ -204,11 +220,30 @@ export function renderRichText(markdown: string): React.ReactNode {
         flushList();
         listType = 'ul';
       }
-      currentListItems.push(
-        <li key={`li-${i}`} className="text-[var(--jira-text-primary)]">
-          {parseInline(ulMatch[2])}
-        </li>
-      );
+      const itemText = ulMatch[2];
+      const taskMatch = /^\[([ xX])\]\s*(.*)$/.exec(itemText);
+      if (taskMatch) {
+        const isChecked = taskMatch[1].toLowerCase() === 'x';
+        currentListItems.push(
+          <li key={`li-${i}`} className="list-none flex items-start gap-2 text-[var(--jira-text-primary)]">
+            <input
+              type="checkbox"
+              readOnly
+              checked={isChecked}
+              className="mt-0.5 rounded border-[var(--jira-border)] accent-[var(--jira-primary)] cursor-default"
+            />
+            <span className={isChecked ? 'line-through text-[var(--jira-text-secondary)]' : ''}>
+              {parseInline(taskMatch[2])}
+            </span>
+          </li>
+        );
+      } else {
+        currentListItems.push(
+          <li key={`li-${i}`} className="text-[var(--jira-text-primary)]">
+            {parseInline(itemText)}
+          </li>
+        );
+      }
       continue;
     }
 

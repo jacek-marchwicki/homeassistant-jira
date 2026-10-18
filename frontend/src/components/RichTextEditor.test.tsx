@@ -111,7 +111,7 @@ describe('RichTextEditor component', () => {
     expect(handleChange).toHaveBeenCalledWith('**sample**');
   });
 
-  it('renders markdown elements correctly via renderRichText helper', () => {
+  it('renders markdown elements correctly via renderRichText helper', async () => {
     // Empty text
     const emptyResult = renderRichText('');
     expect(emptyResult).toBeDefined();
@@ -127,10 +127,27 @@ describe('RichTextEditor component', () => {
 \`\`\`
 const x = 1;
 \`\`\`
-Visit [Google](https://google.com) and check \`inline code\` and *italic*!`;
+Visit [Google](https://google.com) and check \`inline code\` and *italic* and ~~struck~~!
+---
+- [ ] Task incomplete
+- [x] Task complete`;
 
-    const rendered = renderRichText(markdown);
-    expect(rendered).toBeDefined();
+    await act(async () => {
+      root.render(<div>{renderRichText(markdown)}</div>);
+    });
+
+    expect(container.querySelector('h2')?.textContent).toBe('H1 Title');
+    expect(container.querySelector('h3')?.textContent).toBe('H2 Subtitle');
+    expect(container.querySelector('h4')?.textContent).toBe('H3 Subheader');
+    expect(container.querySelector('blockquote')?.textContent).toBe('Blockquote text');
+    expect(container.querySelector('code')?.textContent).toBe('const x = 1;');
+    expect(container.querySelector('del')?.textContent).toBe('struck');
+    expect(container.querySelector('hr')).not.toBeNull();
+
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+    expect(checkboxes.length).toBe(2);
+    expect((checkboxes[0] as HTMLInputElement).checked).toBe(false);
+    expect((checkboxes[1] as HTMLInputElement).checked).toBe(true);
   });
 
   it('generates unique id attribute when id is omitted across multiple instances', async () => {

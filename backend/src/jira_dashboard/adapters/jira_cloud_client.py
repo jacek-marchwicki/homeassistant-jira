@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from jira_dashboard.adapters.adf import adf_to_markdown, markdown_to_adf
 from jira_dashboard.adapters.jira_client import (
     STATUS_MAP,
     JiraAPIError,
@@ -393,22 +394,9 @@ class JiraCloudClient(JiraClientProtocol):
             description = raw_description
         elif isinstance(raw_description, dict):
             try:
-
-                def _extract_adf_text(node: Any) -> list[str]:
-                    texts = []
-                    if isinstance(node, dict):
-                        if node.get("type") == "text" and "text" in node:
-                            texts.append(str(node["text"]))
-                        for v in node.values():
-                            texts.extend(_extract_adf_text(v))
-                    elif isinstance(node, list):
-                        for item in node:
-                            texts.extend(_extract_adf_text(item))
-                    return texts
-
-                extracted = " ".join(_extract_adf_text(raw_description)).strip()
-                description = extracted if extracted else None
+                description = adf_to_markdown(raw_description) or None
             except Exception:
+                logger.exception("Failed converting ADF description for %s", key)
                 description = None
 
         created_at = fields.get("created") or fields.get("created_at")
@@ -987,20 +975,7 @@ class JiraCloudClient(JiraClientProtocol):
         if summary is not None:
             fields["summary"] = summary
         if description is not None:
-            fields["description"] = (
-                {
-                    "type": "doc",
-                    "version": 1,
-                    "content": [
-                        {
-                            "type": "paragraph",
-                            "content": [{"type": "text", "text": description}],
-                        }
-                    ],
-                }
-                if description
-                else None
-            )
+            fields["description"] = markdown_to_adf(description) if description else None
         if priority is not None:
             fields["priority"] = {"name": priority.value.capitalize()}
         if issue_type is not None:
@@ -1103,16 +1078,7 @@ class JiraCloudClient(JiraClientProtocol):
             "priority": {"name": priority.value.capitalize()},
         }
         if description:
-            fields["description"] = {
-                "type": "doc",
-                "version": 1,
-                "content": [
-                    {
-                        "type": "paragraph",
-                        "content": [{"type": "text", "text": description}],
-                    }
-                ],
-            }
+            fields["description"] = markdown_to_adf(description)
         if due_date:
             fields["duedate"] = due_date
         if start_date:
@@ -1212,20 +1178,11 @@ class JiraCloudClient(JiraClientProtocol):
         if isinstance(raw_body, str):
             body_text = raw_body
         elif isinstance(raw_body, dict):
-
-            def _extract_adf(node: Any) -> list[str]:
-                texts = []
-                if isinstance(node, dict):
-                    if node.get("type") == "text" and "text" in node:
-                        texts.append(str(node["text"]))
-                    for v in node.values():
-                        texts.extend(_extract_adf(v))
-                elif isinstance(node, list):
-                    for item in node:
-                        texts.extend(_extract_adf(item))
-                return texts
-
-            body_text = "\n".join(_extract_adf(raw_body)).strip()
+            try:
+                body_text = adf_to_markdown(raw_body)
+            except Exception:
+                logger.exception("Failed converting ADF comment body")
+                body_text = ""
 
         author: JiraUser | None = None
         author_data = data.get("author")
@@ -1291,16 +1248,7 @@ class JiraCloudClient(JiraClientProtocol):
     ) -> JiraComment:
         """Add a comment to an issue via Jira Cloud REST API."""
         payload = {
-            "body": {
-                "type": "doc",
-                "version": 1,
-                "content": [
-                    {
-                        "type": "paragraph",
-                        "content": [{"type": "text", "text": body}],
-                    }
-                ],
-            }
+            "body": markdown_to_adf(body),
         }
         try:
             res = await self._send_request(

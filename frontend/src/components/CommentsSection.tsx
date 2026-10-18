@@ -3,6 +3,7 @@ import { MessageSquare, Send, Pencil, Trash2, Check, X, AlertCircle } from 'luci
 import { JiraComment } from '../types/jira.ts';
 import { useBoardStore } from '../store/boardStore.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
+import { renderRichText } from './RichTextEditor.tsx';
 import { getApiUrl } from '../utils/paths.ts';
 
 interface CommentsSectionProps {
@@ -307,9 +308,9 @@ export function CommentsSection({
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-[var(--jira-text-primary)] whitespace-pre-wrap leading-relaxed">
-                    {comment.body}
-                  </p>
+                  <div className="text-xs text-[var(--jira-text-primary)] leading-relaxed">
+                    {renderRichText(comment.body)}
+                  </div>
                 )}
               </div>
             );

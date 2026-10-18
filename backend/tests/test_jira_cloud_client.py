@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from typing import Any
 
 import httpx
 import pytest
@@ -1142,6 +1144,126 @@ def test_create_issue_ranks_before_key_and_preserves_top_rank() -> None:
         # Even though Jira returned bottom rank '0|i00099:',
         # client preserves requested top rank '0|i00000:'
         assert created.rank == "0|i00000:"
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_parse_issue_with_adf_description() -> None:
+    """Verify _parse_issue converts rich ADF description into Markdown."""
+    settings = JiraDashboardSettings(
+        jira_url="https://example.atlassian.net",
+        jira_email="user@example.com",
+        jira_api_token="token",
+    )
+    client = JiraCloudClient(settings)
+
+    raw_issue = {
+        "id": "100",
+        "key": "DEV-100",
+        "fields": {
+            "summary": "Sample Issue",
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "heading",
+                        "attrs": {"level": 2},
+                        "content": [{"type": "text", "text": "Step 1"}],
+                    },
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {"type": "text", "text": "Do this with "},
+                            {
+                                "type": "text",
+                                "text": "care",
+                                "marks": [{"type": "strong"}],
+                            },
+                        ],
+                    },
+                ],
+            },
+            "priority": {"name": "Medium"},
+            "issuetype": {"name": "Task"},
+            "status": {
+                "id": "1",
+                "name": "To Do",
+                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+            },
+        },
+    }
+
+    issue = client._parse_issue(raw_issue)
+    assert issue.description == "## Step 1\n\nDo this with **care**"
+
+
+def test_create_and_update_issue_with_adf_description() -> None:
+    """Verify create_issue and update_issue serialize markdown description to ADF."""
+
+    async def _test() -> None:
+        last_request_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal last_request_body
+            if request.method == "POST" and "/issue" in str(request.url):
+                last_request_body = json.loads(request.content.decode("utf-8"))
+                return httpx.Response(
+                    201,
+                    json={
+                        "id": "101",
+                        "key": "DEV-101",
+                        "fields": {
+                            "summary": "Created with ADF",
+                            "priority": {"name": "Low"},
+                            "issuetype": {"name": "Task"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                        },
+                    },
+                )
+            if request.method == "PUT" and "/issue/DEV-101" in str(request.url):
+                last_request_body = json.loads(request.content.decode("utf-8"))
+                return httpx.Response(204)
+            if request.method == "GET" and "/issue/DEV-101" in str(request.url):
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "101",
+                        "key": "DEV-101",
+                        "fields": {
+                            "summary": "Created with ADF",
+                            "priority": {"name": "Low"},
+                            "issuetype": {"name": "Task"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        await client.create_issue(
+            summary="Created with ADF",
+            board_id="DEV",
+            description="- Item 1\n- Item 2",
+        )
+        assert last_request_body["fields"]["description"]["type"] == "doc"
+        assert last_request_body["fields"]["description"]["content"][0]["type"] == "bulletList"
+
+        await client.update_issue(
+            issue_key="DEV-101",
+            description="Just updated text",
+        )
+        assert last_request_body["fields"]["description"]["type"] == "doc"
+        assert last_request_body["fields"]["description"]["content"][0]["type"] == "paragraph"
         await client.close()
 
     asyncio.run(_test())

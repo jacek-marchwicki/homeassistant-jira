@@ -32,6 +32,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from jira_dashboard.adapters import (
     DEFAULT_COLUMNS,
@@ -1319,7 +1320,27 @@ CANDIDATE_DIST_DIRS = [
     "/app/frontend/dist",
 ]
 
+
+class SPAStaticFiles(StaticFiles):
+    """Static files with a single-page-app fallback to ``index.html``.
+
+    Client-side routes such as ``/task/HOME-123`` have no file on disk; serving
+    ``index.html`` for them lets the frontend router handle deep links and reloads.
+    """
+
+    async def get_response(self, path: str, scope: Any) -> Response:
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            return await super().get_response("index.html", scope)
+        if response.status_code == 404:
+            return await super().get_response("index.html", scope)
+        return response
+
+
 for candidate in CANDIDATE_DIST_DIRS:
     if os.path.isdir(candidate):
-        app.mount("/", StaticFiles(directory=candidate, html=True), name="static")
+        app.mount("/", SPAStaticFiles(directory=candidate, html=True), name="static")
         break

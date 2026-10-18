@@ -9,6 +9,13 @@ import {
 } from '../types/jira.ts';
 import { applyTheme, getInitialTheme, ThemeMode } from '../tokens/themeBridge.ts';
 import { getApiUrl } from '../utils/paths.ts';
+import {
+  Route,
+  closeOverlayRoute,
+  getCurrentRoute,
+  pushRoute,
+  replaceRoute,
+} from '../utils/navigation.ts';
 import { calculateRankBetween, sortIssuesByRank } from '../utils/boardUtils.ts';
 
 const CATEGORY_TITLES: Record<JiraStatusCategory, string> = {
@@ -187,6 +194,8 @@ export interface BoardStoreState {
   isBacklogExpandedOnBoard: boolean;
   editingIssue: JiraIssue | null;
   isCreateModalOpen: boolean;
+  /** Task key requested by the URL (/task/KEY) that is not yet resolved to an issue. */
+  routeTaskKey: string | null;
   offlineOutbox: OfflineOutboxItem[];
   syncStatus: 'synced' | 'syncing' | 'offline';
   pendingSyncCount: number;
@@ -205,6 +214,10 @@ export interface BoardStoreState {
   toggleBacklogExpandedOnBoard: () => void;
   setEditingIssue: (issue: JiraIssue | null) => void;
   setCreateModalOpen: (open: boolean) => void;
+  /** Applies a URL route to UI state without touching browser history. */
+  applyRoute: (route: Route) => void;
+  /** Resolves a pending /task/KEY route once issues are available. */
+  resolveRouteTask: () => void;
   moveToBacklog: (issueKey: string) => Promise<void>;
   moveToBoard: (issueKey: string) => Promise<void>;
   loadBoard: () => Promise<void>;
@@ -228,6 +241,7 @@ export interface BoardStoreState {
 
 const initialCache = loadCachedBoard();
 const initialOutbox = loadCachedOutbox();
+const initialRoute = getCurrentRoute();
 
 export const useBoardStore = create<BoardStoreState>((set, get) => ({
   theme: getInitialTheme(),
@@ -248,10 +262,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   currentUser: loadCachedUser(),
   errorMessage: null,
   rollbackQueue: {},
-  currentView: loadCachedView(),
+  currentView: initialRoute.kind === 'view' ? initialRoute.view : loadCachedView(),
   isBacklogExpandedOnBoard: false,
   editingIssue: null,
-  isCreateModalOpen: false,
+  isCreateModalOpen: initialRoute.kind === 'create',
+  routeTaskKey: initialRoute.kind === 'task' ? initialRoute.key : null,
   offlineOutbox: initialOutbox,
   syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
   pendingSyncCount: initialOutbox.length,
@@ -264,16 +279,66 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   },
 
   setEditingIssue: (issue: JiraIssue | null) => {
-    set({ editingIssue: issue });
+    if (issue) {
+      pushRoute({ kind: 'task', key: issue.key });
+      set({ editingIssue: issue, routeTaskKey: issue.key, isCreateModalOpen: false });
+    } else {
+      const wasOpen = Boolean(get().editingIssue) || get().routeTaskKey !== null;
+      set({ editingIssue: null, routeTaskKey: null });
+      if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
+    }
   },
 
   setCreateModalOpen: (open: boolean) => {
-    set({ isCreateModalOpen: open });
+    if (open) {
+      pushRoute({ kind: 'create' });
+      set({ isCreateModalOpen: true, editingIssue: null, routeTaskKey: null });
+    } else {
+      const wasOpen = get().isCreateModalOpen;
+      set({ isCreateModalOpen: false });
+      if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
+    }
   },
 
   setCurrentView: (view: DashboardView) => {
     saveCachedView(view);
-    set({ currentView: view });
+    pushRoute({ kind: 'view', view });
+    set({ currentView: view, editingIssue: null, routeTaskKey: null, isCreateModalOpen: false });
+  },
+
+  applyRoute: (route: Route) => {
+    if (route.kind === 'task') {
+      set({ routeTaskKey: route.key, isCreateModalOpen: false, editingIssue: null });
+      get().resolveRouteTask();
+    } else if (route.kind === 'create') {
+      set({ isCreateModalOpen: true, editingIssue: null, routeTaskKey: null });
+    } else if (route.kind === 'view') {
+      saveCachedView(route.view);
+      set({
+        currentView: route.view,
+        editingIssue: null,
+        routeTaskKey: null,
+        isCreateModalOpen: false,
+      });
+    } else {
+      // Root: show the last used view, with no overlays.
+      const view = loadCachedView();
+      replaceRoute({ kind: 'view', view });
+      set({ currentView: view, editingIssue: null, routeTaskKey: null, isCreateModalOpen: false });
+    }
+  },
+
+  resolveRouteTask: () => {
+    const { routeTaskKey, editingIssue, issues, isLoading, currentView } = get();
+    if (!routeTaskKey || editingIssue?.key === routeTaskKey) return;
+    const found = issues.find((i) => i.key === routeTaskKey);
+    if (found) {
+      set({ editingIssue: found });
+    } else if (!isLoading && issues.length > 0) {
+      // Unknown task: fall back to the current view instead of leaving a dead URL.
+      set({ routeTaskKey: null });
+      replaceRoute({ kind: 'view', view: currentView });
+    }
   },
 
   toggleBacklogExpandedOnBoard: () => {
@@ -602,11 +667,14 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       };
     });
 
+    const wasEditing = Boolean(get().editingIssue) || get().routeTaskKey !== null;
     set({
       issues: updatedIssues,
       rollbackQueue: { ...rollbackQueue, [issueKey]: originalIssue },
       editingIssue: null,
+      routeTaskKey: null,
     });
+    if (wasEditing) closeOverlayRoute({ kind: 'view', view: get().currentView });
     persistCurrentBoardState(get);
 
     // Calculate dirty single-field delta
@@ -755,10 +823,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       rank_before_key: payload.rank_before_key || topIssueKey,
     };
 
+    const wasCreating = get().isCreateModalOpen;
     set((state) => ({
       issues: sortIssuesByRank([tempIssue, ...state.issues]),
       isCreateModalOpen: false,
     }));
+    if (wasCreating) closeOverlayRoute({ kind: 'view', view: get().currentView });
     persistCurrentBoardState(get);
 
     // 2. Background Asynchronous Sync to Backend

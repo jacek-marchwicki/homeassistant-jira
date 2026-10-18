@@ -187,3 +187,9 @@ This document details the architectural phases, delivered features, and evolutio
 
 
 
+- [x] **Phase 5.13: URL-Based Navigation**
+  - [x] **Routes**: Every navigable state maps to a URL so browser back/forward work: `/board`, `/backlog`, `/people`, `/task/HOME-123` (task modal) and `/create` (create dialog). Implemented in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) using the History API (no new dependency); `/` redirects to the last used view.
+  - [x] **Store integration**: `boardStore` setters push history entries and update state immediately (optimistic, no latency); a `popstate` listener applies the URL back to state. Deep links to `/task/KEY` resolve once issues load (from offline cache, API or WebSocket); unknown keys fall back to the current view. Closing an overlay opened in-app goes back one entry so history does not grow.
+  - [x] **Ingress / standalone**: Routes are resolved relative to the Ingress base path; `index.html` sets a runtime `<base href>` so relative assets load on deep links, and the backend serves `index.html` as an SPA fallback for unknown paths (`SPAStaticFiles`).
+  - [x] **Offline**: Navigation is purely client-side and works offline using the cached board.
+  - [x] **Tests**: [`navigation.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.test.ts), URL navigation cases in `boardStore.test.ts`, and [`backend/tests/test_spa_fallback.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_spa_fallback.py).

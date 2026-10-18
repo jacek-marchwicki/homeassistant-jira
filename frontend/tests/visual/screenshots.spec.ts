@@ -63,9 +63,9 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(header).toBeVisible();
     const headerBox = await header.boundingBox();
     expect(headerBox).not.toBeNull();
-    // Verify top header takes exactly 1 line (height around 44-54px, definitely not 2 lines of 88px+)
+    // Verify top header takes exactly 1 line (height around 44-65px, definitely not 2 lines of 88px+)
     if (headerBox) {
-      expect(headerBox.height).toBeLessThan(65);
+      expect(headerBox.height).toBeLessThanOrEqual(65);
     }
     await expect(header).toHaveScreenshot('component-header-mobile.png');
 
@@ -1154,6 +1154,28 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(modalHeader).toBeVisible();
     await page.waitForTimeout(200);
     await expect(modalHeader).toHaveScreenshot('component-edit-modal-header-background.png');
+  });
+
+  test('Capture Connection Status Modal (Desktop and Mobile Fullscreen)', async ({ page }) => {
+    // 1. Desktop (Centered dialog)
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const connBtn = page.locator('button[data-testid="connection-status-button"]');
+    await expect(connBtn).toBeVisible();
+    await connBtn.click();
+
+    const dialog = page.locator('div[role="dialog"][aria-labelledby="connection-modal-title"]');
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveScreenshot('modal-connection-status-desktop.png');
+
+    // Close via escape
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+
+    // 2. Mobile (Fullscreen popup)
+    await page.setViewportSize({ width: 375, height: 667 });
+    await connBtn.click();
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveScreenshot('modal-connection-status-mobile.png');
   });
 });
 

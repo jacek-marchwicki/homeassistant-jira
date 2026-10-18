@@ -988,6 +988,23 @@ describe('URL navigation', () => {
     expect(useBoardStore.getState().isCreateModalOpen).toBe(true);
   });
 
+  it('connection modal uses /status and closes back to view', () => {
+    useBoardStore.getState().setConnectionModalOpen(true);
+    expect(window.location.pathname).toBe('/status');
+    expect(useBoardStore.getState().isConnectionModalOpen).toBe(true);
+
+    useBoardStore.getState().setConnectionModalOpen(false);
+    expect(useBoardStore.getState().isConnectionModalOpen).toBe(false);
+    expect(window.location.pathname).toBe('/board');
+  });
+
+  it('applyRoute for status opens connection modal', () => {
+    useBoardStore.getState().applyRoute({ kind: 'status' });
+    expect(useBoardStore.getState().isConnectionModalOpen).toBe(true);
+    expect(useBoardStore.getState().isCreateModalOpen).toBe(false);
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+  });
+
   it('applyRoute for task resolves editing issue, and defers until issues load', () => {
     useBoardStore.getState().applyRoute({ kind: 'task', key: 'HOME-123' });
     expect(useBoardStore.getState().editingIssue?.key).toBe('HOME-123');

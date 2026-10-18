@@ -41,6 +41,7 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
     issues,
     columns,
     setCreateModalOpen,
+    setConnectionModalOpen,
   } = useBoardStore();
 
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
@@ -189,9 +190,16 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
         </div>
 
         {/* Sync & Live WebSocket Status */}
-        <div className="flex items-center shrink-0">
+        <button
+          type="button"
+          onClick={() => setConnectionModalOpen(true)}
+          className="flex items-center shrink-0 cursor-pointer rounded-full"
+          title="Connection status details"
+          aria-haspopup="dialog"
+          data-testid="connection-status-button"
+        >
           {syncStatus === 'offline' && (
-            <div
+            <span
               className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/25 shrink-0 mr-1.5"
               title="Operating offline. Changes queued for sync."
               aria-label="Offline Mode"
@@ -201,11 +209,11 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
               <span className="text-2xs font-semibold">
                 Offline{pendingSyncCount > 0 ? ` (${pendingSyncCount} pending)` : ''}
               </span>
-            </div>
+            </span>
           )}
 
           {(syncStatus === 'syncing' || isSyncing) && syncStatus !== 'offline' && (
-            <div
+            <span
               className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-xs font-medium text-[var(--jira-text-secondary)] bg-[var(--jira-canvas)] border border-[var(--jira-border)] shrink-0 mr-1.5"
               title="Synchronizing changes with Jira..."
               aria-label="Syncing with Jira"
@@ -213,10 +221,10 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
             >
               <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--jira-primary)]" />
               <span className="hidden md:inline text-2xs">Syncing</span>
-            </div>
+            </span>
           )}
 
-          <div
+          <span
             className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-xs font-medium border shrink-0 ${
               wsConnected
                 ? 'text-[var(--jira-live-badge-text)] bg-[var(--jira-live-badge-bg)] border-[var(--jira-live-badge-border)]'
@@ -236,14 +244,14 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
                 <span className="whitespace-nowrap">Reconnecting</span>
               </>
             )}
-          </div>
-        </div>
+          </span>
+        </button>
 
         {/* Settings: icon-only button that opens the full-screen Settings page */}
         <button
           type="button"
           onClick={openSettings}
-          className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer shrink-0"
+          className="flex items-center justify-center min-h-[32px] sm:min-h-[36px] min-w-[32px] sm:min-w-[36px] rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer shrink-0"
           title="Settings"
           aria-label="Settings"
         >

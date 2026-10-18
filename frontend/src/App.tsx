@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { BacklogView } from './components/BacklogView.tsx';
+import { ConnectionStatusModal } from './components/ConnectionStatusModal.tsx';
 import { CreateIssueModal } from './components/CreateIssueModal.tsx';
 import { EditIssueModal } from './components/EditIssueModal.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
@@ -14,6 +15,8 @@ import { useBoardStore } from './store/boardStore.ts';
 import { getCurrentRoute } from './utils/navigation.ts';
 import { getWsUrl } from './utils/paths.ts';
 import { usePwaInstall } from './utils/usePwaInstall.ts';
+
+const RECONNECT_DELAY_MS = 3000;
 
 export default function App() {
   const {
@@ -30,6 +33,8 @@ export default function App() {
     setEditingIssue,
     isCreateModalOpen,
     setCreateModalOpen,
+    isConnectionModalOpen,
+    setConnectionModalOpen,
     applyRoute,
     resolveRouteTask,
     routeTaskKey,
@@ -74,6 +79,12 @@ export default function App() {
 
       socket.onopen = () => {
         setWsConnected(true);
+        useBoardStore.getState().setConnectionDetails({
+          lastConnectedAt: Date.now(),
+          lastError: null,
+          nextRetryAt: null,
+          retryAttempt: 0,
+        });
       };
 
       socket.onmessage = (event) => {
@@ -85,13 +96,27 @@ export default function App() {
         }
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         setWsConnected(false);
-        // Exponential / periodic reconnect attempt
-        reconnectTimer = setTimeout(connectWs, 3000);
+        const details = useBoardStore.getState().connectionDetails;
+        useBoardStore.getState().setConnectionDetails({
+          lastDisconnectedAt: Date.now(),
+          lastError:
+            details.lastError ??
+            `Connection closed (code ${event?.code ?? 'unknown'}${
+              event?.reason ? `: ${event.reason}` : ''
+            })`,
+          nextRetryAt: Date.now() + RECONNECT_DELAY_MS,
+          retryAttempt: details.retryAttempt + 1,
+        });
+        // Periodic reconnect attempt
+        reconnectTimer = setTimeout(connectWs, RECONNECT_DELAY_MS);
       };
 
       socket.onerror = () => {
+        useBoardStore.getState().setConnectionDetails({
+          lastError: 'WebSocket connection failed',
+        });
         socket.close();
       };
     };
@@ -204,6 +229,12 @@ export default function App() {
       <CreateIssueModal
         isOpen={isCreateModalOpen}
         onClose={() => setCreateModalOpen(false)}
+      />
+
+      {/* Connection Status Modal */}
+      <ConnectionStatusModal
+        isOpen={isConnectionModalOpen}
+        onClose={() => setConnectionModalOpen(false)}
       />
     </div>
   );

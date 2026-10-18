@@ -67,6 +67,14 @@ export interface OfflineOutboxItem {
   createdAt: number;
 }
 
+export interface ConnectionDetails {
+  lastError: string | null;
+  lastConnectedAt: number | null;
+  lastDisconnectedAt: number | null;
+  nextRetryAt: number | null;
+  retryAttempt: number;
+}
+
 export interface CachedBoardData {
   boardName: string;
   sprintName: string;
@@ -230,11 +238,15 @@ export interface BoardStoreState {
   isBacklogExpandedOnBoard: boolean;
   editingIssue: JiraIssue | null;
   isCreateModalOpen: boolean;
+  isConnectionModalOpen: boolean;
   /** Task key requested by the URL (/task/KEY) that is not yet resolved to an issue. */
   routeTaskKey: string | null;
   offlineOutbox: OfflineOutboxItem[];
   syncStatus: 'synced' | 'syncing' | 'offline';
   pendingSyncCount: number;
+  syncError: string | null;
+  connectionDetails: ConnectionDetails;
+  setConnectionDetails: (details: Partial<ConnectionDetails>) => void;
   availableUsers: JiraUser[];
 
   // Actions
@@ -255,6 +267,7 @@ export interface BoardStoreState {
   toggleBacklogExpandedOnBoard: () => void;
   setEditingIssue: (issue: JiraIssue | null) => void;
   setCreateModalOpen: (open: boolean) => void;
+  setConnectionModalOpen: (open: boolean) => void;
   /** Applies a URL route to UI state without touching browser history. */
   applyRoute: (route: Route) => void;
   /** Resolves a pending /task/KEY route once issues are available. */
@@ -310,10 +323,19 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   isBacklogExpandedOnBoard: false,
   editingIssue: null,
   isCreateModalOpen: initialRoute.kind === 'create',
+  isConnectionModalOpen: initialRoute.kind === 'status',
   routeTaskKey: initialRoute.kind === 'task' ? initialRoute.key : null,
   offlineOutbox: initialOutbox,
   syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
   pendingSyncCount: initialOutbox.length,
+  syncError: null,
+  connectionDetails: {
+    lastError: null,
+    lastConnectedAt: null,
+    lastDisconnectedAt: null,
+    nextRetryAt: null,
+    retryAttempt: 0,
+  },
   availableUsers: initialCache?.availableUsers || [],
 
   setCurrentUser: (userName: string) => {
@@ -386,7 +408,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   setEditingIssue: (issue: JiraIssue | null) => {
     if (issue) {
       pushRoute({ kind: 'task', key: issue.key });
-      set({ editingIssue: issue, routeTaskKey: issue.key, isCreateModalOpen: false });
+      set({
+        editingIssue: issue,
+        routeTaskKey: issue.key,
+        isCreateModalOpen: false,
+        isConnectionModalOpen: false,
+      });
     } else {
       const wasOpen = Boolean(get().editingIssue) || get().routeTaskKey !== null;
       set({ editingIssue: null, routeTaskKey: null });
@@ -397,10 +424,31 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   setCreateModalOpen: (open: boolean) => {
     if (open) {
       pushRoute({ kind: 'create' });
-      set({ isCreateModalOpen: true, editingIssue: null, routeTaskKey: null });
+      set({
+        isCreateModalOpen: true,
+        editingIssue: null,
+        routeTaskKey: null,
+        isConnectionModalOpen: false,
+      });
     } else {
       const wasOpen = get().isCreateModalOpen;
       set({ isCreateModalOpen: false });
+      if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
+    }
+  },
+
+  setConnectionModalOpen: (open: boolean) => {
+    if (open) {
+      pushRoute({ kind: 'status' });
+      set({
+        isConnectionModalOpen: true,
+        editingIssue: null,
+        routeTaskKey: null,
+        isCreateModalOpen: false,
+      });
+    } else {
+      const wasOpen = get().isConnectionModalOpen;
+      set({ isConnectionModalOpen: false });
       if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
     }
   },
@@ -413,27 +461,44 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       editingIssue: null,
       routeTaskKey: null,
       isCreateModalOpen: false,
+      isConnectionModalOpen: false,
       isSettingsOpen: false,
     });
   },
 
   applyRoute: (route: Route) => {
     if (route.kind === 'settings') {
-      set({ isSettingsOpen: true, editingIssue: null, routeTaskKey: null, isCreateModalOpen: false });
+      set({
+        isSettingsOpen: true,
+        isConnectionModalOpen: false,
+        editingIssue: null,
+        routeTaskKey: null,
+        isCreateModalOpen: false,
+      });
+    } else if (route.kind === 'status') {
+      set({
+        isConnectionModalOpen: true,
+        isSettingsOpen: false,
+        isCreateModalOpen: false,
+        editingIssue: null,
+        routeTaskKey: null,
+      });
     } else if (route.kind === 'task') {
       set({
         routeTaskKey: route.key,
         isCreateModalOpen: false,
-        editingIssue: null,
+        isConnectionModalOpen: false,
         isSettingsOpen: false,
+        editingIssue: null,
       });
       get().resolveRouteTask();
     } else if (route.kind === 'create') {
       set({
         isCreateModalOpen: true,
+        isConnectionModalOpen: false,
+        isSettingsOpen: false,
         editingIssue: null,
         routeTaskKey: null,
-        isSettingsOpen: false,
       });
     } else if (route.kind === 'view') {
       saveCachedView(route.view);
@@ -442,6 +507,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         editingIssue: null,
         routeTaskKey: null,
         isCreateModalOpen: false,
+        isConnectionModalOpen: false,
         isSettingsOpen: false,
       });
     } else {
@@ -453,6 +519,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         editingIssue: null,
         routeTaskKey: null,
         isCreateModalOpen: false,
+        isConnectionModalOpen: false,
         isSettingsOpen: false,
       });
     }
@@ -497,6 +564,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
   setWsConnected: (connected: boolean) => {
     set({ wsConnected: connected });
+  },
+
+  setConnectionDetails: (details: Partial<ConnectionDetails>) => {
+    set((state) => ({ connectionDetails: { ...state.connectionDetails, ...details } }));
   },
 
   setActiveFilters: (filters: string[]) => {
@@ -1164,7 +1235,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       return;
     }
 
-    set({ syncStatus: 'syncing' });
+    set({ syncStatus: 'syncing', syncError: null });
     const remainingOutbox = [...currentQueue];
 
     for (const item of currentQueue) {
@@ -1263,10 +1334,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           pendingSyncCount: remainingOutbox.length,
         });
         persistCurrentBoardState(get);
-      } catch {
+      } catch (err) {
         // Network fetch error: still offline! Stop draining queue.
         saveCachedOutbox(remainingOutbox);
         set({
+          syncError: err instanceof Error ? err.message : 'Network request failed',
           offlineOutbox: [...remainingOutbox],
           pendingSyncCount: remainingOutbox.length,
           syncStatus: 'offline',

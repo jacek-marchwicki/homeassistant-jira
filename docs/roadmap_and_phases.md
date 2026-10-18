@@ -201,6 +201,7 @@ This document details the architectural phases, delivered features, and evolutio
     - Unit tests in `FilterBar.test.tsx` verifying avatars-first ordering, avatar click interactions, and mobile search expand/collapse.
     - Full-stack E2E Playwright test validating assignee avatar filtering and toggle behavior.
     - Playwright visual regression snapshots capturing mobile expanded search (`component-filterbar-mobile-search-expanded.png`) and updated filter bar snapshots across 42 tests.
+
 - [x] **Phase 5.13: URL-Based Navigation**
   - [x] **Routes**: Every navigable state maps to a URL so browser back/forward work: `/board`, `/backlog`, `/people`, `/task/HOME-123` (task modal) and `/create` (create dialog). Implemented in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) using the History API (no new dependency); `/` redirects to the last used view.
   - [x] **Store integration**: `boardStore` setters push history entries and update state immediately (optimistic, no latency); a `popstate` listener applies the URL back to state. Deep links to `/task/KEY` resolve once issues load (from offline cache, API or WebSocket); unknown keys fall back to the current view. Closing an overlay opened in-app goes back one entry so history does not grow.
@@ -226,3 +227,15 @@ This document details the architectural phases, delivered features, and evolutio
     - Backend unit tests in [`backend/tests/test_adf.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_adf.py) and [`backend/tests/test_jira_cloud_client.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_jira_cloud_client.py) verifying ADF parsing, serialization, and roundtripping.
     - Frontend component tests in [`frontend/src/components/RichTextEditor.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/RichTextEditor.test.tsx).
     - 100% passing local CI verification across all backend and frontend test suites.
+
+- [x] **Phase 5.16: Connection Status Details Popup**
+  - [x] **Clickable Connection Badge & /status Route**:
+    - Clicking the header sync / live WebSocket badge opens [`ConnectionStatusModal`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.tsx) (full screen on mobile, centered dialog on larger viewports, 44px touch targets).
+    - Mapped to `/status` URL route with browser back/forward and Escape key support, matching the new navigation and overlay architecture.
+  - [x] **Connection Diagnostics**:
+    - Shows connected / reconnecting state, cause of the last failure (WebSocket error or close code, last sync error), live retry countdown, failed attempt count, and last connected / disconnected times.
+    - `boardStore` tracks `connectionDetails` and `syncError`, populated by the WebSocket lifecycle in `App.tsx` and `flushOfflineQueue`.
+  - [x] **Pending Changes**:
+    - Lists every queued `offlineOutbox` mutation (action, issue key, time) or "Nothing pending". Read-only; no effect on optimistic latency or FIFO replay.
+  - [x] **Test Coverage**:
+    - `ConnectionStatusModal.test.tsx`, `navigation.test.ts`, and `boardStore.test.ts` covering closed, connected, disconnected-with-pending, close action, Escape key, and URL routing.

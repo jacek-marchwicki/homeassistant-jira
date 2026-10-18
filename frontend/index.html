@@ -2,6 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Deep links (e.g. /task/HOME-123) must resolve relative assets against the app root,
+         including under a Home Assistant Ingress prefix. -->
+    <script>
+      (function () {
+        var p = window.location.pathname;
+        var m = p.match(/^(.*?)\/(?:task\/[^/]+|create|board|backlog|people)\/?$/);
+        var base = m ? m[1] + '/' : p.replace(/[^/]*$/, '');
+        document.write('<base href="' + base + '">');
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="alternate icon" type="image/png" href="pwa-192x192.png" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />

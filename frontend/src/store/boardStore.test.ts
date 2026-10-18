@@ -868,3 +868,73 @@ describe('Zustand BoardStore', () => {
 
 
 
+
+describe('URL navigation', () => {
+  const issue = {
+    id: '1',
+    key: 'HOME-123',
+    summary: 'Nav',
+    status: 'To Do',
+    category: 'todo',
+  } as unknown as JiraIssue;
+
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/board');
+    useBoardStore.setState({
+      issues: [issue],
+      isLoading: false,
+      editingIssue: null,
+      routeTaskKey: null,
+      isCreateModalOpen: false,
+      currentView: 'board',
+    });
+  });
+
+  it('opening a task pushes /task/KEY and closing goes back', async () => {
+    useBoardStore.getState().setEditingIssue(issue);
+    expect(window.location.pathname).toBe('/task/HOME-123');
+    expect(useBoardStore.getState().editingIssue?.key).toBe('HOME-123');
+    useBoardStore.getState().setEditingIssue(null);
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(window.location.pathname).toBe('/board');
+  });
+
+  it('switching views updates the URL', () => {
+    useBoardStore.getState().setCurrentView('people');
+    expect(window.location.pathname).toBe('/people');
+    expect(useBoardStore.getState().currentView).toBe('people');
+  });
+
+  it('create modal uses /create', () => {
+    useBoardStore.getState().setCreateModalOpen(true);
+    expect(window.location.pathname).toBe('/create');
+    expect(useBoardStore.getState().isCreateModalOpen).toBe(true);
+  });
+
+  it('applyRoute for task resolves editing issue, and defers until issues load', () => {
+    useBoardStore.getState().applyRoute({ kind: 'task', key: 'HOME-123' });
+    expect(useBoardStore.getState().editingIssue?.key).toBe('HOME-123');
+
+    useBoardStore.setState({ issues: [], editingIssue: null, isLoading: true });
+    useBoardStore.getState().applyRoute({ kind: 'task', key: 'HOME-123' });
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+    useBoardStore.setState({ issues: [issue], isLoading: false });
+    useBoardStore.getState().resolveRouteTask();
+    expect(useBoardStore.getState().editingIssue?.key).toBe('HOME-123');
+  });
+
+  it('unknown task falls back to the view URL', () => {
+    window.history.replaceState(null, '', '/task/NOPE-1');
+    useBoardStore.getState().applyRoute({ kind: 'task', key: 'NOPE-1' });
+    expect(window.location.pathname).toBe('/board');
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+  });
+
+  it('applyRoute for a view closes overlays (back navigation)', () => {
+    useBoardStore.getState().applyRoute({ kind: 'task', key: 'HOME-123' });
+    useBoardStore.getState().applyRoute({ kind: 'view', view: 'backlog' });
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+    expect(useBoardStore.getState().currentView).toBe('backlog');
+  });
+});

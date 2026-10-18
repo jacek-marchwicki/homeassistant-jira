@@ -40,7 +40,7 @@ describe('FilterBar component', () => {
     });
   });
 
-  it('renders All Issues, Assigned to Me, Active, and Hide Epics buttons, but not Blockers', async () => {
+  it('renders assignee avatars first before All Issues, followed by Active and Hide Epics', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
@@ -48,8 +48,19 @@ describe('FilterBar component', () => {
       root.render(<FilterBar />);
     });
 
-    expect(container.textContent).toContain('All Issues (2)');
-    expect(container.textContent).toContain('Assigned to Me');
+    const pillsContainer = container.querySelector('section > div:first-child');
+    expect(pillsContainer).not.toBeNull();
+
+    // First item should be the assignee avatars container or button
+    const firstItem = pillsContainer?.firstElementChild as HTMLElement;
+    expect(firstItem).not.toBeNull();
+    expect(firstItem.getAttribute('data-testid') || firstItem.className).toMatch(/avatar|assignee/i);
+
+    // "All Issues" should follow the avatars
+    const allBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('All Issues')
+    );
+    expect(allBtn).toBeDefined();
     expect(container.textContent).toContain('Active');
     expect(container.textContent).toContain('Hide Epics');
     expect(container.textContent).not.toContain('Blockers');
@@ -59,49 +70,94 @@ describe('FilterBar component', () => {
     });
   });
 
-  it('selects "Assigned to Me", "Active", and "Hide Epics" by default, while "All Issues" is inactive', async () => {
+  it('renders clickable avatars for assignees with active ring when "my" filter is selected', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
     await act(async () => {
+      useBoardStore.setState({
+        currentUser: 'Jacek Marchwicki',
+        activeFilters: ['my', 'active'],
+      });
       root.render(<FilterBar />);
     });
 
-    const buttons = container.querySelectorAll('button');
-    const allBtn = Array.from(buttons).find((b) => b.textContent?.includes('All Issues'));
-    const myBtn = Array.from(buttons).find((b) => b.textContent?.includes('Assigned to Me'));
-    const activeBtn = Array.from(buttons).find((b) => b.textContent?.includes('Active'));
-    const hideEpicsBtn = Array.from(buttons).find((b) => b.textContent?.includes('Hide Epics'));
+    const jacekAvatarBtn = container.querySelector(
+      'button[aria-label="Filter by Jacek Marchwicki"]'
+    ) as HTMLButtonElement;
+    const sarahAvatarBtn = container.querySelector(
+      'button[aria-label="Filter by Sarah Connor"]'
+    ) as HTMLButtonElement;
 
-    expect(allBtn?.className).not.toContain('bg-[var(--jira-primary)]');
-    expect(myBtn?.className).toContain('bg-[var(--jira-primary)]');
-    expect(activeBtn?.className).toContain('bg-[var(--jira-primary)]');
-    expect(hideEpicsBtn?.className).toContain('bg-[var(--jira-primary)]');
+    expect(jacekAvatarBtn).not.toBeNull();
+    expect(sarahAvatarBtn).not.toBeNull();
+
+    // Jacek is current user and 'my' is active -> pressed and ring styling
+    expect(jacekAvatarBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(jacekAvatarBtn.className).toContain('ring-2');
+
+    // Sarah is not selected -> not pressed, no active ring
+    expect(sarahAvatarBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(sarahAvatarBtn.className).not.toContain('ring-2');
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it('toggles "Assigned to Me", "Active", and "Hide Epics" filters when clicked', async () => {
+  it('toggles assignee filter off when active avatar is clicked, and switches user when inactive avatar is clicked', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);
 
     await act(async () => {
+      useBoardStore.setState({
+        currentUser: 'Jacek Marchwicki',
+        activeFilters: ['my', 'active', 'hide_epics'],
+      });
+      root.render(<FilterBar />);
+    });
+
+    const jacekAvatarBtn = container.querySelector(
+      'button[aria-label="Filter by Jacek Marchwicki"]'
+    ) as HTMLButtonElement;
+    const sarahAvatarBtn = container.querySelector(
+      'button[aria-label="Filter by Sarah Connor"]'
+    ) as HTMLButtonElement;
+
+    // Click active Jacek avatar -> toggles off 'my' filter
+    await act(async () => {
+      jacekAvatarBtn.click();
+    });
+    expect(useBoardStore.getState().activeFilters).toEqual(['active', 'hide_epics']);
+
+    // Click inactive Sarah avatar -> sets Sarah as currentUser and enables 'my'
+    await act(async () => {
+      sarahAvatarBtn.click();
+    });
+    expect(useBoardStore.getState().currentUser).toBe('Sarah Connor');
+    expect(useBoardStore.getState().activeFilters).toEqual(['active', 'hide_epics', 'my']);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('toggles Active and Hide Epics filters and resets on All Issues click', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({
+        currentUser: 'Jacek Marchwicki',
+        activeFilters: ['active', 'hide_epics'],
+      });
       root.render(<FilterBar />);
     });
 
     const buttons = container.querySelectorAll('button');
-    const myBtn = Array.from(buttons).find((b) => b.textContent?.includes('Assigned to Me'));
     const activeBtn = Array.from(buttons).find((b) => b.textContent?.includes('Active'));
     const hideEpicsBtn = Array.from(buttons).find((b) => b.textContent?.includes('Hide Epics'));
     const allBtn = Array.from(buttons).find((b) => b.textContent?.includes('All Issues'));
-
-    // Toggle off "Assigned to Me"
-    await act(async () => {
-      myBtn?.click();
-    });
-    expect(useBoardStore.getState().activeFilters).toEqual(['active', 'hide_epics']);
 
     // Toggle off "Active"
     await act(async () => {
@@ -116,17 +172,66 @@ describe('FilterBar component', () => {
     expect(useBoardStore.getState().activeFilters).toEqual([]);
     expect(allBtn?.className).toContain('bg-[var(--jira-primary)]');
 
-    // Toggle "Hide Epics" back on
-    await act(async () => {
-      hideEpicsBtn?.click();
-    });
-    expect(useBoardStore.getState().activeFilters).toEqual(['hide_epics']);
-
-    // Click "All Issues" button clears/keeps empty
+    // Click "All Issues" keeps empty
     await act(async () => {
       allBtn?.click();
     });
     expect(useBoardStore.getState().activeFilters).toEqual([]);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('renders a mobile search button that expands to search input on click and collapses on close', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<FilterBar />);
+    });
+
+    // Mobile search button should be present
+    const mobileSearchBtn = container.querySelector(
+      'button[aria-label="Open search"]'
+    ) as HTMLButtonElement;
+    expect(mobileSearchBtn).not.toBeNull();
+
+    // Click mobile search button to expand
+    await act(async () => {
+      mobileSearchBtn.click();
+    });
+
+    // Mobile input should now be expanded and visible
+    const mobileInput = container.querySelector('input[data-mobile-search="true"]') as HTMLInputElement;
+    expect(mobileInput).not.toBeNull();
+
+    // Type query
+    await act(async () => {
+      const tracker = (mobileInput as unknown as { _valueTracker?: { setValue: (val: string) => void } })
+        ._valueTracker;
+      if (tracker) tracker.setValue('');
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      nativeSetter?.call(mobileInput, 'mobile search query');
+      mobileInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(useBoardStore.getState().searchQuery).toBe('mobile search query');
+
+    // Close button should be present
+    const closeBtn = container.querySelector(
+      'button[aria-label="Close search"]'
+    ) as HTMLButtonElement;
+    expect(closeBtn).not.toBeNull();
+
+    await act(async () => {
+      closeBtn.click();
+    });
+
+    // After closing, expanded input is no longer rendered
+    expect(container.querySelector('input[data-mobile-search="true"]')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -175,8 +280,10 @@ describe('FilterBar component', () => {
       root.render(<FilterBar />);
     });
 
-    // Badge showing first name
-    expect(container.textContent).toContain('Jacek');
+    // Avatar for current user
+    expect(
+      container.querySelector('button[aria-label="Filter by Jacek Marchwicki"]')
+    ).not.toBeNull();
 
     // Find the dropdown chevron button
     const chevronBtn = container.querySelector(
@@ -292,11 +399,11 @@ describe('FilterBar component', () => {
     expect(pillsContainer.className).toContain('overflow-x-auto');
     expect(pillsContainer.className).toContain('no-scrollbar');
 
-    // Search input is directly beside the pills container
-    const searchContainer = section?.lastElementChild as HTMLElement;
+    // Desktop search container is beside the pills container and contains input
+    const searchContainer = section?.querySelector('#filter-search-input')?.parentElement;
     expect(searchContainer).not.toBeNull();
-    expect(searchContainer.className).toContain('shrink-0');
-    expect(searchContainer.querySelector('input')).not.toBeNull();
+    expect(searchContainer?.className).toContain('shrink-0');
+    expect(searchContainer?.querySelector('input')).not.toBeNull();
 
     await act(async () => {
       root.unmount();

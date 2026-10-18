@@ -184,6 +184,23 @@ This document details the architectural phases, delivered features, and evolutio
     - Added Pydantic field validators to `JiraDashboardSettings` in [`backend/src/jira_dashboard/config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/config.py) ensuring empty or whitespace-only strings from Home Assistant forms safely fallback to standard defaults (`None` for API key, default model ID, and default prompt template).
   - [x] **Automated Test Coverage**:
     - Added comprehensive test assertions in [`backend/tests/test_packaging_and_addon.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_packaging_and_addon.py) and [`backend/tests/test_gemini_config.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_gemini_config.py).
+- [x] **Phase 5.13: Filter Bar Style Polish: Assignee Avatars First & Mobile Expandable Search**
+  - [x] **Assignee Avatars First on Filter Bar**:
+    - Reordered the filter bar elements so that the Assignee Avatars group appears as the very first item, preceding "All Issues", "Active", and "Hide Epics".
+  - [x] **Clickable Assignee Avatars with Active State Indicators**:
+    - Rendered board assignees directly as interactive avatar buttons (`AssigneeAvatar`) on the bar with accessible tooltips and `aria-pressed` states.
+    - One-tap selection: clicking an inactive avatar selects that user and enables the assignee filter, while clicking an active avatar deselects it and toggles the user filter off.
+    - Active visual indicators: highlighted with a prominent theme ring (`ring-2 ring-[var(--jira-primary)]`) and full opacity.
+    - Preserved dropdown chevron button for picking from the full available users list.
+  - [x] **Mobile Expandable Quick Search**:
+    - Replaced the static search input on mobile viewports (`< sm`) with a compact search icon button that expands to an overlaid full search input upon touch or click.
+    - Automatically focuses the input when expanded and includes a dedicated clear/close button (`X`) and `Escape` key handler to collapse back.
+    - Displays active accent border and color on the search icon button when a query is active while collapsed.
+  - [x] **Comprehensive Test Verification & Visual Regression Snapshots**:
+    - Unit tests in `FilterBar.test.tsx` verifying avatars-first ordering, avatar click interactions, and mobile search expand/collapse.
+    - Full-stack E2E Playwright test validating assignee avatar filtering and toggle behavior.
+    - Playwright visual regression snapshots capturing mobile expanded search (`component-filterbar-mobile-search-expanded.png`) and updated filter bar snapshots across 42 tests.
+
 
 
 

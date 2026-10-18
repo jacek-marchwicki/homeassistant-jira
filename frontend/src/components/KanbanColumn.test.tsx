@@ -46,12 +46,10 @@ describe('KanbanColumn component', () => {
     expect(container.textContent).toContain('In Progress');
     expect(container.textContent).toContain('1');
 
-    // Issue key Jira link
-    const link = container.querySelector('a[aria-label="Open TEST-1 in Jira"]') as HTMLAnchorElement;
-    expect(link).not.toBeNull();
-    expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
-    expect(link.getAttribute('href')).toBe('https://jira.example.com/browse/TEST-1');
+    // Issue key Jira link should NOT exist on the board
+    const link = container.querySelector('a[aria-label="Open TEST-1 in Jira"]');
+    expect(link).toBeNull();
+    expect(container.textContent).toContain('TEST-1');
 
     // Should NOT show drop target badge
     const dropBadge = container.querySelector('[data-testid="drop-badge-col-inprogress"]');

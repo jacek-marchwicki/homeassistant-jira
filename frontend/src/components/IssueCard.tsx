@@ -4,7 +4,6 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   Calendar,
   CheckCircle2,
-  Pencil,
   RotateCw,
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
@@ -14,7 +13,6 @@ import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 import { PriorityIcon } from './PriorityIcon.tsx';
 import {
   getColumnForIssue,
-  getJiraIssueUrl,
   isIssueExpedited,
   isIssueOverdue,
 } from '../utils/boardUtils.ts';
@@ -33,13 +31,12 @@ export function IssueCard({
   sortableId,
   sourceColumnId,
 }: IssueCardProps) {
-  const { columns, jiraUrl, transitionIssueOptimistic, setEditingIssue } = useBoardStore();
+  const { columns, transitionIssueOptimistic, setEditingIssue } = useBoardStore();
   const currentColumn = getColumnForIssue(issue, columns);
   const isDone = (currentColumn?.category || issue.status.category) === 'done';
   const dueDateStr = issue.due_date ?? issue.dueDate;
   const isOverdue = isIssueOverdue(issue);
   const isExpedited = isIssueExpedited(issue);
-  const issueUrl = getJiraIssueUrl(issue, jiraUrl);
   const itemId = sortableId || issue.key;
 
   const {
@@ -70,6 +67,11 @@ export function IssueCard({
     ...cardBackgroundStyle,
   };
 
+  const handleCardClick = () => {
+    if (isDragging) return;
+    setEditingIssue(issue);
+  };
+
   const handleQuickDone = (e: React.MouseEvent) => {
     e.stopPropagation();
     const doneCol = columns.find((c) => c.category === 'done');
@@ -82,46 +84,28 @@ export function IssueCard({
       style={style}
       {...attributes}
       {...listeners}
+      onClick={handleCardClick}
       data-testid={`issue-card-${issue.key}`}
       data-sortable-id={itemId}
-      className={`group relative p-3 rounded-lg bg-[var(--jira-surface-elevated)] border transition-all shadow-sm cursor-grab active:cursor-grabbing select-none touch-manipulation ${
+      className={`group relative p-3 rounded-lg bg-[var(--jira-surface-elevated)] border transition-all shadow-sm cursor-pointer select-none touch-manipulation ${
         issue._optimisticState === 'pending'
           ? 'border-[var(--jira-primary)] ring-2 ring-[var(--jira-primary)]/30 animate-pulse'
           : 'border-[var(--jira-border)] hover:border-[var(--jira-primary)]/50'
       } ${isDragOverlay ? 'shadow-xl ring-2 ring-[var(--jira-primary)] cursor-grabbing' : ''}`}
     >
       <div className="flex items-center justify-between mb-1.5 pointer-events-auto">
-        <div className="flex items-center gap-1.5 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 shrink-0">
           <IssueTypeIcon type={issue.issue_type || issue.issueType} className="w-3.5 h-3.5 shrink-0" />
-          <a
-            href={issueUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className={`text-xs font-bold whitespace-nowrap text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] hover:underline cursor-pointer ${
+          <span
+            className={`text-xs font-bold whitespace-nowrap text-[var(--jira-text-secondary)] ${
               hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
             }`}
-            title={`Open ${issue.key} in Jira`}
-            aria-label={`Open ${issue.key} in Jira`}
           >
             {issue.key}
-          </a>
+          </span>
         </div>
 
         <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
-          {/* Edit Issue Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingIssue(issue);
-            }}
-            className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center cursor-pointer"
-            title={`Edit ${issue.key}`}
-            aria-label={`Edit ${issue.key}`}
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-
           {/* Direct One-Tap Quick Action: Mark as Done */}
           {!isDone && (
             <button
@@ -138,12 +122,8 @@ export function IssueCard({
       </div>
 
       <p
-        onClick={(e) => {
-          e.stopPropagation();
-          setEditingIssue(issue);
-        }}
         title={`Click to edit ${issue.key}`}
-        className={`text-sm font-medium mb-3 line-clamp-2 cursor-pointer hover:underline ${
+        className={`text-sm font-medium mb-3 line-clamp-2 ${
           hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
         } ${
           isDone

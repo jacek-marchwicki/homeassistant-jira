@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
-import { getAccountType, getAssigneesFromBoard } from '../utils/boardUtils.ts';
+import { getAssigneesFromBoard } from '../utils/boardUtils.ts';
 
 export function FilterBar() {
   const {
@@ -15,8 +15,6 @@ export function FilterBar() {
     setSearchQuery,
     currentUser,
     setCurrentUser,
-    accountTypes,
-    setAccountType,
     showChildren,
     toggleShowChildren,
   } = useBoardStore();
@@ -170,39 +168,9 @@ export function FilterBar() {
                         />
                         <span className="truncate">{user.displayName}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                        {isSelected && (
-                          <Check className="w-3.5 h-3.5 text-[var(--jira-primary)] shrink-0" />
-                        )}
-                        <button
-                          type="button"
-                          aria-pressed={getAccountType(accountTypes, user.displayName) === 'child'}
-                          aria-label={`Mark ${user.displayName} as ${
-                            getAccountType(accountTypes, user.displayName) === 'child'
-                              ? 'parent'
-                              : 'child'
-                          }`}
-                          title="Toggle account type (Parent / Child)"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAccountType(
-                              user.displayName,
-                              getAccountType(accountTypes, user.displayName) === 'child'
-                                ? 'parent'
-                                : 'child'
-                            );
-                          }}
-                          className={`min-h-[44px] min-w-[44px] -my-2 inline-flex items-center justify-center text-2xs font-bold uppercase rounded-md cursor-pointer ${
-                            getAccountType(accountTypes, user.displayName) === 'child'
-                              ? 'text-[var(--jira-primary)]'
-                              : 'text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)]'
-                          }`}
-                        >
-                          {getAccountType(accountTypes, user.displayName) === 'child'
-                            ? 'Child'
-                            : 'Parent'}
-                        </button>
-                      </div>
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-[var(--jira-primary)] shrink-0 ml-auto" />
+                      )}
                     </div>
                   );
                 })}

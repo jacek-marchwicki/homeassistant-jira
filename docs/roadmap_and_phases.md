@@ -192,3 +192,4 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Filtering**: A child never sees unassigned tasks in "Assigned to Me" (Board/Backlog) or in their People column. Parents see own + unassigned tasks.
   - [x] **Show child switch**: Off-by-default switch in the filter bar (Board and People views) that adds child-assigned tasks to parents' views.
   - [x] **Tests**: `boardUtils.test.ts`, `boardStore.test.ts`, `FilterBar.test.tsx`.
+  - [x] **Settings screen**: Account types are now managed in a dedicated "Settings" view (header gear button) instead of the "Who is Me" drop-down, which is back to its original behavior. Tests: `SettingsView.test.tsx`.

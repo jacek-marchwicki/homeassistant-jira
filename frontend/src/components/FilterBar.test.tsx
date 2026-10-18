@@ -326,28 +326,4 @@ describe('FilterBar child accounts', () => {
     expect(sw.getAttribute('aria-checked')).toBe('true');
     act(() => root.unmount());
   });
-
-  it('lets the user mark an account as Child in the picker', async () => {
-    act(() => {
-      useBoardStore.setState({ issues: testIssues, showChildren: false, accountTypes: {} });
-    });
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<FilterBar />);
-    });
-    await act(async () => {
-      (container.querySelector('[aria-label="Change who is Me"]') as HTMLElement).click();
-    });
-    const btn = document.body.querySelector(
-      '[aria-label="Mark Sarah Connor as child"]'
-    ) as HTMLElement;
-    expect(btn).toBeTruthy();
-    await act(async () => {
-      btn.click();
-    });
-    expect(useBoardStore.getState().accountTypes['sarah connor']).toBe('child');
-    act(() => root.unmount());
-  });
 });

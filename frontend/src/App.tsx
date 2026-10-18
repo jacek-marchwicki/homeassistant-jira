@@ -8,6 +8,7 @@ import { Header } from './components/Header.tsx';
 import { InstallHelpModal } from './components/InstallHelpModal.tsx';
 import { KanbanBoard } from './components/KanbanBoard.tsx';
 import { MobileInstallBanner } from './components/MobileInstallBanner.tsx';
+import { SettingsView } from './components/SettingsView.tsx';
 import { PeopleBoard } from './components/PeopleBoard.tsx';
 import { useBoardStore } from './store/boardStore.ts';
 import { getWsUrl } from './utils/paths.ts';
@@ -150,13 +151,15 @@ export default function App() {
       )}
 
       {/* Quick Filters & Search */}
-      <FilterBar />
+      {currentView !== 'settings' && <FilterBar />}
 
       {/* Main View: Kanban Board, People Board, or Dedicated Backlog List View */}
       {currentView === 'board' ? (
         <KanbanBoard />
       ) : currentView === 'people' ? (
         <PeopleBoard />
+      ) : currentView === 'settings' ? (
+        <SettingsView />
       ) : (
         <BacklogView />
       )}

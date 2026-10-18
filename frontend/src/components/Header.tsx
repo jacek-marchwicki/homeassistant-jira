@@ -10,6 +10,7 @@ import {
   Loader2,
   Moon,
   Plus,
+  Settings,
   Sun,
   Tv,
   Users,
@@ -183,6 +184,20 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
             >
               {backlogIssues.length}
             </span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView('settings')}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs transition-colors cursor-pointer min-h-[32px] sm:min-h-[36px] ${
+              currentView === 'settings'
+                ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
+                : 'text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
+            }`}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Settings</span>
           </button>
         </div>
 

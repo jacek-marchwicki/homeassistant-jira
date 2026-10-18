@@ -167,6 +167,25 @@ class TestPresentationApi(unittest.TestCase):
         )
         self.assertEqual(res.json(), {"account_types": {}})
 
+    def test_account_types_accepts_dotted_usernames(self) -> None:
+        """Regression: names like 'luna.marchwicka' (as sent by the frontend) must save."""
+        res = self.client.put(
+            "/api/account-types",
+            json={"display_name": "luna.marchwicka", "account_type": "child"},
+        )
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json(), {"account_types": {"luna.marchwicka": "child"}})
+
+    def test_account_types_route_registered_for_get_and_put(self) -> None:
+        """Guards against a backend missing the endpoint (404/405) the frontend relies on."""
+        self.assertNotIn(self.client.get("/api/account-types").status_code, (404, 405))
+        self.assertNotIn(
+            self.client.put(
+                "/api/account-types", json={"display_name": "a", "account_type": "parent"}
+            ).status_code,
+            (404, 405),
+        )
+
     def test_account_types_validation(self) -> None:
         """Invalid type or empty name is rejected."""
         bad_type = self.client.put(

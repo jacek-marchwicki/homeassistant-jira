@@ -331,11 +331,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         body: JSON.stringify({ display_name: userName.trim(), account_type: type }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'network error';
       saveCachedAccountTypes(previous);
       set({
         accountTypes: previous,
-        errorMessage: `Could not save account type for ${userName.trim()}. Change reverted.`,
+        errorMessage: `Could not save account type for ${userName.trim()} (${reason}). Change reverted.`,
       });
     }
   },

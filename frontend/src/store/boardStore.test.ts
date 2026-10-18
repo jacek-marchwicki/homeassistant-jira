@@ -888,6 +888,27 @@ describe('child account store state', () => {
     expect(useBoardStore.getState().accountTypes['kid kim']).toBeUndefined();
   });
 
+  it('sends the exact request contract the backend expects (dotted names included)', async () => {
+    await useBoardStore.getState().setAccountType(' luna.marchwicka ', 'child');
+    const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/account-types$/);
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(JSON.parse(init.body)).toEqual({
+      display_name: 'luna.marchwicka',
+      account_type: 'child',
+    });
+    expect(useBoardStore.getState().errorMessage).toBeNull();
+  });
+
+  it('reports the failure reason and reverts when the backend lacks the endpoint', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 405 });
+    await useBoardStore.getState().setAccountType('luna.marchwicka', 'child');
+    expect(useBoardStore.getState().accountTypes).toEqual({});
+    expect(useBoardStore.getState().errorMessage).toContain('HTTP 405');
+    expect(useBoardStore.getState().errorMessage).toContain('luna.marchwicka');
+  });
+
   it('loads account types from backend and applies websocket updates', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

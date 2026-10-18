@@ -712,6 +712,33 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const reloadedView = await page.evaluate(() => localStorage.getItem('ha_jira_current_view'));
     expect(reloadedView).toBe('people');
   });
+
+  test('Account types: saving a Child account succeeds, no error, and is stored on the backend', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+
+    const saved = page.waitForResponse(
+      (res) =>
+        res.url().includes('/api/account-types') &&
+        res.request().method() === 'PUT' &&
+        res.status() === 200
+    );
+    await page.getByRole('radio', { name: 'Alex Lead Child' }).click();
+    await saved;
+    await expect(page.getByText(/Could not save account type/)).toHaveCount(0);
+
+    // Source of truth is the backend: wipe the local cache and reload.
+    await page.evaluate(() => window.localStorage.removeItem('ha_jira_account_types'));
+    await page.reload();
+    await expect(page.getByRole('radio', { name: 'Alex Lead Child' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    const res = await page.request.get('/api/account-types');
+    expect((await res.json()).account_types).toEqual({ 'alex lead': 'child' });
+  });
 });
 
 

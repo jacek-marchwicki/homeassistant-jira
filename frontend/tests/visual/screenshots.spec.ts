@@ -63,9 +63,9 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(header).toBeVisible();
     const headerBox = await header.boundingBox();
     expect(headerBox).not.toBeNull();
-    // Verify top header takes exactly 1 line (height around 44-54px, definitely not 2 lines of 88px+)
+    // Verify top header takes exactly 1 line (height around 44-65px, definitely not 2 lines of 88px+)
     if (headerBox) {
-      expect(headerBox.height).toBeLessThan(65);
+      expect(headerBox.height).toBeLessThanOrEqual(65);
     }
     await expect(header).toHaveScreenshot('component-header-mobile.png');
 

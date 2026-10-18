@@ -71,7 +71,7 @@ describe('IssueCard component', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders key, summary, priority, edit button, and quick Done button for todo issue', async () => {
+  it('renders key, summary, priority, and quick Done button for todo issue without Jira link or Edit button', async () => {
     await act(async () => {
       root.render(
         <DndContext>
@@ -86,18 +86,15 @@ describe('IssueCard component', () => {
     expect(container.textContent).toContain('Implement dynamic proxy root path support');
     expect(container.textContent).toContain('Done');
 
-    // Issue key Jira link
-    const link = container.querySelector('a[aria-label="Open PROJ-101 in Jira"]') as HTMLAnchorElement;
-    expect(link).not.toBeNull();
-    expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
-    expect(link.getAttribute('href')).toBe('https://jira.example.com/browse/PROJ-101');
+    // Issue key Jira link should NOT exist on the board
+    const link = container.querySelector('a[aria-label="Open PROJ-101 in Jira"]');
+    expect(link).toBeNull();
 
-    // Edit button
+    // Edit button should be removed
     const editBtn = container.querySelector('button[aria-label="Edit PROJ-101"]');
-    expect(editBtn).not.toBeNull();
+    expect(editBtn).toBeNull();
 
-    // Quick Done button
+    // Quick Done button must exist
     const doneBtn = container.querySelector('button[aria-label="Mark PROJ-101 as Done"]');
     expect(doneBtn).not.toBeNull();
   });
@@ -172,11 +169,13 @@ describe('IssueCard component', () => {
     expect(transitionSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
   });
 
-  it('calls setEditingIssue when Edit button or summary is clicked', async () => {
+  it('calls setEditingIssue when clicking anywhere on the card, but NOT when clicking Done button', async () => {
     const setEditingIssueSpy = vi.fn();
+    const transitionSpy = vi.fn();
     act(() => {
       useBoardStore.setState({
         setEditingIssue: setEditingIssueSpy,
+        transitionIssueOptimistic: transitionSpy,
       });
     });
 
@@ -190,14 +189,37 @@ describe('IssueCard component', () => {
       );
     });
 
-    const editBtn = container.querySelector('button[aria-label="Edit PROJ-101"]');
-    expect(editBtn).not.toBeNull();
+    // 1. Click on card article itself
+    const card = container.querySelector('[data-testid="issue-card-PROJ-101"]') as HTMLElement;
+    expect(card).not.toBeNull();
 
     await act(async () => {
-      editBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-
+    expect(setEditingIssueSpy).toHaveBeenCalledTimes(1);
     expect(setEditingIssueSpy).toHaveBeenCalledWith(mockIssueTodo);
+
+    setEditingIssueSpy.mockClear();
+
+    // 2. Click on summary
+    const summary = container.querySelector('p') as HTMLElement;
+    await act(async () => {
+      summary.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(setEditingIssueSpy).toHaveBeenCalledTimes(1);
+    expect(setEditingIssueSpy).toHaveBeenCalledWith(mockIssueTodo);
+
+    setEditingIssueSpy.mockClear();
+
+    // 3. Click on Done button - should NOT trigger setEditingIssue
+    const doneBtn = container.querySelector('button[aria-label="Mark PROJ-101 as Done"]') as HTMLElement;
+    expect(doneBtn).not.toBeNull();
+
+    await act(async () => {
+      doneBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(transitionSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
+    expect(setEditingIssueSpy).not.toHaveBeenCalled();
   });
 
   it('renders default surface background styling when no background image is available', async () => {

@@ -357,9 +357,12 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
     await expect(proj101Article).toBeVisible();
 
-    // Click the Edit button on PROJ-101
-    const editBtn = proj101Article.getByRole('button', { name: 'Edit PROJ-101' });
-    await editBtn.click();
+    // Verify Edit button and direct Jira link are not present on board card
+    await expect(proj101Article.getByRole('button', { name: 'Edit PROJ-101' })).toHaveCount(0);
+    await expect(proj101Article.locator('a[aria-label="Open PROJ-101 in Jira"]')).toHaveCount(0);
+
+    // Click the card to open details screen
+    await proj101Article.click();
 
     // Modal dialog appears
     const dialog = page.getByRole('dialog', { name: /Edit Issue PROJ-101/ });
@@ -556,9 +559,8 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const proj101Article = page.locator('article', { hasText: 'PROJ-101' });
     await expect(proj101Article).toBeVisible();
 
-    // Click Edit PROJ-101
-    const editBtn = proj101Article.getByRole('button', { name: 'Edit PROJ-101' });
-    await editBtn.click();
+    // Click card to open details
+    await proj101Article.click();
 
     const dialog = page.getByRole('dialog', { name: /Edit Issue PROJ-101/ });
     await expect(dialog).toBeVisible();

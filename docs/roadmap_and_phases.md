@@ -241,8 +241,21 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Test Coverage**:
     - `ConnectionStatusModal.test.tsx`, `navigation.test.ts`, and `boardStore.test.ts` covering closed, connected, disconnected-with-pending, close action, Escape key, and URL routing.
 
+- [x] **Phase 5.17: Streamlined Board Card Interaction & Direct Details Navigation**
+  - [x] **Direct Ticket Details Navigation on Card Click**:
+    - Clicking anywhere on an issue card on the board now opens the ticket details screen (`EditIssueModal`), streamlining user workflow.
+    - Preserved isolated pointer and click event propagation on the quick "Done" action button so marking a task complete transitions it without triggering the details modal.
+  - [x] **Removal of Card Edit Icon & Board Jira Link**:
+    - Removed redundant "Edit" pencil icon from board cards, decluttering the card header.
+    - Removed the direct external Jira hyperlink from the issue key text on board cards, reserving direct Jira navigation (`https://<domain>/browse/<KEY>`) exclusively for the ticket details screen header.
+  - [x] **Comprehensive Test Verification & Visual Regression Snapshots**:
+    - Unit tests in [`IssueCard.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/IssueCard.test.tsx) and [`KanbanColumn.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/KanbanColumn.test.tsx).
+    - Full-stack E2E integration tests in [`fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts).
+    - Playwright visual regression snapshots updated across 43 scenarios in [`screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts).
+
 - [x] **Phase 5.18: Worktrees Data Reusability & Shared Caches**
   - [x] **Shared Data Symlinking for Isolated Worktrees**:
     - Introduced [`scripts/setup_worktree_data.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/setup_worktree_data.py) and Git `post-checkout` hook linking worktree `data -> ../../data`.
     - Enables automatic sharing of SQLite database, schema migrations, and cached background pictures across all parallel branches and worktrees.
     - Tested in [`backend/tests/test_worktree_data_setup.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_worktree_data_setup.py).
+

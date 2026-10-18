@@ -393,8 +393,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
   test('Capture Edit Issue Modal Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
-    await editButton.click();
+    const card = page.locator('article', { hasText: 'PROJ-101' }).first();
+    await card.click();
 
     const modal = page.locator('div[role="dialog"]');
     await expect(modal).toBeVisible();
@@ -438,8 +438,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
   test('Capture Mobile Edit Issue Full-Screen Modal Snapshot (375x667)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
-    await editButton.click();
+    const card = page.locator('article', { hasText: 'PROJ-101' }).first();
+    await card.click();
 
     const modal = page.locator('div[role="dialog"]');
     await expect(modal).toBeVisible();
@@ -566,12 +566,11 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const issueCard = page.locator('article', { hasText: 'PROJ-101' });
     await expect(issueCard).toBeVisible();
 
-    const jiraLink = issueCard.locator('a[aria-label="Open PROJ-101 in Jira"]');
-    await expect(jiraLink).toBeVisible();
-    await expect(jiraLink).toHaveAttribute('target', '_blank');
-    await expect(jiraLink).toHaveAttribute('href', /browse\/PROJ-101/);
+    // Verify Board Card does NOT contain direct Jira link or Edit button
+    await expect(issueCard.locator('a[aria-label="Open PROJ-101 in Jira"]')).toHaveCount(0);
+    await expect(issueCard.locator('button[aria-label="Edit PROJ-101"]')).toHaveCount(0);
 
-    await jiraLink.hover();
+    await issueCard.hover();
     await page.waitForTimeout(100);
 
     await expect(issueCard).toHaveScreenshot('component-card-jira-link-hover.png');
@@ -579,8 +578,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
   test('Capture Edit Issue Modal Jira Link Hover Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
-    await editButton.click();
+    const card = page.locator('article', { hasText: 'PROJ-101' }).first();
+    await card.click();
 
     const modal = page.locator('div[role="dialog"]');
     await expect(modal).toBeVisible();
@@ -988,8 +987,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
   test('Capture Edit Issue Modal with Assignee Picker Open Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
-    await editButton.click();
+    const card = page.locator('article', { hasText: 'PROJ-101' }).first();
+    await card.click();
 
     const modal = page.locator('div[role="dialog"]');
     await expect(modal).toBeVisible();
@@ -1005,8 +1004,8 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
   test('Capture Edit Issue Modal with DatePicker Popover Open Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    const editButton = page.locator('button[aria-label="Edit PROJ-101"]').first();
-    await editButton.click();
+    const card = page.locator('article', { hasText: 'PROJ-101' }).first();
+    await card.click();
 
     const modal = page.getByRole('dialog', { name: /Edit Issue/ });
     await expect(modal).toBeVisible();
@@ -1148,8 +1147,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(card).toHaveScreenshot('component-issue-card-background-light.png');
 
     // Open Edit Issue Modal and verify modal banner with background
-    const editBtn = card.locator('button[aria-label="Edit PROJ-101"]');
-    await editBtn.click();
+    await card.click();
     const modalHeader = page.locator('[data-testid="edit-issue-modal-header"]');
     await expect(modalHeader).toBeVisible();
     await page.waitForTimeout(200);

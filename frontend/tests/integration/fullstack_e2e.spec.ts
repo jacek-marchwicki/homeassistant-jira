@@ -247,13 +247,13 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
   test('8. Quick Filters: "Assigned to Me", "Active", and "Hide Epics" toggle correctly and filter issues', async ({
     page,
   }) => {
-    // By default: "Assigned to Me", "Active", and "Hide Epics" are selected
-    const myBtn = page.getByRole('button', { name: 'Assigned to Me' });
+    // By default: "Assigned to Me" (current user avatar), "Active", and "Hide Epics" are selected
+    const myBtn = page.getByRole('button', { name: /Filter by Jacek|Assigned to Me/i });
     const activeBtn = page.getByRole('button', { name: 'Active' });
     const hideEpicsBtn = page.getByRole('button', { name: 'Hide Epics' });
     const allBtn = page.getByRole('button', { name: /All Issues/ });
 
-    await expect(myBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(myBtn).toHaveClass(/ring-\[var\(--jira-primary\)\]|bg-\[var\(--jira-primary\)\]/);
     await expect(activeBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(hideEpicsBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(allBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
@@ -265,18 +265,18 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
 
     // Toggle "Assigned to Me" off -> PROJ-98 should become visible
     await myBtn.click();
-    await expect(myBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(myBtn).not.toHaveClass(/ring-\[var\(--jira-primary\)\]|bg-\[var\(--jira-primary\)\]/);
     await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();
 
     // Toggle "Assigned to Me" back on -> PROJ-98 should be hidden again
     await myBtn.click();
-    await expect(myBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(myBtn).toHaveClass(/ring-\[var\(--jira-primary\)\]|bg-\[var\(--jira-primary\)\]/);
     await expect(page.locator('article', { hasText: 'PROJ-98' })).not.toBeVisible();
 
     // Click "All Issues" -> all filters cleared, all issues visible
     await allBtn.click();
     await expect(allBtn).toHaveClass(/bg-\[var\(--jira-primary\)\]/);
-    await expect(myBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
+    await expect(myBtn).not.toHaveClass(/ring-\[var\(--jira-primary\)\]|bg-\[var\(--jira-primary\)\]/);
     await expect(activeBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(hideEpicsBtn).not.toHaveClass(/bg-\[var\(--jira-primary\)\]/);
     await expect(page.locator('article', { hasText: 'PROJ-98' })).toBeVisible();

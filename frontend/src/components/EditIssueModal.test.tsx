@@ -208,25 +208,119 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     expect(recreateAfterInput.value).toBe('2y!');
   });
 
-  it('closes on Cancel button click and Escape key', async () => {
+  it('closes on X button click, Cancel button click when dirty, and Escape key', async () => {
     const handleClose = vi.fn();
 
     await act(async () => {
       root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={handleClose} />);
     });
 
-    const cancelBtn = Array.from(container.querySelectorAll('button')).find(
+    // Default pristine state: X button is displayed, no Cancel button
+    const cancelBtnBefore = Array.from(container.querySelectorAll('button')).find(
       (b) => b.textContent?.trim() === 'Cancel'
-    ) as HTMLButtonElement;
+    );
+    expect(cancelBtnBefore).toBeUndefined();
+
+    const closeXBtn = container.querySelector('button[aria-label="Close edit dialog"]') as HTMLButtonElement;
+    expect(closeXBtn).not.toBeNull();
     await act(async () => {
-      cancelBtn.click();
+      closeXBtn.click();
     });
     expect(handleClose).toHaveBeenCalledTimes(1);
 
+    // Escape key closes as well
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     expect(handleClose).toHaveBeenCalledTimes(2);
+
+    // When dirty: X button is replaced with Cancel button
+    const summaryInput = container.querySelector('#edit-summary') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(summaryInput, 'Modified Summary');
+    });
+
+    const closeXBtnAfter = container.querySelector('button[aria-label="Close edit dialog"]');
+    expect(closeXBtnAfter).toBeNull();
+
+    const cancelBtnAfter = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Cancel'
+    ) as HTMLButtonElement;
+    expect(cancelBtnAfter).not.toBeNull();
+
+    await act(async () => {
+      cancelBtnAfter.click();
+    });
+    expect(handleClose).toHaveBeenCalledTimes(3);
+  });
+
+  it('renders Save and Cancel/X buttons at the top header and removes bottom action buttons', async () => {
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
+    });
+
+    const header = container.querySelector('[data-testid="edit-issue-modal-header"]');
+    expect(header).not.toBeNull();
+
+    // Header contains the save button at the top
+    const saveButtonInHeader = header?.querySelector('button[type="submit"]');
+    expect(saveButtonInHeader).not.toBeNull();
+    expect(saveButtonInHeader?.textContent).toContain('Save Changes');
+
+    // Header contains the default X button at the top
+    const xButtonInHeader = header?.querySelector('button[aria-label="Close edit dialog"]');
+    expect(xButtonInHeader).not.toBeNull();
+
+    // Verify there are no bottom action buttons (no Save Changes button outside the header)
+    const allSaveButtons = Array.from(container.querySelectorAll('button[type="submit"]')).filter(
+      (b) => b.getAttribute('form') === 'edit-issue-form' || b.textContent?.includes('Save Changes')
+    );
+    expect(allSaveButtons.length).toBe(1);
+    expect(header?.contains(allSaveButtons[0])).toBe(true);
+  });
+
+  it('orders fields with Assignee right after Description and Issue Type as the last field', async () => {
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
+    });
+
+    const summaryInput = container.querySelector('#edit-summary');
+    const descriptionArea = container.querySelector('[data-testid="rich-text-preview"]') || container.querySelector('#edit-description');
+    const assigneeInput = container.querySelector('#edit-assignee');
+    const statusSelect = container.querySelector('#edit-status');
+    const prioritySelect = container.querySelector('#edit-priority');
+    const startDateInput = container.querySelector('#edit-start-date');
+    const dueDateInput = container.querySelector('#edit-due-date');
+    const recreateAfterInput = container.querySelector('#edit-recreate-after');
+    const typeSelect = container.querySelector('#edit-type');
+
+    expect(summaryInput).not.toBeNull();
+    expect(descriptionArea).not.toBeNull();
+    expect(assigneeInput).not.toBeNull();
+    expect(statusSelect).not.toBeNull();
+    expect(prioritySelect).not.toBeNull();
+    expect(startDateInput).not.toBeNull();
+    expect(dueDateInput).not.toBeNull();
+    expect(recreateAfterInput).not.toBeNull();
+    expect(typeSelect).not.toBeNull();
+
+    // 1. Summary comes before Description
+    expect(
+      Boolean(summaryInput!.compareDocumentPosition(descriptionArea!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+
+    // 2. Assignee comes right after Description (before Status, Priority, Dates, Recreate, Issue Type)
+    expect(
+      Boolean(descriptionArea!.compareDocumentPosition(assigneeInput!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+    expect(
+      Boolean(assigneeInput!.compareDocumentPosition(statusSelect!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+
+    // 3. Issue Type is the last field (after Recreate after)
+    expect(
+      Boolean(recreateAfterInput!.compareDocumentPosition(typeSelect!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
   });
 
   it('applies full-screen styling on mobile viewports and dialog styling on desktop', async () => {

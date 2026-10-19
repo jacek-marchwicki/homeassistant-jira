@@ -40,6 +40,15 @@ export function CreateIssueModal({
 
   const statusOptions = useMemo(() => getAvailableStatuses(columns), [columns]);
 
+  const initialStatus = useMemo(() => {
+    return (
+      defaultStatusName ||
+      statusOptions.find((s) => s.name.toLowerCase() === 'to do')?.name ||
+      statusOptions.find((s) => s.name.toLowerCase() !== 'backlog')?.name ||
+      (statusOptions.length > 0 ? statusOptions[0].name : 'To Do')
+    );
+  }, [defaultStatusName, statusOptions]);
+
   // Initialize form when opened
   useEffect(() => {
     if (isOpen) {
@@ -47,11 +56,6 @@ export function CreateIssueModal({
       setDescription('');
       setIssueType('task');
       setPriority('medium');
-      const initialStatus =
-        defaultStatusName ||
-        statusOptions.find((s) => s.name.toLowerCase() === 'to do')?.name ||
-        statusOptions.find((s) => s.name.toLowerCase() !== 'backlog')?.name ||
-        (statusOptions.length > 0 ? statusOptions[0].name : 'To Do');
       setStatusName(initialStatus);
       setAssigneeName('');
       setAssigneeAccountId('');
@@ -60,7 +64,7 @@ export function CreateIssueModal({
       setRecreateAfter('');
       setValidationError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialStatus]);
 
   // Handle ESC key to dismiss modal
   useEffect(() => {
@@ -74,6 +78,19 @@ export function CreateIssueModal({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const isDirty = Boolean(
+    summary.trim() !== '' ||
+    description.trim() !== '' ||
+    issueType !== 'task' ||
+    priority !== 'medium' ||
+    statusName !== initialStatus ||
+    assigneeName.trim() !== '' ||
+    assigneeAccountId.trim() !== '' ||
+    dueDate.trim() !== '' ||
+    startDate.trim() !== '' ||
+    recreateAfter.trim() !== ''
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,20 +134,46 @@ export function CreateIssueModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[var(--jira-border)]">
-          <div className="flex items-center gap-2">
-            <IssueTypeIcon type={issueType} className="w-5 h-5" />
-            <h2 id="create-issue-title" className="text-lg font-bold text-[var(--jira-text-primary)]">
+        <div
+          data-testid="create-issue-modal-header"
+          className="flex items-center justify-between pb-4 border-b border-[var(--jira-border)]"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <IssueTypeIcon type={issueType} className="w-5 h-5 shrink-0" />
+            <h2 id="create-issue-title" className="text-lg font-bold text-[var(--jira-text-primary)] truncate">
               Create Issue
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
-            aria-label="Close create dialog"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {isDirty && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--jira-border)] hover:bg-[var(--jira-surface-hover)] text-[var(--jira-text-secondary)] transition-colors cursor-pointer"
+                aria-label="Cancel changes"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              type="submit"
+              form="create-issue-form"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--jira-primary)] text-white hover:bg-[var(--jira-primary-hover)] transition-colors shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create</span>
+            </button>
+            {!isDirty && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
+                aria-label="Close create dialog"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Validation Error Banner */}
@@ -142,7 +185,7 @@ export function CreateIssueModal({
         )}
 
         {/* Create Form */}
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form id="create-issue-form" onSubmit={handleSubmit} className="mt-4 space-y-4">
           {/* Summary Input */}
           <div>
             <label
@@ -179,38 +222,26 @@ export function CreateIssueModal({
             />
           </div>
 
-          {/* Type & Priority Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label
-                htmlFor="create-type"
-                className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
-              >
-                Issue Type
-              </label>
-              <IssueTypeSelect
-                id="create-type"
-                value={issueType}
-                onChange={setIssueType}
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="create-priority"
-                className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
-              >
-                Priority
-              </label>
-              <PrioritySelect
-                id="create-priority"
-                value={priority}
-                onChange={setPriority}
-              />
-            </div>
+          {/* Assignee (directly after Description) */}
+          <div>
+            <label
+              htmlFor="create-assignee"
+              className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
+            >
+              Assignee
+            </label>
+            <AssigneeSelect
+              id="create-assignee"
+              value={assigneeName}
+              onChange={setAssigneeName}
+              onSelectOption={(opt) => {
+                setAssigneeName(opt?.displayName || '');
+                setAssigneeAccountId(opt?.accountId || '');
+              }}
+            />
           </div>
 
-          {/* Status & Assignee Row */}
+          {/* Status & Priority Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label
@@ -230,26 +261,21 @@ export function CreateIssueModal({
 
             <div>
               <label
-                htmlFor="create-assignee"
+                htmlFor="create-priority"
                 className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
               >
-                Assignee
+                Priority
               </label>
-              <AssigneeSelect
-                id="create-assignee"
-                value={assigneeName}
-                onChange={setAssigneeName}
-                onSelectOption={(opt) => {
-                  setAssigneeName(opt?.displayName || '');
-                  setAssigneeAccountId(opt?.accountId || '');
-                }}
+              <PrioritySelect
+                id="create-priority"
+                value={priority}
+                onChange={setPriority}
               />
             </div>
           </div>
 
           {/* Dates */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
             <div>
               <label
                 htmlFor="create-start-date"
@@ -311,22 +337,19 @@ export function CreateIssueModal({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--jira-border)]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
+          {/* Issue Type (last field) */}
+          <div>
+            <label
+              htmlFor="create-type"
+              className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-[var(--jira-primary)] text-white hover:bg-[var(--jira-primary-hover)] transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create</span>
-            </button>
+              Issue Type
+            </label>
+            <IssueTypeSelect
+              id="create-type"
+              value={issueType}
+              onChange={setIssueType}
+            />
           </div>
         </form>
       </div>

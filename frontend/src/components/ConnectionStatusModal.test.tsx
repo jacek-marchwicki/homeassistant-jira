@@ -130,4 +130,117 @@ describe('ConnectionStatusModal', () => {
     });
     expect(useBoardStore.getState().isConnectionModalOpen).toBe(true);
   });
+
+  it('displays detailed changes for pending transactions of all action types', async () => {
+    await act(async () => {
+      useBoardStore.setState({
+        offlineOutbox: [
+          {
+            id: 'tx-trans',
+            action: 'transition_issue',
+            issueKey: 'PROJ-10',
+            payload: { target_status: 'In Progress', target_category: 'inprogress' },
+            createdAt: Date.now(),
+          },
+          {
+            id: 'tx-update',
+            action: 'update_issue',
+            issueKey: 'PROJ-11',
+            payload: { summary: 'Fix login button', priority: 'high', status_name: 'Done' },
+            createdAt: Date.now(),
+          },
+          {
+            id: 'tx-create',
+            action: 'create_issue',
+            issueKey: 'PROJ-TEMP-1',
+            payload: { summary: 'New offline story', issue_type: 'Story', priority: 'medium' },
+            createdAt: Date.now(),
+          },
+          {
+            id: 'tx-rank',
+            action: 'rank_issue',
+            issueKey: 'PROJ-12',
+            payload: { rank_before_key: 'PROJ-15' },
+            createdAt: Date.now(),
+          },
+        ],
+      });
+      root.render(<ConnectionStatusModal isOpen={true} onClose={() => {}} />);
+    });
+
+    const text = (container.querySelector('[role="dialog"]') as HTMLElement).textContent!;
+    // Transition details
+    expect(text).toContain('In Progress');
+    // Update details
+    expect(text).toContain('Fix login button');
+    expect(text).toContain('high');
+    expect(text).toContain('Done');
+    // Create details
+    expect(text).toContain('New offline story');
+    expect(text).toContain('Story');
+    // Rank details
+    expect(text).toContain('PROJ-15');
+  });
+
+  it('allows user to remove a pending transaction via remove button', async () => {
+    const removePendingTransaction = vi.fn();
+    (useBoardStore.getState() as any).removePendingTransaction = removePendingTransaction;
+
+    await act(async () => {
+      useBoardStore.setState({
+        offlineOutbox: [
+          {
+            id: 'tx-to-remove',
+            action: 'update_issue',
+            issueKey: 'PROJ-20',
+            payload: { summary: 'Accidental edit' },
+            createdAt: Date.now(),
+          },
+        ],
+      });
+      root.render(<ConnectionStatusModal isOpen={true} onClose={() => {}} />);
+    });
+
+    const removeBtn = container.querySelector(
+      'button[aria-label="Remove transaction tx-to-remove"]'
+    ) as HTMLButtonElement | null;
+    expect(removeBtn).not.toBeNull();
+
+    await act(async () => {
+      removeBtn!.click();
+    });
+
+    expect(removePendingTransaction).toHaveBeenCalledWith('tx-to-remove');
+  });
+
+  it('provides an option to clear all local data and fetch fresh data from backend', async () => {
+    const clearLocalDataAndRefetch = vi.fn().mockResolvedValue(undefined);
+    (useBoardStore.getState() as any).clearLocalDataAndRefetch = clearLocalDataAndRefetch;
+
+    await act(async () => {
+      useBoardStore.setState({
+        offlineOutbox: [
+          {
+            id: 'tx-1',
+            action: 'update_issue',
+            issueKey: 'PROJ-30',
+            payload: { summary: 'Pending change' },
+            createdAt: Date.now(),
+          },
+        ],
+      });
+      root.render(<ConnectionStatusModal isOpen={true} onClose={() => {}} />);
+    });
+
+    const clearBtn = container.querySelector(
+      'button[data-testid="clear-local-data-button"]'
+    ) as HTMLButtonElement | null;
+    expect(clearBtn).not.toBeNull();
+
+    await act(async () => {
+      clearBtn!.click();
+    });
+
+    expect(clearLocalDataAndRefetch).toHaveBeenCalled();
+  });
 });

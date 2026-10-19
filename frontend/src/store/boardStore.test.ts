@@ -9,7 +9,11 @@ import {
   LOCAL_STORAGE_BOARD_CACHE_KEY,
   LOCAL_STORAGE_CURRENT_VIEW_KEY,
   LOCAL_STORAGE_CURRENT_USER_KEY,
+  LOCAL_STORAGE_OUTBOX_KEY,
+  saveCachedOutbox,
+  loadCachedOutbox,
 } from './boardStore.ts';
+import type { OfflineOutboxItem } from './boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
 import { getAvailableStatuses } from '../utils/boardUtils.ts';
 
@@ -1025,5 +1029,220 @@ describe('URL navigation', () => {
     useBoardStore.getState().applyRoute({ kind: 'view', view: 'backlog' });
     expect(useBoardStore.getState().editingIssue).toBeNull();
     expect(useBoardStore.getState().currentView).toBe('backlog');
+  });
+
+  describe('Pending Transactions Management', () => {
+    const mockIssue: JiraIssue = {
+      id: '101',
+      key: 'PROJ-101',
+      summary: 'Existing Issue',
+      priority: 'medium',
+      issue_type: 'task',
+      status: { id: '1', name: 'To Do', category: 'todo' },
+      rank: '0|hzzzzz:',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      window.localStorage.clear();
+      useBoardStore.setState({
+        issues: [mockIssue],
+        offlineOutbox: [],
+        pendingSyncCount: 0,
+        rollbackQueue: {},
+        syncStatus: 'synced',
+        syncError: null,
+        wsConnected: true,
+      });
+    });
+
+    it('removePendingTransaction removes the item from offlineOutbox and updates localStorage and pendingSyncCount', () => {
+      const outboxItem1: OfflineOutboxItem = {
+        id: 'tx-1',
+        action: 'transition_issue',
+        issueKey: 'PROJ-101',
+        payload: { target_category: 'inprogress', target_status: 'In Progress' },
+        createdAt: 1000,
+      };
+      const outboxItem2: OfflineOutboxItem = {
+        id: 'tx-2',
+        action: 'update_issue',
+        issueKey: 'PROJ-101',
+        payload: { summary: 'Updated summary' },
+        createdAt: 2000,
+      };
+
+      useBoardStore.setState({
+        offlineOutbox: [outboxItem1, outboxItem2],
+        pendingSyncCount: 2,
+        syncStatus: 'offline',
+      });
+      saveCachedOutbox([outboxItem1, outboxItem2]);
+
+      // Remove tx-1
+      useBoardStore.getState().removePendingTransaction('tx-1');
+
+      const state = useBoardStore.getState();
+      expect(state.offlineOutbox.map((it) => it.id)).toEqual(['tx-2']);
+      expect(state.pendingSyncCount).toBe(1);
+      expect(loadCachedOutbox().map((it) => it.id)).toEqual(['tx-2']);
+      expect(state.syncStatus).toBe('offline');
+    });
+
+    it('removePendingTransaction sets syncStatus to synced when last transaction is removed and ws is connected', () => {
+      const outboxItem: OfflineOutboxItem = {
+        id: 'tx-1',
+        action: 'transition_issue',
+        issueKey: 'PROJ-101',
+        payload: { target_category: 'inprogress' },
+        createdAt: 1000,
+      };
+
+      useBoardStore.setState({
+        offlineOutbox: [outboxItem],
+        pendingSyncCount: 1,
+        syncStatus: 'offline',
+        wsConnected: true,
+      });
+
+      useBoardStore.getState().removePendingTransaction('tx-1');
+
+      const state = useBoardStore.getState();
+      expect(state.offlineOutbox.length).toBe(0);
+      expect(state.pendingSyncCount).toBe(0);
+      expect(state.syncStatus).toBe('synced');
+    });
+
+    it('removePendingTransaction removes temporary created issue when create_issue transaction is removed', () => {
+      const tempIssue: JiraIssue = {
+        id: 'temp-1',
+        key: 'PROJ-TEMP-999',
+        summary: 'Offline Created Issue',
+        priority: 'high',
+        issue_type: 'bug',
+        status: { id: '1', name: 'To Do', category: 'todo' },
+        rank: '0|hzzzzz:',
+        updated_at: '2026-01-01T00:00:00Z',
+        _optimisticState: 'pending',
+      };
+
+      const createTx: OfflineOutboxItem = {
+        id: 'tx-create',
+        action: 'create_issue',
+        issueKey: 'PROJ-TEMP-999',
+        payload: { summary: 'Offline Created Issue', issue_type: 'bug' },
+        createdAt: 1000,
+      };
+
+      useBoardStore.setState({
+        issues: [mockIssue, tempIssue],
+        offlineOutbox: [createTx],
+        pendingSyncCount: 1,
+      });
+
+      useBoardStore.getState().removePendingTransaction('tx-create');
+
+      const state = useBoardStore.getState();
+      expect(state.issues.find((i) => i.key === 'PROJ-TEMP-999')).toBeUndefined();
+      expect(state.issues.find((i) => i.key === 'PROJ-101')).toBeDefined();
+    });
+
+    it('removePendingTransaction rolls back issue to original state from rollbackQueue when transaction is removed', () => {
+      const transitionedIssue: JiraIssue = {
+        ...mockIssue,
+        status: { id: '2', name: 'In Progress', category: 'inprogress' },
+        _optimisticState: 'pending',
+        _pendingTargetStatusId: 'inprogress',
+      };
+
+      const transitionTx: OfflineOutboxItem = {
+        id: 'tx-transition',
+        action: 'transition_issue',
+        issueKey: 'PROJ-101',
+        payload: { target_category: 'inprogress', target_status: 'In Progress' },
+        createdAt: 1000,
+      };
+
+      useBoardStore.setState({
+        issues: [transitionedIssue],
+        rollbackQueue: { 'PROJ-101': mockIssue },
+        offlineOutbox: [transitionTx],
+        pendingSyncCount: 1,
+      });
+
+      useBoardStore.getState().removePendingTransaction('tx-transition');
+
+      const state = useBoardStore.getState();
+      const issue = state.issues.find((i) => i.key === 'PROJ-101');
+      expect(issue?.status.name).toBe('To Do');
+      expect(issue?._optimisticState).toBe('synced');
+      expect(issue?._pendingTargetStatusId).toBeUndefined();
+      expect(state.rollbackQueue['PROJ-101']).toBeUndefined();
+    });
+
+    it('clearLocalDataAndRefetch clears outbox, rollback queue, localStorage cache and refetches board from backend', async () => {
+      const outboxItem: OfflineOutboxItem = {
+        id: 'tx-1',
+        action: 'update_issue',
+        issueKey: 'PROJ-101',
+        payload: { summary: 'Unsaved change' },
+        createdAt: 1000,
+      };
+
+      saveCachedOutbox([outboxItem]);
+      saveCachedBoard({
+        boardName: 'Old Cached Board',
+        sprintName: 'Old Sprint',
+        jiraUrl: 'https://jira.example.com',
+        columns: DEFAULT_COLUMNS,
+        issues: [mockIssue],
+      });
+
+      useBoardStore.setState({
+        offlineOutbox: [outboxItem],
+        pendingSyncCount: 1,
+        rollbackQueue: { 'PROJ-101': mockIssue },
+        syncError: 'Network Error',
+      });
+
+      const freshRemoteIssue: JiraIssue = {
+        ...mockIssue,
+        summary: 'Fresh Backend Issue Summary',
+      };
+
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/board')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              board_name: 'Fresh Sprint Board',
+              sprint_name: 'Sprint 2',
+              jira_url: 'https://jira.fresh.com',
+              columns: DEFAULT_COLUMNS,
+              issues: [freshRemoteIssue],
+            }),
+          });
+        }
+        if (url.includes('/api/users') || url.includes('/api/account-types')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => [],
+          });
+        }
+        return Promise.reject(new Error('Unknown url'));
+      });
+
+      await useBoardStore.getState().clearLocalDataAndRefetch();
+
+      const state = useBoardStore.getState();
+      expect(state.offlineOutbox).toEqual([]);
+      expect(state.pendingSyncCount).toBe(0);
+      expect(state.rollbackQueue).toEqual({});
+      expect(state.syncError).toBeNull();
+      expect(window.localStorage.getItem(LOCAL_STORAGE_OUTBOX_KEY)).toBeNull();
+
+      expect(state.boardName).toBe('Fresh Sprint Board');
+      expect(state.issues[0].summary).toBe('Fresh Backend Issue Summary');
+    });
   });
 });

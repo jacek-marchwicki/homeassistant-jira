@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { CloudOff, RefreshCw, Wifi, WifiOff, X } from 'lucide-react';
+import { CloudOff, RefreshCw, RotateCcw, Trash2, Wifi, WifiOff, X } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import type { OfflineOutboxItem } from '../store/boardStore.ts';
+import type { JiraUser } from '../types/jira.ts';
 
 interface ConnectionStatusModalProps {
   isOpen: boolean;
@@ -28,13 +29,79 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+function renderTransactionDetails(item: OfflineOutboxItem, users: JiraUser[]) {
+  const p = item.payload || {};
+  const details: string[] = [];
+
+  if (item.action === 'transition_issue') {
+    const target = p.target_status || p.target_category;
+    if (target) {
+      details.push(`Status: ${target}`);
+    }
+  } else if (item.action === 'update_issue') {
+    if (p.summary) details.push(`Summary: "${p.summary}"`);
+    if (p.status_name || p.status_category) {
+      details.push(`Status: ${p.status_name || p.status_category}`);
+    }
+    if (p.priority) details.push(`Priority: ${p.priority}`);
+    if (p.issue_type) details.push(`Type: ${p.issue_type}`);
+    if (p.assignee_id !== undefined) {
+      const user = users.find((u) => u.accountId === p.assignee_id);
+      details.push(`Assignee: ${user ? user.displayName : p.assignee_id || 'Unassigned'}`);
+    }
+    if (p.description !== undefined) details.push('Description updated');
+    if (p.start_date !== undefined) details.push(`Start date: ${p.start_date || 'None'}`);
+    if (p.due_date !== undefined) details.push(`Due date: ${p.due_date || 'None'}`);
+  } else if (item.action === 'create_issue') {
+    if (p.summary) details.push(`Summary: "${p.summary}"`);
+    if (p.issue_type) details.push(`Type: ${p.issue_type}`);
+    if (p.priority) details.push(`Priority: ${p.priority}`);
+    if (p.assignee_id) {
+      const user = users.find((u) => u.accountId === p.assignee_id);
+      details.push(`Assignee: ${user ? user.displayName : p.assignee_id}`);
+    }
+  } else if (item.action === 'rank_issue') {
+    if (p.rank_before_key && p.rank_after_key) {
+      details.push(`Reorder between ${p.rank_after_key} and ${p.rank_before_key}`);
+    } else if (p.rank_before_key) {
+      details.push(`Move before ${p.rank_before_key}`);
+    } else if (p.rank_after_key) {
+      details.push(`Move after ${p.rank_after_key}`);
+    } else {
+      details.push('Reorder position');
+    }
+  }
+
+  if (details.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-[var(--jira-text-secondary)]">
+      {details.map((d, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center px-1.5 py-0.5 rounded bg-[var(--jira-surface)] border border-[var(--jira-border)]"
+        >
+          {d}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModalProps) {
   const wsConnected = useBoardStore((s) => s.wsConnected);
   const syncStatus = useBoardStore((s) => s.syncStatus);
   const syncError = useBoardStore((s) => s.syncError);
   const outbox = useBoardStore((s) => s.offlineOutbox);
   const details = useBoardStore((s) => s.connectionDetails);
+  const availableUsers = useBoardStore((s) => s.availableUsers);
+  const removePendingTransaction = useBoardStore((s) => s.removePendingTransaction);
+  const clearLocalDataAndRefetch = useBoardStore((s) => s.clearLocalDataAndRefetch);
+
   const [now, setNow] = useState(() => Date.now());
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -60,6 +127,15 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
       ? Math.max(0, Math.ceil((details.nextRetryAt - now) / 1000))
       : null;
   const StatusIcon = wsConnected ? Wifi : WifiOff;
+
+  const handleClearLocalData = async () => {
+    setIsClearing(true);
+    try {
+      await clearLocalDataAndRefetch();
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   return (
     <div
@@ -148,20 +224,59 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
               Nothing pending — all changes are synced.
             </p>
           ) : (
-            <ul className="mt-2 space-y-1.5">
+            <ul className="mt-2 space-y-2">
               {outbox.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)]"
+                  className="p-2.5 rounded-lg bg-[var(--jira-canvas)] border border-[var(--jira-border)]"
                 >
-                  <span className="font-semibold">{ACTION_LABELS[item.action]}</span>
-                  <span className="text-[var(--jira-text-secondary)] truncate">
-                    {item.issueKey ?? 'new issue'} · {formatTime(item.createdAt)}
-                  </span>
+                  <div className="flex items-start justify-between gap-2 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold">{ACTION_LABELS[item.action]}</span>
+                        <span className="text-[var(--jira-text-secondary)]">
+                          {item.issueKey ?? 'new issue'} · {formatTime(item.createdAt)}
+                        </span>
+                      </div>
+                      {renderTransactionDetails(item, availableUsers)}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePendingTransaction(item.id)}
+                      aria-label={`Remove transaction ${item.id}`}
+                      title="Remove transaction"
+                      className="p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md text-[var(--jira-text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
+        </section>
+
+        <section className="mt-6 pt-4 border-t border-[var(--jira-border)]">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--jira-text-secondary)]">
+            Reset & Re-sync
+          </h3>
+          <p className="text-xs mt-1 text-[var(--jira-text-secondary)]">
+            Clear local cached data and unsent offline transactions, then reload fresh state directly from Jira.
+          </p>
+          <button
+            type="button"
+            data-testid="clear-local-data-button"
+            onClick={handleClearLocalData}
+            disabled={isClearing}
+            className="w-full mt-3 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30 transition-colors cursor-pointer disabled:opacity-50 min-h-[44px]"
+          >
+            {isClearing ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <RotateCcw className="w-4 h-4" />
+            )}
+            <span>{isClearing ? 'Clearing and fetching…' : 'Clear local data & re-fetch'}</span>
+          </button>
         </section>
       </div>
     </div>

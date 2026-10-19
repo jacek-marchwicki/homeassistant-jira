@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle, ExternalLink, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, X, Save, AlertCircle, ExternalLink, Calendar, Clock } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue, JiraIssueType, JiraPriority } from '../types/jira.ts';
 import { getAvailableStatuses, getJiraIssueUrl } from '../utils/boardUtils.ts';
@@ -158,7 +158,29 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
             hasBackground ? 'p-3 -m-4 sm:-m-6 mb-4 sm:mb-6 rounded-t-none sm:rounded-t-xl shadow-inner' : ''
           }`}
         >
+          {/* Far-left: Close (back arrow) / Cancel (X) button + Title */}
           <div className="flex items-center gap-2 min-w-0">
+            {isDirty ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"
+                aria-label="Cancel changes"
+                title="Cancel changes"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"
+                aria-label="Close edit dialog"
+                title="Close"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <IssueTypeIcon type={issueType} className="w-5 h-5 shrink-0" />
             <h2 id="edit-issue-title" className={`text-lg font-bold text-[var(--jira-text-primary)] flex items-center gap-2 min-w-0 ${
               hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
@@ -179,17 +201,9 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               </a>
             </h2>
           </div>
+
+          {/* Far-right: Save Changes button */}
           <div className="flex items-center gap-2 shrink-0">
-            {isDirty && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--jira-border)] hover:bg-[var(--jira-surface-hover)] text-[var(--jira-text-secondary)] transition-colors cursor-pointer"
-                aria-label="Cancel changes"
-              >
-                Cancel
-              </button>
-            )}
             <button
               type="submit"
               form="edit-issue-form"
@@ -198,16 +212,6 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               <Save className="w-3.5 h-3.5" />
               <span>Save Changes</span>
             </button>
-            {!isDirty && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
-                aria-label="Close edit dialog"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
           </div>
         </div>
 

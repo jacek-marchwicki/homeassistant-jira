@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Plus, AlertCircle } from 'lucide-react';
+import { ArrowLeft, X, Plus, AlertCircle } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssueType, JiraPriority, JiraStatusCategory } from '../types/jira.ts';
 import { getAvailableStatuses } from '../utils/boardUtils.ts';
@@ -138,23 +138,37 @@ export function CreateIssueModal({
           data-testid="create-issue-modal-header"
           className="flex items-center justify-between pb-4 border-b border-[var(--jira-border)]"
         >
+          {/* Far-left: Close (back arrow) / Cancel (X) button + Title */}
           <div className="flex items-center gap-2 min-w-0">
+            {isDirty ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"
+                aria-label="Cancel changes"
+                title="Cancel changes"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"
+                aria-label="Close create dialog"
+                title="Close"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <IssueTypeIcon type={issueType} className="w-5 h-5 shrink-0" />
             <h2 id="create-issue-title" className="text-lg font-bold text-[var(--jira-text-primary)] truncate">
               Create Issue
             </h2>
           </div>
+
+          {/* Far-right: Create button */}
           <div className="flex items-center gap-2 shrink-0">
-            {isDirty && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--jira-border)] hover:bg-[var(--jira-surface-hover)] text-[var(--jira-text-secondary)] transition-colors cursor-pointer"
-                aria-label="Cancel changes"
-              >
-                Cancel
-              </button>
-            )}
             <button
               type="submit"
               form="create-issue-form"
@@ -163,16 +177,6 @@ export function CreateIssueModal({
               <Plus className="w-4 h-4" />
               <span>Create</span>
             </button>
-            {!isDirty && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
-                aria-label="Close create dialog"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
           </div>
         </div>
 

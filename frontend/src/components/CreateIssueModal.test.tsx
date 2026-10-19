@@ -139,23 +139,24 @@ describe('CreateIssueModal component', () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes on X button click, Cancel button click when dirty, and Escape key', async () => {
+  it('closes on Close (back arrow) button click, Cancel (X) button click when dirty, and Escape key', async () => {
     const handleClose = vi.fn();
 
     await act(async () => {
       root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
     });
 
-    // Default pristine state: X button is displayed, no Cancel button
-    const cancelBtnBefore = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Cancel'
-    );
-    expect(cancelBtnBefore).toBeUndefined();
+    // Default pristine state: Close button (back arrow) on the far left, no Cancel button
+    const cancelBtnBefore = container.querySelector('button[aria-label="Cancel changes"]');
+    expect(cancelBtnBefore).toBeNull();
 
-    const closeXBtn = container.querySelector('button[aria-label="Close create dialog"]') as HTMLButtonElement;
-    expect(closeXBtn).not.toBeNull();
+    const closeBtn = container.querySelector('button[aria-label="Close create dialog"]') as HTMLButtonElement;
+    expect(closeBtn).not.toBeNull();
+    // Verify it uses ArrowLeft icon
+    expect(closeBtn.querySelector('svg.lucide-arrow-left')).not.toBeNull();
+
     await act(async () => {
-      closeXBtn.click();
+      closeBtn.click();
     });
     expect(handleClose).toHaveBeenCalledTimes(1);
 
@@ -165,19 +166,22 @@ describe('CreateIssueModal component', () => {
     });
     expect(handleClose).toHaveBeenCalledTimes(2);
 
-    // When dirty: X button is replaced with Cancel button
+    // When dirty: Close button is replaced with Cancel (X icon) button on the far left
     const summaryInput = container.querySelector('#create-summary') as HTMLInputElement;
     await act(async () => {
       setInputValue(summaryInput, 'Brand new task');
     });
 
-    const closeXBtnAfter = container.querySelector('button[aria-label="Close create dialog"]');
-    expect(closeXBtnAfter).toBeNull();
+    const closeBtnAfter = container.querySelector('button[aria-label="Close create dialog"]');
+    expect(closeBtnAfter).toBeNull();
 
-    const cancelBtnAfter = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Cancel'
-    ) as HTMLButtonElement;
+    const cancelBtnAfter = container.querySelector('button[aria-label="Cancel changes"]') as HTMLButtonElement;
     expect(cancelBtnAfter).not.toBeNull();
+    // Verify it uses X icon
+    expect(cancelBtnAfter.querySelector('svg.lucide-x')).not.toBeNull();
+
+    // Verify UI did not shift: same button container dimensions and classes
+    expect(cancelBtnAfter.className).toBe(closeBtn.className);
 
     await act(async () => {
       cancelBtnAfter.click();
@@ -185,7 +189,7 @@ describe('CreateIssueModal component', () => {
     expect(handleClose).toHaveBeenCalledTimes(3);
   });
 
-  it('renders Create and Cancel/X buttons at the top header and removes bottom action buttons', async () => {
+  it('renders Close/Cancel on the far left and Create on the far right in header', async () => {
     await act(async () => {
       root.render(<CreateIssueModal isOpen={true} onClose={() => {}} />);
     });
@@ -193,14 +197,24 @@ describe('CreateIssueModal component', () => {
     const header = container.querySelector('[data-testid="create-issue-modal-header"]');
     expect(header).not.toBeNull();
 
-    // Header contains the submit create button at the top
+    const closeButtonInHeader = header?.querySelector('button[aria-label="Close create dialog"]');
+    const title = header?.querySelector('#create-issue-title');
     const createButtonInHeader = header?.querySelector('button[type="submit"]');
+
+    expect(closeButtonInHeader).not.toBeNull();
+    expect(title).not.toBeNull();
     expect(createButtonInHeader).not.toBeNull();
     expect(createButtonInHeader?.textContent).toContain('Create');
 
-    // Header contains the default X button at the top
-    const xButtonInHeader = header?.querySelector('button[aria-label="Close create dialog"]');
-    expect(xButtonInHeader).not.toBeNull();
+    // Close button is on the far left (before title)
+    expect(
+      Boolean(closeButtonInHeader!.compareDocumentPosition(title!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+
+    // Create button is on the far right (after title)
+    expect(
+      Boolean(title!.compareDocumentPosition(createButtonInHeader!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
 
     // Verify there are no bottom action buttons (no Create button outside the header)
     const allCreateButtons = container.querySelectorAll('button[type="submit"]');

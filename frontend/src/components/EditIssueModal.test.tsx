@@ -273,7 +273,7 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     expect(closeButtonInHeader).not.toBeNull();
     expect(title).not.toBeNull();
     expect(saveButtonInHeader).not.toBeNull();
-    expect(saveButtonInHeader?.textContent).toContain('Save Changes');
+    expect(saveButtonInHeader?.textContent).toContain('Save');
 
     // Close button is on the far left (before title)
     expect(
@@ -285,9 +285,9 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
       Boolean(title!.compareDocumentPosition(saveButtonInHeader!) & Node.DOCUMENT_POSITION_FOLLOWING)
     ).toBe(true);
 
-    // Verify there are no bottom action buttons (no Save Changes button outside the header)
+    // Verify there are no bottom action buttons (no Save button outside the header)
     const allSaveButtons = Array.from(container.querySelectorAll('button[type="submit"]')).filter(
-      (b) => b.getAttribute('form') === 'edit-issue-form' || b.textContent?.includes('Save Changes')
+      (b) => b.getAttribute('form') === 'edit-issue-form' || b.textContent?.includes('Save')
     );
     expect(allSaveButtons.length).toBe(1);
     expect(header?.contains(allSaveButtons[0])).toBe(true);

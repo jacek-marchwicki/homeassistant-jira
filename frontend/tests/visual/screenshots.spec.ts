@@ -421,7 +421,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const header = modal.getByTestId('edit-issue-modal-header');
     await expect(header.getByRole('button', { name: 'Close edit dialog' })).toBeVisible();
     await expect(header.getByRole('button', { name: 'Cancel' })).not.toBeVisible();
-    await expect(header.getByRole('button', { name: 'Save Changes' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Save' })).toBeVisible();
 
     // Make an edit to trigger dirty state
     await modal.locator('#edit-summary').fill('Updated Summary for Dirty Snapshot');

@@ -202,7 +202,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
             </h2>
           </div>
 
-          {/* Far-right: Save Changes button */}
+          {/* Far-right: Save button */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="submit"
@@ -210,7 +210,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--jira-primary)] hover:bg-[var(--jira-primary-hover)] text-white shadow-xs transition-colors cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>Save Changes</span>
+              <span>Save</span>
             </button>
           </div>
         </div>

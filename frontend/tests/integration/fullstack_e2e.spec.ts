@@ -366,7 +366,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await summaryInput.fill('Configure Home Assistant Ingress dynamic proxy support (Edited)');
 
     // Save changes
-    await dialog.getByRole('button', { name: 'Save Changes' }).click();
+    await dialog.getByRole('button', { name: 'Save' }).click();
 
     // Verify modal closes
     await expect(dialog).not.toBeVisible();
@@ -576,12 +576,12 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await clearDueBtn.click();
     await expect(dueDateInput).toHaveValue('');
 
-    // 4. Save Changes and verify backend PATCH call
+    // 4. Save and verify backend PATCH call
     const patchPromise = page.waitForResponse(
       (res) => res.url().includes('/api/issues/PROJ-101') && res.status() === 200
     );
 
-    await dialog.getByRole('button', { name: 'Save Changes' }).click();
+    await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).not.toBeVisible();
 
     const patchRes = await patchPromise;

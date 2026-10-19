@@ -274,7 +274,7 @@ This document details the architectural phases, delivered features, and evolutio
 
 - [x] **Phase 5.21: Details Screen UX Polish, Top Action Buttons & Field Reordering**
   - [x] **Easily Accessible Top Action Buttons & Left-Aligned Dismissal**:
-    - Placed primary "Save Changes" / "Create" button on the **far right** of the header bar.
+    - Placed primary "Save" / "Create" button on the **far right** of the header bar.
     - Positioned the single dismissal action on the **far left** of the header bar, preceding the issue title, icon, and external Jira link.
     - Removed bottom action button rows from both [`EditIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.tsx) and [`CreateIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.tsx), completely eliminating the need to scroll past long descriptions, form attributes, dates, or comments to save or discard changes.
   - [x] **Dynamic "Close" (Back Arrow) / "Cancel" (X) Zero-Shift Toggle**:

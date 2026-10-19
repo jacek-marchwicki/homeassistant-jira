@@ -271,3 +271,23 @@ This document details the architectural phases, delivered features, and evolutio
     - Updated Vitest unit tests in `navigation.test.ts`, `boardStore.test.ts`, `offlineReactivity.test.ts`, and `Header.test.tsx` (36 test files, 330 tests passing).
     - Updated Playwright integration and E2E test suites in [`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts) (17/17 tests passing).
     - Updated Playwright visual regression snapshots in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) (43/43 snapshots passing).
+
+- [x] **Phase 5.21: Pending Transactions Management & Local Data Reset**
+  - [x] **Individual Pending Transaction Removal**:
+    - Users can inspect and selectively delete individual pending transactions directly from [`ConnectionStatusModal`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.tsx) via an accessible trash button (`removePendingTransaction`).
+    - If a locally created issue (`create_issue`) is removed from the outbox, the temporary issue is cleanly purged from state.
+    - If a status transition, update, or rank change is removed and no other pending transactions remain for that issue, it safely reverts to its baseline pre-mutation state from `rollbackQueue`.
+  - [x] **Detailed Transaction Changes Inspection**:
+    - Each pending transaction card provides detailed insight into what is changing:
+      - `transition_issue`: Target status and category (`Status: In Progress`).
+      - `update_issue`: Detailed breakdown of changed fields (`Summary`, `Status`, `Priority`, `Type`, `Assignee`, `Start date`, `Due date`, `Description`).
+      - `create_issue`: Summary, issue type, priority, and assigned user.
+      - `rank_issue`: Explicit relative positioning (`Move before ...`, `Move after ...`, or `Reorder between ...`).
+  - [x] **Reset & Re-sync Local Data**:
+    - Added "Clear local data & re-fetch" control in [`ConnectionStatusModal`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.tsx).
+    - Purges outbox queue and board cache in `localStorage`, resets store rollback queues and sync errors, and refetches fresh board data from `/api/board` and `/api/users`.
+  - [x] **Automated Testing & Visual Verification**:
+    - Store unit tests in [`frontend/src/store/boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts) covering removal of creations, status rollback, outbox cache persistence, and data reset.
+    - Component interaction tests in [`frontend/src/components/ConnectionStatusModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.test.tsx).
+    - Offline reactivity tests in [`frontend/src/store/offlineReactivity.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/offlineReactivity.test.ts).
+    - Playwright visual screenshot snapshot `modal-connection-status-pending-transactions.png` in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) (44/44 tests passing).

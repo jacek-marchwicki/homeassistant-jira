@@ -1157,5 +1157,45 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(dialog).toBeVisible();
     await expect(page).toHaveScreenshot('modal-connection-status-mobile.png');
   });
+
+  test('Capture Connection Status Modal with Pending Transactions and Clear Option', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // Seed outbox items in localStorage
+    await page.evaluate(() => {
+      window.localStorage.setItem(
+        'ha_jira_offline_outbox_v1',
+        JSON.stringify([
+          {
+            id: 'tx-visual-1',
+            action: 'transition_issue',
+            issueKey: 'PROJ-101',
+            payload: { target_status: 'In Progress', target_category: 'inprogress' },
+            createdAt: 1773000000000,
+          },
+          {
+            id: 'tx-visual-2',
+            action: 'update_issue',
+            issueKey: 'PROJ-102',
+            payload: { summary: 'Fix login button layout', priority: 'high', status_name: 'Done' },
+            createdAt: 1773000000000,
+          },
+        ])
+      );
+    });
+
+    await page.reload();
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+
+    const connBtn = page.locator('button[data-testid="connection-status-button"]');
+    await expect(connBtn).toBeVisible();
+    await connBtn.click();
+
+    const dialog = page.locator('div[role="dialog"][aria-labelledby="connection-modal-title"]');
+    await expect(dialog).toBeVisible();
+    await expect(page.getByText('Pending to send (2)')).toBeVisible();
+    await expect(page).toHaveScreenshot('modal-connection-status-pending-transactions.png');
+  });
 });
+
 

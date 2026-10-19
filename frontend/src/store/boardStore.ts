@@ -290,6 +290,8 @@ export interface BoardStoreState {
     targetRank?: string
   ) => Promise<void>;
   flushOfflineQueue: () => Promise<void>;
+  removePendingTransaction: (id: string) => void;
+  clearLocalDataAndRefetch: () => Promise<void>;
   handleWsMessage: (data: unknown) => void;
 }
 
@@ -1354,6 +1356,78 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       syncStatus: remainingOutbox.length === 0 ? 'synced' : 'offline',
     });
     persistCurrentBoardState(get);
+  },
+
+  removePendingTransaction: (id: string) => {
+    const currentOutbox = get().offlineOutbox;
+    const targetItem = currentOutbox.find((it) => it.id === id);
+    if (!targetItem) return;
+
+    const remainingOutbox = currentOutbox.filter((it) => it.id !== id);
+    saveCachedOutbox(remainingOutbox);
+
+    const issueKey = targetItem.issueKey;
+    const hasOtherPendingForIssue = issueKey
+      ? remainingOutbox.some((it) => it.issueKey === issueKey)
+      : false;
+
+    set((state) => {
+      let nextIssues = state.issues;
+      const nextRollbackQueue = { ...state.rollbackQueue };
+
+      if (targetItem.action === 'create_issue' && issueKey) {
+        nextIssues = state.issues.filter((i) => i.key !== issueKey);
+        delete nextRollbackQueue[issueKey];
+      } else if (issueKey && !hasOtherPendingForIssue) {
+        if (state.rollbackQueue[issueKey]) {
+          const original = state.rollbackQueue[issueKey];
+          nextIssues = state.issues.map((i) =>
+            i.key === issueKey
+              ? { ...original, _optimisticState: 'synced' as const, _pendingTargetStatusId: undefined }
+              : i
+          );
+          delete nextRollbackQueue[issueKey];
+        } else {
+          nextIssues = state.issues.map((i) =>
+            i.key === issueKey
+              ? { ...i, _optimisticState: 'synced' as const, _pendingTargetStatusId: undefined }
+              : i
+          );
+        }
+      }
+
+      const nextSyncStatus =
+        remainingOutbox.length === 0
+          ? state.wsConnected
+            ? 'synced'
+            : 'offline'
+          : state.syncStatus;
+
+      return {
+        issues: sortIssuesByRank(nextIssues),
+        rollbackQueue: nextRollbackQueue,
+        offlineOutbox: remainingOutbox,
+        pendingSyncCount: remainingOutbox.length,
+        syncStatus: nextSyncStatus,
+      };
+    });
+
+    persistCurrentBoardState(get);
+  },
+
+  clearLocalDataAndRefetch: async () => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(LOCAL_STORAGE_OUTBOX_KEY);
+      window.localStorage.removeItem(LOCAL_STORAGE_BOARD_CACHE_KEY);
+    }
+    set({
+      offlineOutbox: [],
+      pendingSyncCount: 0,
+      rollbackQueue: {},
+      syncError: null,
+      syncStatus: get().wsConnected ? 'synced' : 'offline',
+    });
+    await get().loadBoard();
   },
 
   handleWsMessage: (data: unknown) => {

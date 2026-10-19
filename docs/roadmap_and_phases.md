@@ -304,3 +304,30 @@ This document details the architectural phases, delivered features, and evolutio
     - Offline reactivity tests in [`frontend/src/store/offlineReactivity.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/offlineReactivity.test.ts).
     - Playwright visual screenshot snapshot `modal-connection-status-pending-transactions.png` in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) (44/44 tests passing).
 
+- [x] **Phase 5.23: Google Cloud Platform (Cloud Run) Deployment & Model Context Protocol (MCP) Server for Gemini Web**
+  - [x] **Remote Model Context Protocol (MCP) Server**:
+    - Implemented JSON-RPC 2.0 Model Context Protocol support supporting both modern **Streamable HTTP** (`POST /mcp`) and legacy/streaming **Server-Sent Events** (`GET /sse` and `POST /messages?session_id=...`).
+    - Exposed six Jira tools for Gemini on Web and LLM agents: `jira_get_board`, `jira_list_issues`, `jira_get_issue`, `jira_create_issue`, `jira_transition_issue`, and `jira_add_comment`.
+    - Tested in [`backend/tests/test_mcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_mcp.py).
+  - [x] **Google OAuth 2.0 & Identity Security**:
+    - Added pluggable authentication provider in [`backend/src/jira_dashboard/presentation/auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/presentation/auth.py) supporting `none`, `homeassistant`, and `gcp_oauth`.
+    - Restricts access exclusively to authorized family Gmail accounts (`ALLOWED_EMAILS`), blocking any unauthorized accounts with 403.
+    - Verifies Google ID tokens using official `google-auth` library and issues secure, tamper-proof session tokens for web browsers.
+    - Tested in [`backend/tests/test_auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_auth.py).
+  - [x] **Zero-to-Minimal Cost Guarantee (< $2 USD / month)**:
+    - Designed strictly around GCP's **Always Free Tier**:
+      - Scale to zero (`--min-instances 0`).
+      - CPU throttling allocated strictly during active requests.
+      - Instance scaling cap (`--max-instances 2`).
+      - Direct native HTTPS domain mapping avoiding the ~$18/month HTTP(S) Load Balancer trap.
+  - [x] **Privacy & Secret Management Architecture**:
+    - Zero email addresses or credentials stored in Git repository or committed code.
+    - Credentials managed via local `.env.gcp` (git-ignored) and uploaded directly into encrypted **Google Cloud Secret Manager**.
+    - Cloud Run mounts Secret Manager secrets at runtime.
+  - [x] **Python Single-Command Deployment Automation**:
+    - Implemented [`scripts/deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/deploy_gcp.py) with subcommands `sync-secrets`, `deploy`, and `status`.
+    - Tested in [`backend/tests/test_deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_deploy_gcp.py).
+  - [x] **Complete Deployment Documentation**:
+    - Comprehensive guide published at [`docs/gcp_deployment.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/gcp_deployment.md) and linked directly from [`README.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/README.md).
+
+

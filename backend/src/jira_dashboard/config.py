@@ -113,6 +113,33 @@ class JiraDashboardSettings(BaseModel):
         default=2592000,
         description="Retention duration in seconds (30 days) before unrequested images are pruned",
     )
+    auth_mode: str = Field(
+        default="auto",
+        description="Authentication mode: 'auto', 'none', 'homeassistant', or 'gcp_oauth'",
+    )
+    allowed_emails: str = Field(
+        default="",
+        description="Comma-separated list of allowed user email addresses",
+    )
+    google_client_id: str | None = Field(
+        default=None,
+        description="Google OAuth 2.0 Web Client ID",
+    )
+    google_client_secret: str | None = Field(
+        default=None,
+        description="Google OAuth 2.0 Web Client Secret",
+    )
+    session_secret_key: str | None = Field(
+        default=None,
+        description="Secret key for signing session tokens and cookies",
+    )
+
+    @property
+    def allowed_emails_set(self) -> set[str]:
+        """Return the parsed set of allowed lowercase email addresses."""
+        if not self.allowed_emails:
+            return set()
+        return {email.strip().lower() for email in self.allowed_emails.split(",") if email.strip()}
 
     @field_validator("gemini_api_key", mode="before")
     @classmethod
@@ -193,6 +220,11 @@ class JiraDashboardSettings(BaseModel):
             "gemini_daily_limit": "GEMINI_DAILY_LIMIT",
             "gemini_debounce_seconds": "GEMINI_DEBOUNCE_SECONDS",
             "gemini_cache_retention_seconds": "GEMINI_CACHE_RETENTION_SECONDS",
+            "auth_mode": "AUTH_MODE",
+            "allowed_emails": "ALLOWED_EMAILS",
+            "google_client_id": "GOOGLE_CLIENT_ID",
+            "google_client_secret": "GOOGLE_CLIENT_SECRET",
+            "session_secret_key": "SESSION_SECRET_KEY",
         }
 
         int_fields = {

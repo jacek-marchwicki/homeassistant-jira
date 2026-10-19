@@ -353,6 +353,23 @@ In the add-on's **Configuration** tab, enter your Jira connection settings:
 
 ---
 
+## ☁️ Deployment to Google Cloud Platform & Gemini MCP
+
+The application can also be deployed to **Google Cloud Run** with a single command, providing a remote **Model Context Protocol (MCP) Server** for **Gemini on Web (`gemini.com`)** alongside the web dashboard, protected by Google OAuth 2.0 and restricted to authorized family accounts.
+
+### Highlights:
+- **Zero-to-Minimal Cost Guarantee**: Serverless scale-to-zero compute that operates within Google Cloud's **Always Free Tier** (< $2 USD / month).
+- **Gemini on Web Integration**: Exposes standard `/sse` and `/mcp` endpoints allowing Gemini Advanced / custom tools to query sprint issues, update task statuses, and post comments.
+- **Privacy First**: Zero email addresses or credentials stored in Git; secrets are encrypted inside **Google Cloud Secret Manager**.
+- **Automated Deployment**: Single-command provisioning and deployment using Python:
+  ```bash
+  python3 scripts/deploy_gcp.py deploy
+  ```
+
+👉 [**Complete Google Cloud Platform & Gemini MCP Deployment Guide**](docs/gcp_deployment.md)
+
+---
+
 ## 🤖 AI Agent & Developer Guidelines
 
 If you are an AI assistant or human contributor developing this project, please consult:

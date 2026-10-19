@@ -1,0 +1,171 @@
+# Google Cloud Platform (GCP) & Gemini MCP Deployment Guide
+
+This guide details how to deploy the **Home Assistant Jira Dashboard** and its built-in **Model Context Protocol (MCP) Server** to **Google Cloud Run**, protected by Google OAuth 2.0 and restricted to four specified family Gmail accounts, while remaining 100% within GCP's **Always Free Tier** ($0/month under typical usage, with a hard guarantee never to exceed $2 USD/month).
+
+---
+
+## 1. Architectural Highlights & Principles
+
+1. **Dual-Deployment First**:
+   - The application runs identically on **Google Cloud Run** or as a **Home Assistant Add-on** (with Ingress).
+   - The authentication layer dynamically switches between `homeassistant` (Ingress headers) and `gcp_oauth` (Google OAuth 2.0 Bearer tokens and session cookies).
+2. **Unified Single Container**:
+   - The React 19 frontend and the Python FastAPI backend (serving both the Jira REST API, WebSockets, and the MCP endpoints) are packaged in a single Docker image.
+3. **Gemini on Web Native MCP**:
+   - Exposes standard Model Context Protocol endpoints:
+     - **SSE Transport**: `GET /sse` and `POST /messages?session_id=...`
+     - **Streamable HTTP Transport**: `POST /mcp`
+   - Gemini on web (`gemini.com`) connects securely using your OAuth 2.0 Client ID and Client Secret.
+4. **Privacy & Zero Secret Leakage**:
+   - No email addresses or secrets are stored in Git.
+   - All credentials and allowed user lists are stored in **Google Cloud Secret Manager** and mounted into Cloud Run at runtime.
+
+---
+
+## 2. Cost Control & Free Tier Guarantee (< $2 USD / Month)
+
+To guarantee you never pay more than **$2 USD/month** (and typically **$0.00**), the deployment strictly uses serverless, scale-to-zero compute:
+
+| Service | GCP Free Tier Allowance | How We Keep It Free |
+| :--- | :--- | :--- |
+| **Cloud Run** | • 2,000,000 requests / month<br/>• 360,000 vCPU-seconds / month<br/>• 180,000 GiB-seconds / month | • **Scale to Zero**: `--min-instances 0` (zero compute when idle).<br/>• **CPU Throttling**: CPU is only allocated and billed during active request processing.<br/>• **Instance Cap**: `--max-instances 2` to prevent runaway traffic spikes. |
+| **Secret Manager** | • 6 active secret versions free / month<br/>• 10,000 access operations free / month | We use ~5 secrets, well within the free tier. |
+| **Cloud Build** | • 120 build-minutes free / day | Container builds take ~1 to 2 minutes. |
+| **Networking** | Direct Cloud Run HTTPS | **We DO NOT use an external HTTP(S) Load Balancer** (which costs ~$18/month). Cloud Run provides free, fully-managed TLS certificates automatically. |
+
+### Recommended: Set a $2.00 Budget Alert
+1. In the Google Cloud Console, open **Billing > Budgets & alerts**.
+2. Click **Create Budget**.
+3. Set the target amount to **$2.00 USD**.
+4. Set threshold rules at 50% ($1.00), 90% ($1.80), and 100% ($2.00) with email notifications.
+
+---
+
+## 3. Step-by-Step Setup Guide
+
+### Step 1: Install & Authenticate Google Cloud SDK
+Ensure the `gcloud` CLI is installed and authenticated:
+```bash
+# Check version
+gcloud version
+
+# Log in with your Google account
+gcloud auth login
+```
+
+### Step 2: Configure OAuth Consent Screen & Whitelist 4 Users
+1. Open the [Google Cloud Console](https://console.cloud.google.com/).
+2. Select or create your GCP project (e.g., `family-jira-dashboard`).
+3. Navigate to **APIs & Services > OAuth consent screen** (or **Google Auth Platform**).
+4. Select User Type: **External** and click **Create**.
+5. Fill in the App Name (e.g. `Family Jira Assistant`) and user support email.
+6. Leave Publishing Status as **Testing** (Do NOT click "Publish App").
+   > [!IMPORTANT]
+   > While in **Testing** mode, Google automatically restricts access exclusively to listed test users. Any unlisted Google account is blocked by Google with `Error 403: access_denied` before reaching your service.
+7. Under **Test users**, click **Add Users** and enter your four Gmail accounts:
+   - `jacek.marchwicki@gmail.com`
+   - `marchwicka.ania@gmail.com`
+   - `luna.marchwicka@gmail.com`
+   - `zoja.marchwicka@gmail.com`
+8. Save and finish.
+
+### Step 3: Create OAuth 2.0 Web Client Credentials
+1. In the GCP Console, navigate to **APIs & Services > Credentials**.
+2. Click **Create Credentials > OAuth client ID**.
+3. Select Application type: **Web application**.
+4. Name: `Gemini and Dashboard Client`.
+5. Under **Authorized redirect URIs**, add Google's and Gemini's OAuth callback URLs:
+   - `https://oauth.googleusercontent.com`
+   - `https://gemini.google.com`
+   - `https://accounts.google.com`
+6. Click **Create** and copy your **Client ID** and **Client Secret**.
+
+### Step 4: Create Local `.env.gcp` Configuration
+Copy the template file to `.env.gcp` (which is strictly ignored by Git):
+```bash
+cp .env.gcp.example .env.gcp
+```
+
+Edit `.env.gcp` and fill in your actual values:
+```env
+# 1. Google Cloud Project & Service Configuration
+GCP_PROJECT_ID=your-gcp-project-id
+GCP_REGION=europe-west1
+GCP_SERVICE_NAME=homeassistant-jira
+
+# 2. Authorized Family Gmail Accounts (comma-separated, NO spaces)
+ALLOWED_EMAILS=jacek.marchwicki@gmail.com,marchwicka.ania@gmail.com,luna.marchwicka@gmail.com,zoja.marchwicka@gmail.com
+
+# 3. Google OAuth 2.0 Web Client Credentials
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+
+# 4. Jira Cloud Credentials
+JIRA_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your-jira-account@example.com
+JIRA_API_TOKEN=your-jira-api-token
+JIRA_BOARD_ID=engineering-1
+```
+
+---
+
+## 4. Single-Command Deployment via Python
+
+All deployment steps are automated using the type-safe Python deployment utility [`scripts/deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/deploy_gcp.py):
+
+### 1. Sync Secrets to GCP Secret Manager (First time or when credentials change)
+```bash
+python3 scripts/deploy_gcp.py sync-secrets
+```
+This command:
+- Enables Cloud Run, Secret Manager, Cloud Build, and Artifact Registry APIs.
+- Uploads and encrypts all credentials in GCP Secret Manager.
+- Grants read access to Cloud Run's default service account.
+
+### 2. Deploy to Cloud Run
+```bash
+python3 scripts/deploy_gcp.py deploy
+```
+This command:
+- Runs pre-deployment local CI verification ([`scripts/run_ci_locally.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/run_ci_locally.py)).
+- Submits the container build to Cloud Build.
+- Deploys the service to Cloud Run with scale-to-zero, memory limits (512Mi), and secret bindings.
+- Outputs your public HTTPS URLs.
+
+### 3. Check Service Health & Status
+```bash
+python3 scripts/deploy_gcp.py status
+```
+
+---
+
+## 5. Connecting Gemini on Web (`gemini.com`)
+
+Once deployed, connect Gemini on Web to your custom Jira MCP server:
+
+1. Open **[gemini.google.com](https://gemini.google.com/)** in your browser.
+2. Go to **Settings > Extensions / Custom Tools / MCP Servers** (or your developer tools integration).
+3. Select **Add Custom MCP Server**:
+   - **Server URL**: `https://<your-cloud-run-service-url>/sse`
+   - **Client ID**: Paste your `GOOGLE_CLIENT_ID` (from `.env.gcp`)
+   - **Client Secret**: Paste your `GOOGLE_CLIENT_SECRET` (from `.env.gcp`)
+4. Click **Connect** and authorize access with your Google account.
+
+### Available MCP Tools Exposed to Gemini:
+- `jira_get_board`: Retrieve active sprint columns, backlog items, and ticket summaries.
+- `jira_list_issues`: Search and filter issues across the board.
+- `jira_get_issue`: Get detailed specifications, descriptions, and comments for any ticket (`PROJ-101`).
+- `jira_create_issue`: Create chores, tasks, or bugs with summary and description.
+- `jira_transition_issue`: Move issues between `todo`, `in_progress`, and `done`.
+- `jira_add_comment`: Post comments directly to Jira issues.
+
+---
+
+## 6. Accessing the Jira Web Dashboard
+
+Open the deployed Cloud Run URL directly in any desktop, tablet, or smartphone browser:
+```
+https://<your-cloud-run-service-url>/
+```
+- Visitors are authenticated via Google OAuth 2.0.
+- Only the 4 authorized accounts in `ALLOWED_EMAILS` will be granted access to view the dashboard and manage tasks.

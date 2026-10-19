@@ -48,5 +48,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD curl -f http://127.0.0.1:8000/health || exit 1
 
-# Start FastAPI application via Uvicorn ASGI server
-CMD ["python", "-m", "uvicorn", "jira_dashboard.presentation.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start FastAPI application via Uvicorn ASGI server with dynamic port support
+CMD ["sh", "-c", "exec python -m uvicorn jira_dashboard.presentation.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

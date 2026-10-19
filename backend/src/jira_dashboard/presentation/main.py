@@ -8,6 +8,7 @@ dynamic Ingress root_path handling, and fallback background polling.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -30,6 +31,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -57,6 +59,15 @@ from jira_dashboard.domain import (
     StatusCategory,
     issue_sort_key,
 )
+from jira_dashboard.presentation import auth as auth_module
+from jira_dashboard.presentation.auth import (
+    DEFAULT_SESSION_MAX_AGE,
+    SESSION_COOKIE_NAME,
+    AuthProvider,
+    GoogleAuthUser,
+    create_session_token,
+)
+from jira_dashboard.presentation.mcp import MCPServerHandler
 
 logger = logging.getLogger(__name__)
 
@@ -498,6 +509,162 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+mcp_handler = MCPServerHandler(jira_client=jira_client, storage=storage)
+
+
+class GoogleLoginRequest(BaseModel):
+    """Payload for Google OAuth 2.0 credential verification."""
+
+    credential: str
+
+
+@app.middleware("http")
+async def auth_and_access_middleware(request: Request, call_next: Any) -> Response:
+    """Enforce authentication on API and MCP endpoints when enabled."""
+    path = request.url.path
+
+    # Public bypass endpoints
+    if (
+        path in ("/health", "/api/health", "/api/auth/google", "/api/auth/logout")
+        or path.startswith("/api/webhooks/")
+        or path.startswith("/api/test/")
+        or request.method == "OPTIONS"
+    ):
+        return await call_next(request)
+
+    # Protected paths: /api/*, /mcp, /sse, /messages
+    if path.startswith("/api/") or path in ("/mcp", "/sse", "/messages"):
+        current_settings = JiraDashboardSettings.load()
+        provider = AuthProvider(current_settings)
+        try:
+            provider.authenticate_request(request)
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=exc.headers or {},
+            )
+
+    return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Authentication Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/auth/google")
+def auth_google(payload: GoogleLoginRequest, response: Response) -> dict[str, Any]:
+    """Exchange Google ID token credential for an authenticated session cookie."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    try:
+        info = auth_module.verify_google_id_token(
+            payload.credential, current_settings.google_client_id
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid Google ID token: {exc}") from exc
+
+    email = str(info.get("email", "")).strip().lower()
+    if not provider.is_email_allowed(email):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Email '{email}' is not in allowed users list",
+        )
+
+    user = GoogleAuthUser(
+        email=email,
+        name=str(info.get("name", "")),
+        picture=str(info.get("picture", "")),
+    )
+    token = create_session_token(user, provider.get_signing_secret())
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=DEFAULT_SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+    )
+    return user.model_dump()
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request) -> dict[str, Any]:
+    """Retrieve currently authenticated user profile."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    user = provider.authenticate_request(request)
+    return user.model_dump()
+
+
+@app.post("/api/auth/logout")
+def auth_logout(response: Response) -> dict[str, str]:
+    """Log out current user and invalidate session cookie."""
+    response.delete_cookie(key=SESSION_COOKIE_NAME)
+    return {"status": "logged_out"}
+
+
+# ---------------------------------------------------------------------------
+# Model Context Protocol (MCP) Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/mcp")
+async def mcp_endpoint(request_data: dict[str, Any]) -> Any:
+    """Streamable HTTP transport endpoint for Model Context Protocol."""
+    result = await mcp_handler.handle_jsonrpc(request_data)
+    if result is None:
+        return Response(status_code=204)
+    return result
+
+
+@app.get("/sse")
+async def mcp_sse_endpoint(request: Request) -> StreamingResponse:
+    """Server-Sent Events (SSE) transport endpoint for Model Context Protocol."""
+    session_id = mcp_handler.create_session()
+    queue = mcp_handler.sessions[session_id]
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        # Emit initial endpoint discovery event for client POST target
+        yield f"event: endpoint\ndata: /messages?session_id={session_id}\n\n"
+        try:
+            while True:
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"event: message\ndata: {msg}\n\n"
+                except asyncio.TimeoutError:
+                    # Heartbeat comment to keep connection alive
+                    yield ": ping\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            mcp_handler.remove_session(session_id)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/messages")
+async def mcp_messages_endpoint(
+    request_data: dict[str, Any],
+    session_id: str = Query(...),
+) -> Any:
+    """JSON-RPC message receiver endpoint for active SSE sessions."""
+    result = await mcp_handler.handle_jsonrpc(request_data)
+    if result is not None:
+        queue = mcp_handler.sessions.get(session_id)
+        if queue is not None:
+            await queue.put(json.dumps(result))
+        return result
+    return Response(status_code=202)
 
 
 # ---------------------------------------------------------------------------

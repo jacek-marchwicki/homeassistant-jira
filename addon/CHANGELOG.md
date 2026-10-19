@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- **Details Screen & Modal Improvements**: Replaced bottom action buttons in Edit and Create issue dialogs with easily accessible top header actions: primary "Save" / "Create" button on the far right and a dynamic zero-shift "Close" / "Cancel" toggle on the far left. Reordered fields so Assignee immediately follows Description and Issue Type is cleanly positioned at the bottom of the form.
+- **Pending Transactions Management & Local Data Reset**: Added the ability to inspect and selectively delete individual pending offline transactions directly from the Connection Status dialog (`/status`), safely reverting uncommitted edits or purging locally created drafts. Added a one-click "Clear local data & re-fetch" control to reset stale caches and re-synchronize directly from Jira.
+- **Retirement of "Home as Usual" Section**: Retired the separate "Home as Usual" column divider, normalizing daily recurring tasks (`recreate_after == "1d"`) into standard "To Do", Overdue, or In Progress sections for a simpler, less cluttered board layout while preserving full recurrence metadata.
+
 ## 0.5.0
 
 - **People Board as Default View**: Streamlined dashboard views by establishing the People board as the primary default view alongside Backlog, retiring the separate status-column Kanban board. Navigating to `/board` or using legacy saved preferences smoothly redirects to `/people`.

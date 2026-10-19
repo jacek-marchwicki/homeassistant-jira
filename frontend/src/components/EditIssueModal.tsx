@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle, ExternalLink, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, X, Save, AlertCircle, ExternalLink, Calendar, Clock } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue, JiraIssueType, JiraPriority } from '../types/jira.ts';
 import { getAvailableStatuses, getJiraIssueUrl } from '../utils/boardUtils.ts';
@@ -123,6 +123,21 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
     onClose();
   };
 
+  const isDirty = Boolean(
+    issue && (
+      summary !== (issue.summary || '') ||
+      description !== (issue.description || '') ||
+      issueType !== (issue.issue_type || issue.issueType || 'task') ||
+      priority !== (issue.priority || 'medium') ||
+      statusName !== (issue.status?.name || '') ||
+      assigneeName !== (issue.assignee?.displayName || issue.assignee?.display_name || '') ||
+      assigneeAccountId !== (issue.assignee?.accountId || '') ||
+      dueDate !== (issue.due_date ?? issue.dueDate ?? '') ||
+      startDate !== (issue.start_date ?? issue.startDate ?? '') ||
+      recreateAfter !== (issue.recreate_after ?? issue.recreateAfter ?? '')
+    )
+  );
+
   return (
     <div
       className="fixed inset-0 z-50 flex sm:items-center sm:justify-center sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
@@ -143,17 +158,39 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
             hasBackground ? 'p-3 -m-4 sm:-m-6 mb-4 sm:mb-6 rounded-t-none sm:rounded-t-xl shadow-inner' : ''
           }`}
         >
-          <div className="flex items-center gap-2">
-            <IssueTypeIcon type={issueType} className="w-5 h-5" />
-            <h2 id="edit-issue-title" className={`text-lg font-bold text-[var(--jira-text-primary)] flex items-center gap-2 ${
+          {/* Far-left: Close (back arrow) / Cancel (X) button + Title */}
+          <div className="flex items-center gap-2 min-w-0">
+            {isDirty ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"
+                aria-label="Cancel changes"
+                title="Cancel changes"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"
+                aria-label="Close edit dialog"
+                title="Close"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
+            <IssueTypeIcon type={issueType} className="w-5 h-5 shrink-0" />
+            <h2 id="edit-issue-title" className={`text-lg font-bold text-[var(--jira-text-primary)] flex items-center gap-2 min-w-0 ${
               hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
             }`}>
-              <span>Edit Issue</span>
+              <span className="truncate">Edit Issue</span>
               <a
                 href={issueUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`font-mono text-[var(--jira-primary)] hover:underline inline-flex items-center gap-1 cursor-pointer ${
+                className={`font-mono text-[var(--jira-primary)] hover:underline inline-flex items-center gap-1 cursor-pointer shrink-0 ${
                   hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
                 }`}
                 title={`Open ${issue.key} in Jira`}
@@ -164,13 +201,18 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               </a>
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer"
-            aria-label="Close edit dialog"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          {/* Far-right: Save button */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="submit"
+              form="edit-issue-form"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--jira-primary)] hover:bg-[var(--jira-primary-hover)] text-white shadow-xs transition-colors cursor-pointer"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Save</span>
+            </button>
+          </div>
         </div>
 
         {/* Validation Error Banner */}
@@ -182,7 +224,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
         )}
 
         {/* Edit Form */}
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form id="edit-issue-form" onSubmit={handleSubmit} className="mt-4 space-y-4">
           {/* Summary Input */}
           <div>
             <label
@@ -221,38 +263,26 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
             />
           </div>
 
-          {/* Type & Priority Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label
-                htmlFor="edit-type"
-                className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
-              >
-                Issue Type
-              </label>
-              <IssueTypeSelect
-                id="edit-type"
-                value={issueType}
-                onChange={setIssueType}
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="edit-priority"
-                className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
-              >
-                Priority
-              </label>
-              <PrioritySelect
-                id="edit-priority"
-                value={priority}
-                onChange={setPriority}
-              />
-            </div>
+          {/* Assignee (directly after Description) */}
+          <div>
+            <label
+              htmlFor="edit-assignee"
+              className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
+            >
+              Assignee
+            </label>
+            <AssigneeSelect
+              id="edit-assignee"
+              value={assigneeName}
+              onChange={setAssigneeName}
+              onSelectOption={(opt) => {
+                setAssigneeName(opt?.displayName || '');
+                setAssigneeAccountId(opt?.accountId || '');
+              }}
+            />
           </div>
 
-          {/* Status & Assignee Row */}
+          {/* Status & Priority Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label
@@ -272,26 +302,21 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
             <div>
               <label
-                htmlFor="edit-assignee"
+                htmlFor="edit-priority"
                 className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
               >
-                Assignee
+                Priority
               </label>
-              <AssigneeSelect
-                id="edit-assignee"
-                value={assigneeName}
-                onChange={setAssigneeName}
-                onSelectOption={(opt) => {
-                  setAssigneeName(opt?.displayName || '');
-                  setAssigneeAccountId(opt?.accountId || '');
-                }}
+              <PrioritySelect
+                id="edit-priority"
+                value={priority}
+                onChange={setPriority}
               />
             </div>
           </div>
 
           {/* Dates */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
             <div>
               <label
                 htmlFor="edit-start-date"
@@ -353,22 +378,19 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--jira-border)]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold rounded-lg border border-[var(--jira-border)] hover:bg-[var(--jira-surface-hover)] text-[var(--jira-text-secondary)] transition-colors cursor-pointer"
+          {/* Issue Type (last field) */}
+          <div>
+            <label
+              htmlFor="edit-type"
+              className="block text-xs font-semibold text-[var(--jira-text-secondary)] mb-1"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-[var(--jira-primary)] hover:bg-[var(--jira-primary-hover)] text-white shadow-xs transition-colors cursor-pointer"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Save Changes</span>
-            </button>
+              Issue Type
+            </label>
+            <IssueTypeSelect
+              id="edit-type"
+              value={issueType}
+              onChange={setIssueType}
+            />
           </div>
         </form>
 

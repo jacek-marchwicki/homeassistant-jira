@@ -139,25 +139,131 @@ describe('CreateIssueModal component', () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes on Cancel button click and Escape key', async () => {
+  it('closes on Close (back arrow) button click, Cancel (X) button click when dirty, and Escape key', async () => {
     const handleClose = vi.fn();
 
     await act(async () => {
       root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
     });
 
-    const cancelBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Cancel'
-    ) as HTMLButtonElement;
+    // Default pristine state: Close button (back arrow) on the far left, no Cancel button
+    const cancelBtnBefore = container.querySelector('button[aria-label="Cancel changes"]');
+    expect(cancelBtnBefore).toBeNull();
+
+    const closeBtn = container.querySelector('button[aria-label="Close create dialog"]') as HTMLButtonElement;
+    expect(closeBtn).not.toBeNull();
+    // Verify it uses ArrowLeft icon
+    expect(closeBtn.querySelector('svg.lucide-arrow-left')).not.toBeNull();
+
     await act(async () => {
-      cancelBtn.click();
+      closeBtn.click();
     });
     expect(handleClose).toHaveBeenCalledTimes(1);
 
+    // Escape key closes as well
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     expect(handleClose).toHaveBeenCalledTimes(2);
+
+    // When dirty: Close button is replaced with Cancel (X icon) button on the far left
+    const summaryInput = container.querySelector('#create-summary') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(summaryInput, 'Brand new task');
+    });
+
+    const closeBtnAfter = container.querySelector('button[aria-label="Close create dialog"]');
+    expect(closeBtnAfter).toBeNull();
+
+    const cancelBtnAfter = container.querySelector('button[aria-label="Cancel changes"]') as HTMLButtonElement;
+    expect(cancelBtnAfter).not.toBeNull();
+    // Verify it uses X icon
+    expect(cancelBtnAfter.querySelector('svg.lucide-x')).not.toBeNull();
+
+    // Verify UI did not shift: same button container dimensions and classes
+    expect(cancelBtnAfter.className).toBe(closeBtn.className);
+
+    await act(async () => {
+      cancelBtnAfter.click();
+    });
+    expect(handleClose).toHaveBeenCalledTimes(3);
+  });
+
+  it('renders Close/Cancel on the far left and Create on the far right in header', async () => {
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={() => {}} />);
+    });
+
+    const header = container.querySelector('[data-testid="create-issue-modal-header"]');
+    expect(header).not.toBeNull();
+
+    const closeButtonInHeader = header?.querySelector('button[aria-label="Close create dialog"]');
+    const title = header?.querySelector('#create-issue-title');
+    const createButtonInHeader = header?.querySelector('button[type="submit"]');
+
+    expect(closeButtonInHeader).not.toBeNull();
+    expect(title).not.toBeNull();
+    expect(createButtonInHeader).not.toBeNull();
+    expect(createButtonInHeader?.textContent).toContain('Create');
+
+    // Close button is on the far left (before title)
+    expect(
+      Boolean(closeButtonInHeader!.compareDocumentPosition(title!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+
+    // Create button is on the far right (after title)
+    expect(
+      Boolean(title!.compareDocumentPosition(createButtonInHeader!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+
+    // Verify there are no bottom action buttons (no Create button outside the header)
+    const allCreateButtons = container.querySelectorAll('button[type="submit"]');
+    expect(allCreateButtons.length).toBe(1);
+    expect(header?.contains(allCreateButtons[0])).toBe(true);
+  });
+
+  it('orders fields with Assignee right after Description and Issue Type as the last field', async () => {
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={() => {}} />);
+    });
+
+    const summaryInput = container.querySelector('#create-summary');
+    const descriptionInput = container.querySelector('#create-description');
+    const assigneeInput = container.querySelector('#create-assignee');
+    const statusSelect = container.querySelector('#create-status');
+    const prioritySelect = container.querySelector('#create-priority');
+    const startDateInput = container.querySelector('#create-start-date');
+    const dueDateInput = container.querySelector('#create-due-date');
+    const recreateAfterInput = container.querySelector('#create-recreate-after');
+    const typeSelect = container.querySelector('#create-type');
+
+    expect(summaryInput).not.toBeNull();
+    expect(descriptionInput).not.toBeNull();
+    expect(assigneeInput).not.toBeNull();
+    expect(statusSelect).not.toBeNull();
+    expect(prioritySelect).not.toBeNull();
+    expect(startDateInput).not.toBeNull();
+    expect(dueDateInput).not.toBeNull();
+    expect(recreateAfterInput).not.toBeNull();
+    expect(typeSelect).not.toBeNull();
+
+    // 1. Summary comes before Description
+    expect(
+      Boolean(summaryInput!.compareDocumentPosition(descriptionInput!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+
+    // 2. Assignee comes right after Description (before Status, Priority, Dates, Recreate, Issue Type)
+    expect(
+      Boolean(descriptionInput!.compareDocumentPosition(assigneeInput!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+    expect(
+      Boolean(assigneeInput!.compareDocumentPosition(statusSelect!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+
+    // 3. Issue Type is the last field (after Recreate after)
+    expect(
+      Boolean(recreateAfterInput!.compareDocumentPosition(typeSelect!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
   });
 
   it('allows clicking recreate after hint buttons to populate input', async () => {

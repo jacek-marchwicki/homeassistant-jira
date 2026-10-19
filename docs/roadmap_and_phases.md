@@ -304,3 +304,19 @@ This document details the architectural phases, delivered features, and evolutio
     - Offline reactivity tests in [`frontend/src/store/offlineReactivity.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/offlineReactivity.test.ts).
     - Playwright visual screenshot snapshot `modal-connection-status-pending-transactions.png` in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) (44/44 tests passing).
 
+- [x] **Phase 5.23: Details Screen UX Polish, Top Action Buttons & Field Reordering**
+  - [x] **Easily Accessible Top Action Buttons & Left-Aligned Dismissal**:
+    - Placed primary "Save" / "Create" button on the **far right** of the header bar.
+    - Positioned the single dismissal action on the **far left** of the header bar, preceding the issue title, icon, and external Jira link.
+    - Removed bottom action button rows from both [`EditIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.tsx) and [`CreateIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.tsx), completely eliminating the need to scroll past long descriptions, form attributes, dates, or comments to save or discard changes.
+  - [x] **Dynamic "Close" (Back Arrow) / "Cancel" (X) Zero-Shift Toggle**:
+    - In pristine state (no unsaved edits), the far-left button renders as "Close" using an **ArrowLeft** back-arrow icon.
+    - When the user enters any edits that can be saved or discarded (`isDirty`), the button smoothly transitions to "Cancel" using an **X** icon.
+    - Both states share identical dimensions (`w-8 h-8`), padding, and flex properties, guaranteeing **zero UI layout shift** when toggling between pristine and dirty states.
+  - [x] **Optimized Field Ordering**:
+    - Positioned "Assignee" directly after "Description", allowing users reviewing an issue to immediately view or reassign ticket ownership without scanning past workflow statuses.
+    - Positioned "Issue Type" as the last field at the bottom of the form (after "Recreate after"), de-emphasizing static ticket classification in favor of dynamic workflow fields (Status, Priority, Dates, Recurrence).
+  - [x] **Full Test Coverage & Visual Regression Verification**:
+    - Vitest unit tests in [`EditIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.test.tsx) and [`CreateIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.test.tsx) covering field document order, dynamic ArrowLeft-to-X transition, zero-shift CSS class equivalence, Escape key handling, and top button submission (334/334 passed).
+    - Full-stack Playwright E2E tests in [`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts) (17/17 passed).
+    - Playwright visual regression snapshots in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) capturing clean and dirty modal states (43/43 passed).

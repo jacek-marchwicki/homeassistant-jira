@@ -62,11 +62,11 @@ gcloud auth login
 6. Leave Publishing Status as **Testing** (Do NOT click "Publish App").
    > [!IMPORTANT]
    > While in **Testing** mode, Google automatically restricts access exclusively to listed test users. Any unlisted Google account is blocked by Google with `Error 403: access_denied` before reaching your service.
-7. Under **Test users**, click **Add Users** and enter your four Gmail accounts:
-   - `jacek.marchwicki@gmail.com`
-   - `marchwicka.ania@gmail.com`
-   - `luna.marchwicka@gmail.com`
-   - `zoja.marchwicka@gmail.com`
+7. Under **Test users**, click **Add Users** and enter your four authorized Gmail accounts:
+   - `user1@gmail.com`
+   - `user2@gmail.com`
+   - `user3@gmail.com`
+   - `user4@gmail.com`
 8. Save and finish.
 
 ### Step 3: Create OAuth 2.0 Web Client Credentials
@@ -74,11 +74,17 @@ gcloud auth login
 2. Click **Create Credentials > OAuth client ID**.
 3. Select Application type: **Web application**.
 4. Name: `Gemini and Dashboard Client`.
-5. Under **Authorized redirect URIs**, add Google's and Gemini's OAuth callback URLs:
-   - `https://oauth.googleusercontent.com`
-   - `https://gemini.google.com`
-   - `https://accounts.google.com`
-6. Click **Create** and copy your **Client ID** and **Client Secret**.
+5. Checkbox **"Use this client for an AI-powered agent"**:
+   - **Leave this unchecked**. Google recommends standard "Web application" clients for dual-purpose applications serving both human browser users (the web dashboard) and AI tools.
+6. **Authorized JavaScript origins** (Optional for local testing / web app):
+   - `http://localhost:8000`
+   - `http://localhost:3000`
+   - `https://<your-service>-<hash>.a.run.app` (add after running deployment)
+7. **Authorized redirect URIs**:
+   - *Note on Google restriction*: Google will reject Google-owned domains (such as `oauth.googleusercontent.com` or `accounts.google.com`) with *"Invalid Redirect: uses a forbidden domain"*.
+   - **For web dashboard**: `http://localhost:8000/api/auth/google/callback` (or leave empty if using GIS popup).
+   - **For Gemini on Web**: If Gemini's setup dialog displays a specific callback URI (such as `https://vertexaisearch.cloud.google.com/oauth-redirect`), add that URI here. You can also leave this empty initially and update it once Gemini prompts you during tool connection.
+8. Click **Create** and copy your **Client ID** and **Client Secret**.
 
 ### Step 4: Create Local `.env.gcp` Configuration
 Copy the template file to `.env.gcp` (which is strictly ignored by Git):
@@ -94,7 +100,7 @@ GCP_REGION=europe-west1
 GCP_SERVICE_NAME=homeassistant-jira
 
 # 2. Authorized Family Gmail Accounts (comma-separated, NO spaces)
-ALLOWED_EMAILS=jacek.marchwicki@gmail.com,marchwicka.ania@gmail.com,luna.marchwicka@gmail.com,zoja.marchwicka@gmail.com
+ALLOWED_EMAILS=user1@gmail.com,user2@gmail.com,user3@gmail.com,user4@gmail.com
 
 # 3. Google OAuth 2.0 Web Client Credentials
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com

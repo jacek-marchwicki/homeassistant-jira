@@ -160,4 +160,47 @@ describe('PeopleColumn Component', () => {
     expect(container.textContent).toContain('Recent completed task');
     expect(container.textContent).not.toContain('Old completed task from 3 days ago');
   });
+
+  it('renders tasks with recreate_after == "1d" in the normal To Do section without Home as Usual section', async () => {
+    const issues: JiraIssue[] = [
+      {
+        id: '1',
+        key: 'PROJ-1',
+        summary: 'Daily task treated as normal To Do',
+        priority: 'medium',
+        status: { id: 'col-ready', name: 'Ready', category: 'todo' },
+        assignee: { displayName: 'Alice Engineer', accountId: 'usr-alice' },
+        recreate_after: '1d',
+        start_date: '2026-10-01',
+      },
+      {
+        id: '2',
+        key: 'PROJ-2',
+        summary: 'In Progress Task',
+        priority: 'medium',
+        status: { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
+        assignee: { displayName: 'Alice Engineer', accountId: 'usr-alice' },
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <PeopleColumn
+            person={{ displayName: 'Alice Engineer', accountId: 'usr-alice' }}
+            issues={issues}
+            now={mockNow}
+          />
+        </DndContext>
+      );
+    });
+
+    expect(container.textContent).toContain('Daily task treated as normal To Do');
+    expect(container.querySelector('[data-testid="people-section-home-as-usual"]')).toBeNull();
+    expect(container.querySelector('[data-testid="people-section-other"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="people-section-other"]')?.textContent).toContain(
+      'Daily task treated as normal To Do'
+    );
+  });
 });
+

@@ -351,7 +351,7 @@ describe('Cross-View & Filter Offline Reactivity', () => {
     expect(useBoardStore.getState().syncStatus).toBe('synced');
   });
 
-  it('issue with recreate_after == "1d" and Active is immediately classified into Home as Usual section while offline', async () => {
+  it('issue with recreate_after == "1d" and Active is treated as normal task in other (To Do) section while offline', async () => {
     const readyIssue: JiraIssue = {
       id: '302',
       key: 'PROJ-302',
@@ -377,7 +377,6 @@ describe('Cross-View & Filter Offline Reactivity', () => {
       new Date('2026-10-07'),
       testColumns
     );
-    expect(sections.homeAsUsual.length).toBe(0);
     expect(sections.other.length).toBe(1);
 
     // Simulate offline
@@ -388,15 +387,14 @@ describe('Cross-View & Filter Offline Reactivity', () => {
       recreate_after: '1d',
     });
 
-    // Immediately classified into Home as Usual
+    // Remains classified into normal other (To Do) section
     sections = splitReadyIssues(
       useBoardStore.getState().issues,
       new Date('2026-10-07'),
       testColumns
     );
-    expect(sections.homeAsUsual.length).toBe(1);
-    expect(sections.homeAsUsual[0].key).toBe('PROJ-302');
-    expect(sections.other.length).toBe(0);
+    expect(sections.other.length).toBe(1);
+    expect(sections.other[0].key).toBe('PROJ-302');
   });
 
   it('reassigning an issue on People view while offline applies optimistically in <50ms and queues in outbox', async () => {

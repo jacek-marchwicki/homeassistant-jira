@@ -11,7 +11,6 @@ import {
   isIssueOverdue,
   isIssueExpedited,
   isIssueInProgress,
-  isIssueHomeAsUsual,
   isEpicIssue,
   isReadyColumn,
   isInProgressColumn,
@@ -456,35 +455,7 @@ describe('boardUtils', () => {
       expect(other.map((i) => i.key)).toEqual(['READY-NORMAL']);
     });
 
-    it('identifies Home as Usual tasks when Active and recreate_after is "1d"', () => {
-      const activeDailyIssue: JiraIssue = {
-        ...mockBaseIssue,
-        key: 'DAILY-ACTIVE',
-        summary: 'Daily routine task',
-        start_date: '2026-10-01', // Past start date -> Active
-        recreate_after: '1d',
-      };
-      const inactiveDailyIssue: JiraIssue = {
-        ...mockBaseIssue,
-        key: 'DAILY-INACTIVE',
-        summary: 'Future daily task',
-        start_date: '2026-10-25', // Future start date -> Not active
-        recreate_after: '1d',
-      };
-      const weeklyIssue: JiraIssue = {
-        ...mockBaseIssue,
-        key: 'WEEKLY',
-        summary: 'Weekly task',
-        start_date: null, // Active
-        recreate_after: '1w',
-      };
-
-      expect(isIssueHomeAsUsual(activeDailyIssue, fixedNow)).toBe(true);
-      expect(isIssueHomeAsUsual(inactiveDailyIssue, fixedNow)).toBe(false);
-      expect(isIssueHomeAsUsual(weeklyIssue, fixedNow)).toBe(false);
-    });
-
-    it('splits Ready column into Overdue, Expedited, In Progress, Home as Usual, and Other with correct precedence', () => {
+    it('splits Ready column into Overdue, Expedited, In Progress, and Other with correct precedence, treating daily recreate_after tasks as normal To Do tasks', () => {
       const issues: JiraIssue[] = [
         // 1. Overdue with recreate_after == '1d' -> Overdue takes precedence
         {
@@ -518,18 +489,18 @@ describe('boardUtils', () => {
           due_date: '2026-10-20',
           recreate_after: '1d',
         },
-        // 4. Home as Usual: Active and recreate_after == '1d'
+        // 4. Daily task: Active and recreate_after == '1d' -> Treated as normal other / To Do task
         {
           ...mockBaseIssue,
           key: 'TASK-HOME-AS-USUAL',
-          summary: 'Home as Usual Task',
+          summary: 'Daily Task',
           priority: 'medium',
           status: { id: '10003', name: 'Ready', category: 'todo' },
           start_date: '2026-10-01',
           due_date: '2026-10-20',
           recreate_after: '1d',
         },
-        // 5. Inactive with recreate_after == '1d' -> Not Active, so lands in Other
+        // 5. Inactive with recreate_after == '1d' -> Lands in Other
         {
           ...mockBaseIssue,
           key: 'TASK-INACTIVE-DAILY',
@@ -540,7 +511,7 @@ describe('boardUtils', () => {
           due_date: '2026-10-30',
           recreate_after: '1d',
         },
-        // 6. Regular Ready task -> lands in Other
+        // 6. Regular Ready task -> Lands in Other
         {
           ...mockBaseIssue,
           key: 'TASK-REGULAR-OTHER',
@@ -552,7 +523,7 @@ describe('boardUtils', () => {
         },
       ];
 
-      const { overdue, expedited, inProgress, homeAsUsual, other } = splitReadyIssues(
+      const { overdue, expedited, inProgress, other } = splitReadyIssues(
         issues,
         fixedNow,
         homeColumns
@@ -561,8 +532,11 @@ describe('boardUtils', () => {
       expect(overdue.map((i) => i.key)).toEqual(['TASK-OVERDUE-DAILY']);
       expect(expedited.map((i) => i.key)).toEqual(['TASK-EXP-DAILY']);
       expect(inProgress.map((i) => i.key)).toEqual(['TASK-PROG-DAILY']);
-      expect(homeAsUsual.map((i) => i.key)).toEqual(['TASK-HOME-AS-USUAL']);
-      expect(other.map((i) => i.key)).toEqual(['TASK-INACTIVE-DAILY', 'TASK-REGULAR-OTHER']);
+      expect(other.map((i) => i.key)).toEqual([
+        'TASK-HOME-AS-USUAL',
+        'TASK-INACTIVE-DAILY',
+        'TASK-REGULAR-OTHER',
+      ]);
     });
   });
 
@@ -1329,7 +1303,7 @@ describe('boardUtils', () => {
     });
 
     describe('splitReadyAndDoneIssues', () => {
-      it('separates issues into Overdue, Expedited, In Progress, Home as Usual, Other, and Done', () => {
+      it('separates issues into Overdue, Expedited, In Progress, Other, and Done', () => {
         const overdueIssue: JiraIssue = {
           ...mockBaseIssue,
           key: 'OVERDUE-1',
@@ -1387,8 +1361,7 @@ describe('boardUtils', () => {
         expect(sections.overdue.map((i) => i.key)).toEqual(['OVERDUE-1']);
         expect(sections.expedited.map((i) => i.key)).toEqual(['EXPEDITED-1']);
         expect(sections.inProgress.map((i) => i.key)).toEqual(['INPROGRESS-1']);
-        expect(sections.homeAsUsual.map((i) => i.key)).toEqual(['HOME-1']);
-        expect(sections.other.map((i) => i.key)).toEqual(['OTHER-1']);
+        expect(sections.other.map((i) => i.key)).toEqual(['HOME-1', 'OTHER-1']);
         // Only recent Done is included; old Done (>24h) is excluded
         expect(sections.done.map((i) => i.key)).toEqual(['DONE-RECENT']);
       });

@@ -484,29 +484,16 @@ export interface ReadySections {
   overdue: JiraIssue[];
   expedited: JiraIssue[];
   inProgress: JiraIssue[];
-  homeAsUsual: JiraIssue[];
   other: JiraIssue[];
 }
 
 /**
- * Returns true if an issue belongs to "Home as Usual".
- * An issue belongs to Home as Usual if it is Active (Start date <= Now date)
- * and its "Recreate after" interval equals "1d".
- */
-export function isIssueHomeAsUsual(issue: JiraIssue, now: Date = new Date()): boolean {
-  if (!isIssueActive(issue, now)) return false;
-  const recreate = (issue.recreate_after ?? issue.recreateAfter ?? '').trim().toLowerCase();
-  return recreate === '1d';
-}
-
-/**
- * Splits an array of issues into Overdue, Expedited, In Progress, Home as Usual, and Other groups.
+ * Splits an array of issues into Overdue, Expedited, In Progress, and Other groups.
  * Precedence:
  * 1. Overdue (due date strictly before today - takes highest priority)
  * 2. Expedited (highest priority or due today)
  * 3. In Progress (status is inprogress, not overdue/expedited)
- * 4. Home as Usual (Active and recreate_after == "1d")
- * 5. Other (standard Ready / To Do issues)
+ * 4. Other (standard Ready / To Do issues, including daily routine tasks)
  */
 export function splitReadyIssues(
   issues: JiraIssue[],
@@ -516,7 +503,6 @@ export function splitReadyIssues(
   const overdue: JiraIssue[] = [];
   const expedited: JiraIssue[] = [];
   const inProgress: JiraIssue[] = [];
-  const homeAsUsual: JiraIssue[] = [];
   const other: JiraIssue[] = [];
 
   for (const issue of issues) {
@@ -526,14 +512,12 @@ export function splitReadyIssues(
       expedited.push(issue);
     } else if (isIssueInProgress(issue, columns)) {
       inProgress.push(issue);
-    } else if (isIssueHomeAsUsual(issue, now)) {
-      homeAsUsual.push(issue);
     } else {
       other.push(issue);
     }
   }
 
-  return { overdue, expedited, inProgress, homeAsUsual, other };
+  return { overdue, expedited, inProgress, other };
 }
 
 /**
@@ -1103,7 +1087,7 @@ export interface ReadyAndDoneSections extends ReadySections {
 }
 
 /**
- * Splits issues into Overdue, Expedited, In Progress, Home as Usual, Other, and Done sections.
+ * Splits issues into Overdue, Expedited, In Progress, Other, and Done sections.
  * Done issues updated within doneMaxDays (default: 1 day / 24 hours) are retained in the done section.
  */
 export function splitReadyAndDoneIssues(
@@ -1115,7 +1099,6 @@ export function splitReadyAndDoneIssues(
   const overdue: JiraIssue[] = [];
   const expedited: JiraIssue[] = [];
   const inProgress: JiraIssue[] = [];
-  const homeAsUsual: JiraIssue[] = [];
   const other: JiraIssue[] = [];
   const done: JiraIssue[] = [];
 
@@ -1137,14 +1120,12 @@ export function splitReadyAndDoneIssues(
       expedited.push(issue);
     } else if (isIssueInProgress(issue, columns)) {
       inProgress.push(issue);
-    } else if (isIssueHomeAsUsual(issue, now)) {
-      homeAsUsual.push(issue);
     } else {
       other.push(issue);
     }
   }
 
-  return { overdue, expedited, inProgress, homeAsUsual, other, done };
+  return { overdue, expedited, inProgress, other, done };
 }
 
 /**

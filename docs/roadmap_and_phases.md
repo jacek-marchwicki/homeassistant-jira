@@ -271,3 +271,16 @@ This document details the architectural phases, delivered features, and evolutio
     - Updated Vitest unit tests in `navigation.test.ts`, `boardStore.test.ts`, `offlineReactivity.test.ts`, and `Header.test.tsx` (36 test files, 330 tests passing).
     - Updated Playwright integration and E2E test suites in [`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts) (17/17 tests passing).
     - Updated Playwright visual regression snapshots in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) (43/43 snapshots passing).
+
+- [x] **Phase 5.21: Retirement of "Home as Usual" Section & Normalization into "To Do"**
+  - [x] **Retirement of Dedicated "Home as Usual" Section**:
+    - Resigned the separate "Home as Usual" section on the board and removed the section divider, icon, and special-case branching from [`frontend/src/components/PeopleColumn.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/PeopleColumn.tsx).
+    - Daily routine tasks (`recreate_after == "1d"`) are now treated as regular tasks in the standard "To Do" list (or Overdue / Expedited / In Progress based on due date, priority, and status), simplifying the column layout and reducing visual clutter.
+  - [x] **Domain Logic & Section Splitting Normalization**:
+    - Streamlined `splitReadyIssues` and `splitReadyAndDoneIssues` in [`frontend/src/utils/boardUtils.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/boardUtils.ts) by removing `homeAsUsual` group from `ReadySections` and `ReadyAndDoneSections`.
+    - Removed `isIssueHomeAsUsual` helper while preserving full recurrence metadata (`recreate_after`) on task cards.
+  - [x] **Full-Stack Automated Verification & Snapshot Cleanup**:
+    - Updated Vitest unit test suites in `boardUtils.test.ts`, `PeopleColumn.test.tsx`, and `offlineReactivity.test.ts` (36 test files, 330 tests passing).
+    - Updated Playwright full-stack E2E acceptance tests in [`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts) verifying daily routine tasks display in the standard "To Do" section.
+    - Removed obsolete snapshot `ready-section-home-as-usual.png` and updated visual regression snapshots across all 43 scenarios in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts).
+

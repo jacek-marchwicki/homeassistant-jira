@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { AlertCircle, CheckCircle2, CircleDot, Home, PlayCircle, Zap } from 'lucide-react';
+import { AlertCircle, CheckCircle2, CircleDot, PlayCircle, Zap } from 'lucide-react';
 import { JiraIssue } from '../types/jira.ts';
 import { AssigneePerson, splitReadyAndDoneIssues } from '../utils/boardUtils.ts';
 import { useBoardStore } from '../store/boardStore.ts';
@@ -36,7 +36,7 @@ export function PeopleColumn({
   const isOver = Boolean(isHighlighted || isDroppableOver);
   const issueSortableIds = issues.map((i) => `${columnId}:${i.key}`);
 
-  const { overdue, expedited, inProgress, homeAsUsual, other, done } = splitReadyAndDoneIssues(
+  const { overdue, expedited, inProgress, other, done } = splitReadyAndDoneIssues(
     issues,
     now,
     columns,
@@ -46,10 +46,9 @@ export function PeopleColumn({
   const hasOverdue = overdue.length > 0;
   const hasExpedited = expedited.length > 0;
   const hasInProgress = inProgress.length > 0;
-  const hasHomeAsUsual = homeAsUsual.length > 0;
   const hasDone = done.length > 0;
   const hasSpecialSections =
-    hasOverdue || hasExpedited || hasInProgress || hasHomeAsUsual || hasDone;
+    hasOverdue || hasExpedited || hasInProgress || hasDone;
 
   return (
     <div
@@ -171,32 +170,7 @@ export function PeopleColumn({
                 </div>
               )}
 
-              {/* 4. Home as Usual Sub-section */}
-              {hasHomeAsUsual && (
-                <div data-testid="people-section-home-as-usual" className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-                      <Home className="w-3.5 h-3.5" />
-                      <span>Home as Usual</span>
-                    </div>
-                    <span className="px-1.5 py-0.5 rounded-full text-2xs font-bold bg-emerald-500/20 text-emerald-300">
-                      {homeAsUsual.length}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {homeAsUsual.map((issue) => (
-                      <IssueCard
-                        key={issue.key}
-                        issue={issue}
-                        sortableId={`${columnId}:${issue.key}`}
-                        sourceColumnId={columnId}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 5. Other Sub-section */}
+              {/* 4. Other Sub-section (To Do) */}
               {other.length > 0 && (
                 <div data-testid="people-section-other" className="flex flex-col gap-2">
                   <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[var(--jira-surface-elevated)] border border-[var(--jira-border-subtle)]">

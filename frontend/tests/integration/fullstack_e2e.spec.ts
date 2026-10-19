@@ -591,7 +591,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     expect(patchJson.due_date).toBeNull();
   });
 
-  test('15. Home as Usual Section: displays active tasks with recreate_after == "1d" in People column between In Progress and Other', async ({
+  test('15. Daily Tasks with recreate_after == "1d" are displayed in normal To Do section in People column', async ({
     page,
   }) => {
     // Show all issues
@@ -621,30 +621,16 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     });
     expect(dailyWebhookRes.ok()).toBeTruthy();
 
-    // Verify "Home as Usual" sub-section appears in People column
-    const homeAsUsualSection = page.getByTestId('people-section-home-as-usual').first();
-    await expect(homeAsUsualSection).toBeVisible();
-    await expect(homeAsUsualSection).toContainText('Home as Usual');
-    await expect(homeAsUsualSection.locator('article', { hasText: 'PROJ-888' })).toBeVisible();
+    // Verify "Home as Usual" sub-section does NOT exist
+    await expect(page.getByTestId('people-section-home-as-usual')).toHaveCount(0);
 
-    // Verify sub-section order in People column
-    const personColumn = page.getByTestId('people-column-usr-1');
-    const sections = personColumn.locator('[data-testid^="people-section-"]');
-    const count = await sections.count();
-    const testIds: string[] = [];
-    for (let i = 0; i < count; i++) {
-      testIds.push((await sections.nth(i).getAttribute('data-testid')) || '');
-    }
-
-    const inProgressIndex = testIds.indexOf('people-section-inprogress');
-    const homeAsUsualIndex = testIds.indexOf('people-section-home-as-usual');
-    const otherIndex = testIds.indexOf('people-section-other');
-
-    expect(homeAsUsualIndex).toBeGreaterThan(inProgressIndex);
-    expect(otherIndex).toBeGreaterThan(homeAsUsualIndex);
+    // Verify task is displayed in the normal To Do section
+    const otherSection = page.getByTestId('people-section-other').first();
+    await expect(otherSection).toBeVisible();
+    await expect(otherSection.locator('article', { hasText: 'PROJ-888' })).toBeVisible();
   });
 
-  test('15. Preferences & View Persistence: "Who is Me" shows all available users and view choice persists across reload', async ({
+  test('16. Preferences & View Persistence: "Who is Me" shows all available users and view choice persists across reload', async ({
     page,
   }) => {
     // 1. Initially on People view

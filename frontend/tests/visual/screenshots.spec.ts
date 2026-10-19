@@ -224,14 +224,13 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     const overdueSection = page.getByTestId('people-section-overdue').first();
     const expeditedSection = page.getByTestId('people-section-expedited').first();
     const inProgressSection = page.getByTestId('people-section-inprogress').first();
-    const homeAsUsualSection = page.getByTestId('people-section-home-as-usual').first();
     const otherSection = page.getByTestId('people-section-other').first();
 
     await expect(overdueSection).toBeVisible();
     await expect(expeditedSection).toBeVisible();
     await expect(inProgressSection).toBeVisible();
-    await expect(homeAsUsualSection).toBeVisible();
     await expect(otherSection).toBeVisible();
+    await expect(page.getByTestId('people-section-home-as-usual')).toHaveCount(0);
 
     // 1. Capture Overdue section snapshot
     await expect(overdueSection).toHaveScreenshot('ready-section-overdue.png');
@@ -242,10 +241,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     // 3. Capture In Progress section snapshot
     await expect(inProgressSection).toHaveScreenshot('ready-section-inprogress.png');
 
-    // 4. Capture Home as Usual section snapshot
-    await expect(homeAsUsualSection).toHaveScreenshot('ready-section-home-as-usual.png');
-
-    // 5. Capture full person column snapshot with all sub-sections
+    // 4. Capture full person column snapshot with all sub-sections
     await expect(readyColumn).toHaveScreenshot('ready-column-sections.png');
   });
 

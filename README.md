@@ -369,9 +369,9 @@ The complete architectural phases, delivered features, and development roadmap h
 👉 **[View Full Roadmap & Evolutionary Phases](docs/roadmap_and_phases.md)**
 
 *Recent Milestones*:
+- **People Board as Default**: Streamlined dashboard views by establishing the People board as primary default view with direct card details navigation.
 - **Interactive Date Picker & Portal Architecture**: Portaled calendar popover escaping modal boundaries, viewport collision detection, quick year jumping (`<<` / `>>`), and native year/month dropdowns.
 - **Consistent Modal Date Ordering**: "Start Date" displayed before "Due Date" across both Create Issue and Edit Issue dialogs.
-- **Home as Usual Section**: Dedicated grouping in the "Ready" column for daily active recurring tasks (`recreate_after == "1d"`).
 - **AI Feature Workflow Skill**: Integrated developer skill ([`.agents/skills/implement-feature-workflow/SKILL.md`](.agents/skills/implement-feature-workflow/SKILL.md)) orchestrating full-cycle implementation with worktrees, tests, offline reactivity, and visual regression.
 
 ---

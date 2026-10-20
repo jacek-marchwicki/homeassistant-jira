@@ -29,9 +29,10 @@
     --jira-status-blocked: #ef4444;
 
     /* Quick Action: Done Button */
-    --jira-action-done-text: #4ade80;
-    --jira-action-done-bg: rgba(34, 197, 94, 0.15);
-    --jira-action-done-hover: rgba(34, 197, 94, 0.25);
+    --jira-action-done-text: #ffffff;
+    --jira-action-done-bg: rgba(34, 197, 94, 0.85);
+    --jira-action-done-hover: rgba(34, 197, 94, 0.95);
+    --jira-action-done-border: rgba(74, 222, 128, 0.4);
 
     /* Live WebSocket Status Pill */
     --jira-live-badge-text: #4ade80;
@@ -74,9 +75,10 @@
     --jira-status-done: #16a34a;
     --jira-status-blocked: #dc2626;
 
-    --jira-action-done-text: #15803d;
-    --jira-action-done-bg: rgba(34, 197, 94, 0.15);
-    --jira-action-done-hover: rgba(34, 197, 94, 0.25);
+    --jira-action-done-text: #ffffff;
+    --jira-action-done-bg: #16a34a;
+    --jira-action-done-hover: #15803d;
+    --jira-action-done-border: #15803d;
 
     --jira-live-badge-text: #15803d;
     --jira-live-badge-bg: rgba(34, 197, 94, 0.15);
@@ -117,9 +119,10 @@
     --jira-status-done: #4ade80;
     --jira-status-blocked: #f87171;
 
-    --jira-action-done-text: #4ade80;
-    --jira-action-done-bg: rgba(34, 197, 94, 0.20);
-    --jira-action-done-hover: rgba(34, 197, 94, 0.32);
+    --jira-action-done-text: #ffffff;
+    --jira-action-done-bg: rgba(34, 197, 94, 0.90);
+    --jira-action-done-hover: #22c55e;
+    --jira-action-done-border: rgba(74, 222, 128, 0.5);
 
     --jira-live-badge-text: #4ade80;
     --jira-live-badge-bg: rgba(34, 197, 94, 0.18);

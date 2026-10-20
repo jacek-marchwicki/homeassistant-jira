@@ -13,9 +13,11 @@ import { IssueTypeIcon } from './IssueTypeIcon.tsx';
 import { PriorityIcon } from './PriorityIcon.tsx';
 import {
   getColumnForIssue,
+  isAssignedToChild,
   isIssueExpedited,
   isIssueOverdue,
 } from '../utils/boardUtils.ts';
+import { triggerDoneCelebration } from '../utils/celebrationEffects.ts';
 import { useTaskBackground, getCardBackgroundStyle } from '../utils/useTaskBackground.ts';
 
 interface IssueCardProps {
@@ -31,7 +33,7 @@ export function IssueCard({
   sortableId,
   sourceColumnId,
 }: IssueCardProps) {
-  const { columns, transitionIssueOptimistic, setEditingIssue } = useBoardStore();
+  const { columns, transitionIssueOptimistic, setEditingIssue, accountTypes } = useBoardStore();
   const currentColumn = getColumnForIssue(issue, columns);
   const isDone = (currentColumn?.category || issue.status.category) === 'done';
   const dueDateStr = issue.due_date ?? issue.dueDate;
@@ -74,6 +76,9 @@ export function IssueCard({
 
   const handleQuickDone = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isAssignedToChild(issue, accountTypes)) {
+      triggerDoneCelebration();
+    }
     const doneCol = columns.find((c) => c.category === 'done');
     transitionIssueOptimistic(issue.key, 'done', doneCol?.name);
   };
@@ -110,11 +115,11 @@ export function IssueCard({
           {!isDone && (
             <button
               onClick={handleQuickDone}
-              className="flex items-center gap-1 px-2 py-1 rounded text-2xs font-semibold text-[var(--jira-action-done-text)] bg-[var(--jira-action-done-bg)] hover:bg-[var(--jira-action-done-hover)] transition-colors min-h-[32px] cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold text-[var(--jira-action-done-text)] bg-[var(--jira-action-done-bg)] hover:bg-[var(--jira-action-done-hover)] border border-[var(--jira-action-done-border)] shadow-xs transition-all min-h-[38px] cursor-pointer touch-manipulation active:scale-95"
               title="Quick Action: Mark as Done"
               aria-label={`Mark ${issue.key} as Done`}
             >
-              <CheckCircle2 className="w-3.5 h-3.5" />
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>Done</span>
             </button>
           )}

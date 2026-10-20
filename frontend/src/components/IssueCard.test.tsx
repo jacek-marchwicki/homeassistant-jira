@@ -7,6 +7,7 @@ import { IssueCard } from './IssueCard.tsx';
 import { clearBackgroundCache } from '../utils/useTaskBackground.ts';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
+import * as celebrationEffects from '../utils/celebrationEffects.ts';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -281,5 +282,93 @@ describe('IssueCard component', () => {
     expect(card.style.backgroundImage).toContain('/api/issues/CHORE-101/background');
     expect(card.style.backgroundImage).toContain('linear-gradient');
     expect(card.style.backgroundSize).toBe('cover');
+  });
+
+  it('triggers celebration animation when quick Done is clicked for a child task', async () => {
+    const triggerSpy = vi.spyOn(celebrationEffects, 'triggerDoneCelebration').mockImplementation(() => 'dual-cannon');
+    const childIssue: JiraIssue = {
+      ...mockIssueTodo,
+      key: 'CHILD-1',
+      assignee: { displayName: 'Tommy' },
+    };
+
+    act(() => {
+      useBoardStore.setState({
+        accountTypes: { tommy: 'child' },
+        transitionIssueOptimistic: vi.fn(),
+      });
+    });
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[childIssue.key]}>
+            <IssueCard issue={childIssue} />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const doneBtn = container.querySelector('button[aria-label="Mark CHILD-1 as Done"]');
+    expect(doneBtn).not.toBeNull();
+
+    await act(async () => {
+      doneBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(triggerSpy).toHaveBeenCalledTimes(1);
+    triggerSpy.mockRestore();
+  });
+
+  it('does NOT trigger celebration animation when quick Done is clicked for a parent or unassigned task', async () => {
+    const triggerSpy = vi.spyOn(celebrationEffects, 'triggerDoneCelebration').mockImplementation(() => 'dual-cannon');
+    const parentIssue: JiraIssue = {
+      ...mockIssueTodo,
+      key: 'PARENT-1',
+      assignee: { displayName: 'Alice' },
+    };
+
+    act(() => {
+      useBoardStore.setState({
+        accountTypes: { alice: 'parent' },
+        transitionIssueOptimistic: vi.fn(),
+      });
+    });
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[parentIssue.key]}>
+            <IssueCard issue={parentIssue} />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const doneBtn = container.querySelector('button[aria-label="Mark PARENT-1 as Done"]');
+    expect(doneBtn).not.toBeNull();
+
+    await act(async () => {
+      doneBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(triggerSpy).not.toHaveBeenCalled();
+    triggerSpy.mockRestore();
+  });
+
+  it('renders a larger, less transparent Done button with min-h-[38px]', async () => {
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockIssueTodo.key]}>
+            <IssueCard issue={mockIssueTodo} />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const doneBtn = container.querySelector('button[aria-label="Mark PROJ-101 as Done"]') as HTMLElement;
+    expect(doneBtn).not.toBeNull();
+    expect(doneBtn.className).toContain('min-h-[38px]');
   });
 });

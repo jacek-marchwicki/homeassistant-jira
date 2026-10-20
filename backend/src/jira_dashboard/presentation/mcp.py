@@ -242,16 +242,25 @@ class MCPServerHandler:
 
         # Standard methods
         if method == "initialize":
+            client_version = params.get("protocolVersion") or MCP_PROTOCOL_VERSION
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
                 "result": {
-                    "protocolVersion": MCP_PROTOCOL_VERSION,
-                    "capabilities": {"tools": {"listChanged": False}},
+                    "protocolVersion": client_version,
+                    "capabilities": {
+                        "tools": {"listChanged": False},
+                        "resources": {"subscribe": False, "listChanged": False},
+                        "prompts": {"listChanged": False},
+                        "logging": {},
+                    },
                     "serverInfo": {
                         "name": SERVER_NAME,
                         "version": SERVER_VERSION,
                     },
+                    "instructions": (
+                        "Jira Task Manager MCP server for Home Assistant and Google Cloud."
+                    ),
                 },
             }
 

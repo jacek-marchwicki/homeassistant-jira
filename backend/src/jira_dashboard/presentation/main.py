@@ -911,6 +911,8 @@ async def mcp_endpoint(request: Request) -> Response:
         "Access-Control-Expose-Headers": "Mcp-Session-Id, Content-Type, Authorization",
     }
 
+    print(f"[MCP] INCOMING method={request.method} headers={dict(request.headers)}", flush=True)
+
     if request.method == "OPTIONS":
         return Response(
             status_code=200,
@@ -953,6 +955,7 @@ async def mcp_endpoint(request: Request) -> Response:
     # POST method
     try:
         request_data = await request.json()
+        print(f"[MCP] POST payload={request_data}", flush=True)
     except Exception:
         return JSONResponse(
             status_code=400,

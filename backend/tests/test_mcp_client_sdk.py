@@ -67,7 +67,7 @@ def test_official_mcp_client_sdk_lifecycle(local_mcp_server: str) -> None:
             async with ClientSession(read_stream, write_stream) as session:
                 # 1. initialize
                 init_res = await session.initialize()
-                assert init_res.server_info.name == "jira-dashboard-mcp"
+                assert init_res.server_info.name == "home-tasks-manager"
                 assert init_res.server_info.version == "0.5.0"
                 assert init_res.capabilities.tools is not None
 
@@ -75,9 +75,11 @@ def test_official_mcp_client_sdk_lifecycle(local_mcp_server: str) -> None:
                 tools_res = await session.list_tools()
                 tool_names = [t.name for t in tools_res.tools]
                 assert "jira_get_board" in tool_names
+                assert "jira_list_users" in tool_names
                 assert "jira_list_issues" in tool_names
                 assert "jira_get_issue" in tool_names
                 assert "jira_create_issue" in tool_names
+                assert "jira_assign_issue" in tool_names
                 assert "jira_transition_issue" in tool_names
                 assert "jira_add_comment" in tool_names
 
@@ -147,10 +149,10 @@ def test_official_mcp_client_sdk_with_oauth_bearer_token(local_mcp_server: str) 
                 ):
                     async with ClientSession(read_stream, write_stream) as session:
                         init_res = await session.initialize()
-                        assert init_res.server_info.name == "jira-dashboard-mcp"
+                        assert init_res.server_info.name == "home-tasks-manager"
 
                         tools_res = await session.list_tools()
-                        assert len(tools_res.tools) == 6
+                        assert len(tools_res.tools) == 8
 
                         # Call tool requiring authentication
                         call_res = await session.call_tool("jira_list_issues", {})

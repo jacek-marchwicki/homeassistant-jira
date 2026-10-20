@@ -1305,6 +1305,10 @@ async def mcp_endpoint(request: Request) -> Response:
     """Streamable HTTP transport endpoint for Model Context Protocol."""
     session_id = request.headers.get("mcp-session-id") or str(uuid.uuid4())
     protocol_version = request.headers.get("mcp-protocol-version") or "2025-11-25"
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
     base_headers = {
         "Access-Control-Allow-Origin": "*",
         "Mcp-Session-Id": session_id,
@@ -1414,7 +1418,7 @@ async def mcp_endpoint(request: Request) -> Response:
             except HTTPException:
                 pass
 
-        result = await mcp_handler.handle_jsonrpc(request_data)
+        result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
         if result is None:
             # Per MCP Streamable HTTP specification, notifications return 202 Accepted
             return Response(status_code=202, headers=base_headers)
@@ -1447,7 +1451,7 @@ async def mcp_endpoint(request: Request) -> Response:
             headers=resp_headers,
         )
 
-    result = await mcp_handler.handle_jsonrpc(request_data)
+    result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
     if result is None:
         return Response(status_code=202, headers=base_headers)
     return JSONResponse(content=result, headers=base_headers)
@@ -1530,7 +1534,11 @@ async def mcp_messages_endpoint(
                 headers=headers,
             )
 
-    result = await mcp_handler.handle_jsonrpc(request_data)
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
+    result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
     if result is not None:
         queue = mcp_handler.sessions.get(session_id)
         if queue is not None:

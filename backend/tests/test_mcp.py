@@ -45,7 +45,7 @@ def test_mcp_streamable_http_lifecycle() -> None:
     assert data["id"] == 1
     assert "result" in data
     assert data["result"]["protocolVersion"] == "2024-11-05"
-    assert data["result"]["serverInfo"]["name"] == "jira-dashboard-mcp"
+    assert data["result"]["serverInfo"]["name"] == "home-tasks-manager"
     assert "tools" in data["result"]["capabilities"]
 
     # 1b. notifications/initialized (returns 202 Accepted per Streamable HTTP spec)
@@ -66,11 +66,22 @@ def test_mcp_streamable_http_lifecycle() -> None:
     tools = resp.json()["result"]["tools"]
     tool_names = [t["name"] for t in tools]
     assert "jira_get_board" in tool_names
+    assert "jira_list_users" in tool_names
     assert "jira_list_issues" in tool_names
     assert "jira_get_issue" in tool_names
     assert "jira_create_issue" in tool_names
+    assert "jira_assign_issue" in tool_names
     assert "jira_transition_issue" in tool_names
     assert "jira_add_comment" in tool_names
+
+    # Verify annotations on all tools
+    for t in tools:
+        assert "annotations" in t
+        ann = t["annotations"]
+        assert "readOnlyHint" in ann
+        assert "destructiveHint" in ann
+        assert "idempotentHint" in ann
+        assert ann["openWorldHint"] is False
 
     # 4. tools/call -> jira_get_board
     call_payload = {
@@ -252,7 +263,7 @@ def test_mcp_auth_protection(monkeypatch: pytest.MonkeyPatch) -> None:
     # 2. GET /mcp -> 200 OK (server status)
     resp_get = client.get("/mcp")
     assert resp_get.status_code == 200
-    assert resp_get.json()["name"] == "jira-dashboard-mcp"
+    assert resp_get.json()["name"] == "home-tasks-manager"
 
     # 3. Unauthenticated discovery (initialize, ping, tools/list) -> 200
     resp_init = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
@@ -327,3 +338,256 @@ def test_mcp_oauth_discovery_metadata_endpoints() -> None:
     resp_oidc = client.get("/.well-known/openid-configuration")
     assert resp_oidc.status_code == 200
     assert resp_oidc.json()["authorization_endpoint"] == "http://testserver/oauth/authorize"
+
+
+def test_mcp_get_board_people_board_format_and_filters() -> None:
+    """Verify jira_get_board matches People board grouping, filters, and fields."""
+    from datetime import datetime, timedelta, timezone
+
+    from jira_dashboard.presentation.main import storage
+
+    client = TestClient(app)
+
+    # Set up child account
+    storage.set_account_type("Zoja", "child")
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # 1. Create a future task (should be hidden by default active_only=True)
+    client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {
+                "name": "jira_create_issue",
+                "arguments": {
+                    "summary": "Future task",
+                    "start_date": tomorrow,
+                    "assignee": "Jacek",
+                },
+            },
+        },
+    )
+
+    # 2. Create an Epic (should be hidden by default hide_epics=True)
+    client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {
+                "name": "jira_create_issue",
+                "arguments": {
+                    "summary": "Big Epic Project",
+                    "issue_type": "Epic",
+                    "assignee": "Jacek",
+                },
+            },
+        },
+    )
+
+    # 3. Create a Child task (should be hidden by default show_child_tasks=False)
+    client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {
+                "name": "jira_create_issue",
+                "arguments": {
+                    "summary": "Do homework",
+                    "assignee": "Zoja",
+                    "start_date": today,
+                    "due_date": today,
+                    "recreate_after": "1d",
+                },
+            },
+        },
+    )
+
+    # 4. Create an active parent task
+    create_res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "tools/call",
+            "params": {
+                "name": "jira_create_issue",
+                "arguments": {
+                    "summary": "Review system architecture",
+                    "assignee": "Jacek",
+                    "start_date": today,
+                    "due_date": today,
+                    "recreate_after": "1w",
+                },
+            },
+        },
+    )
+    parent_key = json.loads(create_res.json()["result"]["content"][0]["text"])["key"]
+
+    # Call jira_get_board with defaults (active_only=True, hide_epics=True, show_child_tasks=False)
+    board_res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 14,
+            "method": "tools/call",
+            "params": {"name": "jira_get_board", "arguments": {}},
+        },
+    )
+    assert board_res.status_code == 200
+    data = json.loads(board_res.json()["result"]["content"][0]["text"])
+
+    assert "people" in data
+    assert "tasks" in data
+    task_keys = [t["key"] for t in data["tasks"]]
+    assert parent_key in task_keys
+    # Future task, Epic, and Child task should be hidden by default
+    summaries = [t["summary"] for t in data["tasks"]]
+    assert "Future task" not in summaries
+    assert "Big Epic Project" not in summaries
+    assert "Do homework" not in summaries
+
+    # Verify task fields (start_date, due_date, end_date, recreate_after, dashboard url)
+    parent_task = next(t for t in data["tasks"] if t["key"] == parent_key)
+    assert parent_task["start_date"] == today
+    assert parent_task["due_date"] == today
+    assert parent_task["end_date"] == today
+    assert parent_task["recreate_after"] == "1w"
+    assert parent_task["url"] == f"http://testserver/task/{parent_key}"
+
+    # Call with show_child_tasks=True -> child task should be visible
+    board_child_res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": {"name": "jira_get_board", "arguments": {"show_child_tasks": True}},
+        },
+    )
+    data_child = json.loads(board_child_res.json()["result"]["content"][0]["text"])
+    child_summaries = [t["summary"] for t in data_child["tasks"]]
+    assert "Do homework" in child_summaries
+
+    # Call with username filter "Zoja" -> returns Zoja's tasks
+    board_user_res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "tools/call",
+            "params": {"name": "jira_get_board", "arguments": {"username": "Zoja"}},
+        },
+    )
+    data_user = json.loads(board_user_res.json()["result"]["content"][0]["text"])
+    user_summaries = [t["summary"] for t in data_user["tasks"]]
+    assert "Do homework" in user_summaries
+    assert "Review system architecture" not in user_summaries
+
+
+def test_mcp_list_users() -> None:
+    """Verify jira_list_users returns all board users with parent/child account types."""
+    from jira_dashboard.presentation.main import storage
+
+    storage.set_account_type("Zoja", "child")
+
+    client = TestClient(app)
+    resp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": {"name": "jira_list_users", "arguments": {}},
+        },
+    )
+    assert resp.status_code == 200
+    res = json.loads(resp.json()["result"]["content"][0]["text"])
+    assert "users" in res
+    users = res["users"]
+    user_names = [u["display_name"] for u in users]
+    assert any("Jacek" in name for name in user_names)
+
+    zoja = next((u for u in users if "Zoja" in u["display_name"]), None)
+    if zoja:
+        assert zoja["account_type"] == "child"
+
+
+def test_mcp_create_and_assign_issue() -> None:
+    """Verify jira_create_issue with all GUI fields and jira_assign_issue."""
+    client = TestClient(app)
+
+    # 1. Create with full GUI parameters
+    create_payload = {
+        "jsonrpc": "2.0",
+        "id": 30,
+        "method": "tools/call",
+        "params": {
+            "name": "jira_create_issue",
+            "arguments": {
+                "summary": "Water the plants",
+                "description": "Balcony and living room",
+                "issue_type": "Task",
+                "priority": "High",
+                "assignee": "Jacek",
+                "start_date": "2026-10-25",
+                "end_date": "2026-10-26",
+                "recreate_after": "3d",
+            },
+        },
+    }
+    resp = client.post("/mcp", json=create_payload)
+    assert resp.status_code == 200
+    created = json.loads(resp.json()["result"]["content"][0]["text"])
+    assert created["summary"] == "Water the plants"
+    assert created["priority"].lower() == "high"
+    assert created["start_date"] == "2026-10-25"
+    assert created["end_date"] == "2026-10-26"
+    assert created["recreate_after"] == "3d"
+    assert created["url"] == f"http://testserver/task/{created['key']}"
+
+    issue_key = created["key"]
+
+    # 2. Reassign using jira_assign_issue
+    assign_payload = {
+        "jsonrpc": "2.0",
+        "id": 31,
+        "method": "tools/call",
+        "params": {
+            "name": "jira_assign_issue",
+            "arguments": {
+                "issue_key": issue_key,
+                "assignee": "Ania",
+            },
+        },
+    }
+    resp_assign = client.post("/mcp", json=assign_payload)
+    assert resp_assign.status_code == 200
+    reassigned = json.loads(resp_assign.json()["result"]["content"][0]["text"])
+    assert "Ania" in reassigned["assignee"]
+    assert reassigned["url"] == f"http://testserver/task/{issue_key}"
+
+    # 3. Unassign using jira_assign_issue
+    unassign_payload = {
+        "jsonrpc": "2.0",
+        "id": 32,
+        "method": "tools/call",
+        "params": {
+            "name": "jira_assign_issue",
+            "arguments": {
+                "issue_key": issue_key,
+                "assignee": "unassigned",
+            },
+        },
+    }
+    resp_unassign = client.post("/mcp", json=unassign_payload)
+    assert resp_unassign.status_code == 200
+    unassigned = json.loads(resp_unassign.json()["result"]["content"][0]["text"])
+    assert unassigned["assignee"] == "Unassigned"

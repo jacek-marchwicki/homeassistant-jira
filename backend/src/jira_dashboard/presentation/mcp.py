@@ -139,16 +139,25 @@ class MCPServerHandler:
         self.storage = storage
         self.sessions: dict[str, asyncio.Queue[str]] = {}
 
-    def create_session(self) -> str:
-        """Create a new SSE session ID and message queue."""
-        session_id = str(uuid.uuid4())
+    def _create_queue(self) -> asyncio.Queue[str]:
         try:
-            self.sessions[session_id] = asyncio.Queue()
+            return asyncio.Queue()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            self.sessions[session_id] = asyncio.Queue()
+            return asyncio.Queue()
+
+    def create_session(self) -> str:
+        """Create a new SSE session ID and message queue."""
+        session_id = str(uuid.uuid4())
+        self.sessions[session_id] = self._create_queue()
         return session_id
+
+    def get_or_create_session(self, session_id: str) -> asyncio.Queue[str]:
+        """Retrieve existing session queue or create a new one."""
+        if session_id not in self.sessions:
+            self.sessions[session_id] = self._create_queue()
+        return self.sessions[session_id]
 
     def remove_session(self, session_id: str) -> None:
         """Clean up an SSE session."""

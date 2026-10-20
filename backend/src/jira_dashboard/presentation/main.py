@@ -71,7 +71,6 @@ from jira_dashboard.presentation.auth import (
     create_session_token,
 )
 from jira_dashboard.presentation.mcp import (
-    MCP_PROTOCOL_VERSION,
     SERVER_NAME,
     SERVER_VERSION,
     MCPServerHandler,
@@ -905,10 +904,14 @@ def auth_logout(response: Response) -> dict[str, str]:
 async def mcp_endpoint(request: Request) -> Response:
     """Streamable HTTP transport endpoint for Model Context Protocol."""
     session_id = request.headers.get("mcp-session-id") or str(uuid.uuid4())
+    protocol_version = request.headers.get("mcp-protocol-version") or "2025-11-25"
     base_headers = {
         "Access-Control-Allow-Origin": "*",
         "Mcp-Session-Id": session_id,
-        "Access-Control-Expose-Headers": "Mcp-Session-Id, Content-Type, Authorization",
+        "Mcp-Protocol-Version": protocol_version,
+        "Access-Control-Expose-Headers": (
+            "Mcp-Session-Id, Mcp-Protocol-Version, Content-Type, Authorization"
+        ),
     }
 
     print(f"[MCP] INCOMING method={request.method} headers={dict(request.headers)}", flush=True)
@@ -936,17 +939,44 @@ async def mcp_endpoint(request: Request) -> Response:
         )
 
     if request.method == "DELETE":
+        del_session_id = request.headers.get("mcp-session-id") or session_id
+        mcp_handler.remove_session(del_session_id)
         return Response(status_code=200, headers=base_headers)
 
     if request.method == "GET":
         accept = request.headers.get("accept", "")
         if "text/event-stream" in accept:
-            return await mcp_sse_endpoint(request)
+            queue = mcp_handler.get_or_create_session(session_id)
+
+            async def streamable_event_generator() -> AsyncGenerator[str, None]:
+                try:
+                    while True:
+                        try:
+                            msg = await asyncio.wait_for(queue.get(), timeout=15.0)
+                            yield f"event: message\ndata: {msg}\n\n"
+                        except asyncio.TimeoutError:
+                            yield ": ping\n\n"
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    mcp_handler.remove_session(session_id)
+
+            return StreamingResponse(
+                streamable_event_generator(),
+                media_type="text/event-stream",
+                headers={
+                    **base_headers,
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
         return JSONResponse(
             content={
                 "name": SERVER_NAME,
                 "version": SERVER_VERSION,
-                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "protocolVersion": protocol_version,
                 "status": "ready",
             },
             headers=base_headers,
@@ -964,6 +994,10 @@ async def mcp_endpoint(request: Request) -> Response:
         )
 
     method = request_data.get("method") if isinstance(request_data, dict) else None
+    if method == "initialize" and isinstance(request_data, dict):
+        client_proto = request_data.get("params", {}).get("protocolVersion")
+        if client_proto:
+            base_headers["Mcp-Protocol-Version"] = client_proto
 
     # Handle unauthenticated discovery and handshake methods:
     # initialize, ping, tools/list, notifications/initialized

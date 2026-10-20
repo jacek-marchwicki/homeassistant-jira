@@ -37,6 +37,8 @@ def test_mcp_streamable_http_lifecycle() -> None:
     resp = client.post("/mcp", json=init_payload)
     assert resp.status_code == 200
     assert "mcp-session-id" in resp.headers
+    assert "mcp-protocol-version" in resp.headers
+    assert resp.headers["mcp-protocol-version"] == "2024-11-05"
     session_id = resp.headers["mcp-session-id"]
     data = resp.json()
     assert data["jsonrpc"] == "2.0"
@@ -152,6 +154,58 @@ def test_mcp_streamable_http_lifecycle() -> None:
     assert resp.status_code == 200
     comment_res = json.loads(resp.json()["result"]["content"][0]["text"])
     assert comment_res["body"] == "Finished ahead of schedule!"
+
+
+def test_mcp_streamable_http_sse_and_delete() -> None:
+    """Verify Streamable HTTP GET /mcp SSE streaming and DELETE /mcp teardown."""
+    import asyncio
+
+    from starlette.requests import Request
+
+    from jira_dashboard.presentation.main import mcp_endpoint, mcp_handler
+
+    client = TestClient(app)
+    test_session = "test-streamable-session-1"
+
+    # Pre-populate session
+    queue = mcp_handler.get_or_create_session(test_session)
+    assert test_session in mcp_handler.sessions
+
+    # Verify that streamable event generator yields message without legacy endpoint
+    async def _test_gen() -> None:
+        await queue.put(json.dumps({"jsonrpc": "2.0", "method": "notifications/test"}))
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/mcp",
+            "headers": [
+                (b"accept", b"text/event-stream"),
+                (b"mcp-session-id", test_session.encode("utf-8")),
+                (b"mcp-protocol-version", b"2025-11-25"),
+            ],
+        }
+        req = Request(scope)
+        resp = await mcp_endpoint(req)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "text/event-stream"
+        assert resp.headers["mcp-session-id"] == test_session
+        assert resp.headers["mcp-protocol-version"] == "2025-11-25"
+
+        first_chunk = await resp.body_iterator.__anext__()
+        assert "event: endpoint" not in first_chunk
+        assert "event: message" in first_chunk
+        await resp.body_iterator.aclose()
+
+    asyncio.run(_test_gen())
+
+    # DELETE /mcp
+    del_resp = client.delete(
+        "/mcp",
+        headers={"Mcp-Session-Id": test_session},
+    )
+    assert del_resp.status_code == 200
+    assert test_session not in mcp_handler.sessions
 
 
 def test_mcp_sse_transport() -> None:

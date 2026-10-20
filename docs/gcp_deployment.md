@@ -147,17 +147,25 @@ python3 scripts/deploy_gcp.py status
 
 ---
 
-## 5. Connecting Gemini on Web (`gemini.com`)
+## 5. Connecting Gemini on Web (`gemini.com` / Custom Apps)
 
-Once deployed, connect Gemini on Web to your custom Jira MCP server:
+Once deployed, connect Gemini to your custom Jira MCP server:
 
 1. Open **[gemini.google.com](https://gemini.google.com/)** in your browser.
-2. Go to **Settings > Extensions / Custom Tools / MCP Servers** (or your developer tools integration).
-3. Select **Add Custom MCP Server**:
-   - **Server URL**: `https://<your-cloud-run-service-url>/sse`
-   - **Client ID**: Paste your `GOOGLE_CLIENT_ID` (from `.env.gcp`)
-   - **Client Secret**: Paste your `GOOGLE_CLIENT_SECRET` (from `.env.gcp`)
-4. Click **Connect** and authorize access with your Google account.
+2. Go to **Settings > Connected Apps > Custom apps > Add a custom app**.
+3. In the setup dialog:
+   - **Server URL**: `https://<your-cloud-run-service-url>/mcp`
+   - Notice the **Redirect URI** provided by Gemini (e.g. `https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-...`).
+4. In your **Google Cloud Console** > **APIs & Services > Credentials** > Edit your OAuth 2.0 Client ID:
+   - Add this exact Gemini redirect URI to **Authorized redirect URIs**.
+   - Click **Save**.
+5. Back in Gemini, enter your credentials when prompted:
+   - **Client ID**: Your `GOOGLE_CLIENT_ID` (from `.env.gcp`)
+   - **Client Secret**: Your `GOOGLE_CLIENT_SECRET` (from `.env.gcp`)
+6. Click **Connect** and authorize access with your allowed Google account.
+
+> [!NOTE]
+> The server automatically implements **RFC 9728** and **RFC 8414** discovery endpoints (`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`). When unauthenticated MCP requests arrive, the server responds with standard `WWW-Authenticate: Bearer resource_metadata="..."` headers, allowing Gemini to authenticate via standard OAuth 2.0.
 
 ### Available MCP Tools Exposed to Gemini:
 - `jira_get_board`: Retrieve active sprint columns, backlog items, and ticket summaries.

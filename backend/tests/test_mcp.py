@@ -182,9 +182,14 @@ def test_mcp_auth_protection(monkeypatch: pytest.MonkeyPatch) -> None:
 
     client = TestClient(app)
 
-    # 1. Call without auth -> 401
+    # 1. Call without auth -> 401 with RFC 9728 WWW-Authenticate header
     resp = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
     assert resp.status_code == 401
+    assert "www-authenticate" in resp.headers
+    www_auth = resp.headers["www-authenticate"]
+    assert 'realm="mcp"' in www_auth
+    assert "resource_metadata=" in www_auth
+    assert ".well-known/oauth-protected-resource" in www_auth
 
     # 2. Call with unauthorized token -> 403
     with patch("jira_dashboard.presentation.auth.verify_google_id_token") as mock_verify:
@@ -205,3 +210,31 @@ def test_mcp_auth_protection(monkeypatch: pytest.MonkeyPatch) -> None:
             headers={"Authorization": "Bearer mock-token"},
         )
         assert resp.status_code == 200
+
+
+def test_mcp_oauth_discovery_metadata_endpoints() -> None:
+    """Verify RFC 9728 and RFC 8414 metadata discovery endpoints for Gemini & MCP clients."""
+    client = TestClient(app)
+
+    # 1. RFC 9728: /.well-known/oauth-protected-resource
+    resp_prm = client.get("/.well-known/oauth-protected-resource")
+    assert resp_prm.status_code == 200
+    data_prm = resp_prm.json()
+    assert "resource" in data_prm
+    assert "https://accounts.google.com" in data_prm["authorization_servers"]
+    assert "openid" in data_prm["scopes_supported"]
+    assert "header" in data_prm["bearer_methods_supported"]
+
+    # 2. RFC 8414: /.well-known/oauth-authorization-server
+    resp_as = client.get("/.well-known/oauth-authorization-server")
+    assert resp_as.status_code == 200
+    data_as = resp_as.json()
+    assert data_as["authorization_endpoint"] == "https://accounts.google.com/o/oauth2/v2/auth"
+    assert data_as["token_endpoint"] == "https://oauth2.googleapis.com/token"
+
+    # 3. OpenID Connect fallback: /.well-known/openid-configuration
+    resp_oidc = client.get("/.well-known/openid-configuration")
+    assert resp_oidc.status_code == 200
+    assert (
+        resp_oidc.json()["authorization_endpoint"] == "https://accounts.google.com/o/oauth2/v2/auth"
+    )

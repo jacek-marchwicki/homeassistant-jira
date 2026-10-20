@@ -539,6 +539,7 @@ async def auth_and_access_middleware(request: Request, call_next: Any) -> Respon
             "/api/auth/google/callback",
             "/api/auth/logout",
         )
+        or path.startswith("/.well-known/")
         or path.startswith("/api/webhooks/")
         or path.startswith("/api/test/")
         or request.method == "OPTIONS"
@@ -552,13 +553,76 @@ async def auth_and_access_middleware(request: Request, call_next: Any) -> Respon
         try:
             provider.authenticate_request(request)
         except HTTPException as exc:
+            headers = dict(exc.headers or {})
+            if exc.status_code == 401 and path in ("/mcp", "/sse", "/messages"):
+                scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+                host = request.headers.get(
+                    "x-forwarded-host", request.headers.get("host", request.url.netloc)
+                )
+                root_path = request.scope.get("root_path", "").rstrip("/")
+                prm_url = f"{scheme}://{host}{root_path}/.well-known/oauth-protected-resource"
+                headers["WWW-Authenticate"] = f'Bearer realm="mcp", resource_metadata="{prm_url}"'
+
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.detail},
-                headers=exc.headers or {},
+                headers=headers,
             )
 
     return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# OAuth Discovery Metadata Endpoints (RFC 9728 & RFC 8414 for MCP & Gemini)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/.well-known/oauth-protected-resource")
+def oauth_protected_resource(request: Request) -> dict[str, Any]:
+    """RFC 9728 Protected Resource Metadata for Model Context Protocol clients."""
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
+
+    return {
+        "resource": f"{base_url}/mcp",
+        "authorization_servers": [
+            "https://accounts.google.com",
+        ],
+        "scopes_supported": [
+            "openid",
+            "email",
+            "profile",
+        ],
+        "bearer_methods_supported": [
+            "header",
+        ],
+        "resource_documentation": f"{base_url}/docs",
+    }
+
+
+@app.get("/.well-known/oauth-authorization-server")
+@app.get("/.well-known/openid-configuration")
+def oauth_authorization_server_metadata(request: Request) -> dict[str, Any]:
+    """RFC 8414 Authorization Server Metadata and OpenID Connect Discovery."""
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
+
+    return {
+        "issuer": base_url,
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+        "jwks_uri": "https://www.googleapis.com/oauth2/v3/certs",
+        "response_types_supported": ["code"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["RS256"],
+        "scopes_supported": ["openid", "email", "profile"],
+        "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
+    }
 
 
 # ---------------------------------------------------------------------------

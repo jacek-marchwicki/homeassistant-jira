@@ -39,28 +39,34 @@ describe('celebrationEffects', () => {
     ]);
   });
 
-  it('triggers dual-cannon celebration correctly', () => {
+  it('triggers dual-cannon celebration correctly with prominent visibility and high z-index', () => {
     triggerDoneCelebration({ forcedType: 'dual-cannon' });
     expect(confetti).toHaveBeenCalled();
     const calls = (confetti as unknown as ReturnType<typeof vi.fn>).mock.calls;
-    // Dual cannon fires from left and right
+    // Dual cannon fires from left and right with high zIndex and prominent scalar
     expect(calls.length).toBeGreaterThanOrEqual(2);
     const origins = calls.map((c) => c[0]?.origin?.x);
     expect(origins.some((x: number) => x < 0.3)).toBe(true);
     expect(origins.some((x: number) => x > 0.7)).toBe(true);
+    expect(calls[0][0]?.zIndex).toBe(99999);
+    expect(calls[0][0]?.scalar).toBeGreaterThanOrEqual(1.2);
   });
 
-  it('triggers star-emoji celebration correctly with custom text/star shapes', () => {
+  it('triggers star-emoji celebration correctly with custom text/star shapes and large scalar', () => {
     triggerDoneCelebration({ forcedType: 'star-emoji' });
     expect(confetti).toHaveBeenCalled();
     expect((confetti as any).shapeFromText).toHaveBeenCalled();
+    const calls = (confetti as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((c) => c[0]?.scalar >= 2.5)).toBe(true);
   });
 
-  it('triggers rainbow-cascade celebration with spread and gravity', () => {
+  it('triggers rainbow-cascade celebration with spread, gravity, and high visibility', () => {
     triggerDoneCelebration({ forcedType: 'rainbow-cascade' });
     expect(confetti).toHaveBeenCalled();
     const firstCall = (confetti as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(firstCall.origin.y).toBeLessThanOrEqual(0.1);
+    expect(firstCall.zIndex).toBe(99999);
+    expect(firstCall.scalar).toBeGreaterThanOrEqual(1.3);
   });
 
   it('triggers fireworks celebration with multiple timed bursts', () => {

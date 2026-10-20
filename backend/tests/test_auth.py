@@ -132,6 +132,88 @@ def test_gcp_oauth_flow_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
         assert resp_logout.status_code == 200
 
 
+def test_auth_config_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify /api/auth/config public endpoint returns mode, client_id, and session status."""
+    monkeypatch.setenv("AUTH_MODE", "gcp_oauth")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "mock-client-id-123.apps.googleusercontent.com")
+    monkeypatch.setenv("ALLOWED_EMAILS", "member@example.com")
+    monkeypatch.setenv("SESSION_SECRET_KEY", "secret-test-key")
+
+    client = TestClient(app)
+
+    # 1. Unauthenticated call
+    resp = client.get("/api/auth/config")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["auth_mode"] == "gcp_oauth"
+    assert data["google_client_id"] == "mock-client-id-123.apps.googleusercontent.com"
+    assert data["authenticated"] is False
+    assert data["user"] is None
+
+    # 2. Authenticated with session cookie
+    user = GoogleAuthUser(email="member@example.com", name="Member", picture="https://pic.url")
+    token = create_session_token(user, secret="secret-test-key")
+    resp_auth = client.get("/api/auth/config", cookies={"ha_jira_session": token})
+    assert resp_auth.status_code == 200
+    data_auth = resp_auth.json()
+    assert data_auth["authenticated"] is True
+    assert data_auth["user"]["email"] == "member@example.com"
+
+
+def test_google_oauth_redirect_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify /api/auth/google/login and /api/auth/google/callback OAuth 2.0 flow."""
+    monkeypatch.setenv("AUTH_MODE", "gcp_oauth")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "client-secret-xyz")
+    monkeypatch.setenv("ALLOWED_EMAILS", "family@example.com")
+    monkeypatch.setenv("WEBHOOK_SECRET", "secret-test-key")
+
+    client = TestClient(app)
+
+    # 1. /api/auth/google/login redirects to Google OAuth
+    resp_login = client.get("/api/auth/google/login", follow_redirects=False)
+    assert resp_login.status_code in (302, 307)
+    location = resp_login.headers["location"]
+    assert "accounts.google.com/o/oauth2/v2/auth" in location
+    assert "client_id=client-id.apps.googleusercontent.com" in location
+    assert "response_type=code" in location
+    assert "scope=openid+email+profile" in location or "scope=openid%20email%20profile" in location
+    assert "redirect_uri=" in location
+
+    # 2. /api/auth/google/callback with error param redirects with auth_error
+    resp_err = client.get("/api/auth/google/callback?error=access_denied", follow_redirects=False)
+    assert resp_err.status_code == 302
+    assert "auth_error=" in resp_err.headers["location"]
+
+    # 3. /api/auth/google/callback with valid code exchanges token and sets cookie
+    mock_token_response = {
+        "id_token": "mock-id-token",
+        "access_token": "mock-access-token",
+    }
+    with (
+        patch("httpx.AsyncClient.post") as mock_post,
+        patch("jira_dashboard.presentation.auth.verify_google_id_token") as mock_verify,
+    ):
+
+        class MockHttpResponse:
+            status_code = 200
+
+            def json(self):
+                return mock_token_response
+
+        mock_post.return_value = MockHttpResponse()
+        mock_verify.return_value = {
+            "email": "family@example.com",
+            "name": "Family Member",
+            "picture": "https://lh3.example.com/pic.jpg",
+        }
+
+        resp_cb = client.get("/api/auth/google/callback?code=mock-code-123", follow_redirects=False)
+        assert resp_cb.status_code == 302
+        assert resp_cb.headers["location"].endswith("/")
+        assert "ha_jira_session" in resp_cb.cookies
+
+
 def test_bearer_token_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify Authorization: Bearer <google_token> works for API/MCP requests."""
     monkeypatch.setenv("AUTH_MODE", "gcp_oauth")

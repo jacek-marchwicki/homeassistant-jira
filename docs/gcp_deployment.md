@@ -76,14 +76,16 @@ gcloud auth login
 4. Name: `Gemini and Dashboard Client`.
 5. Checkbox **"Use this client for an AI-powered agent"**:
    - **Leave this unchecked**. Google recommends standard "Web application" clients for dual-purpose applications serving both human browser users (the web dashboard) and AI tools.
-6. **Authorized JavaScript origins** (Optional for local testing / web app):
+6. **Authorized JavaScript origins**:
    - `http://localhost:8000`
    - `http://localhost:3000`
-   - `https://<your-service>-<hash>.a.run.app` (add after running deployment)
+   - `https://<your-service>-<hash>.a.run.app` (e.g. `https://home-taskmanager-4ln37ygzvq-ew.a.run.app`)
 7. **Authorized redirect URIs**:
-   - *Note on Google restriction*: Google will reject Google-owned domains (such as `oauth.googleusercontent.com` or `accounts.google.com`) with *"Invalid Redirect: uses a forbidden domain"*.
-   - **For web dashboard**: `http://localhost:8000/api/auth/google/callback` (or leave empty if using GIS popup).
-   - **For Gemini on Web**: If Gemini's setup dialog displays a specific callback URI (such as `https://vertexaisearch.cloud.google.com/oauth-redirect`), add that URI here. You can also leave this empty initially and update it once Gemini prompts you during tool connection.
+   - *Note on Google restriction*: Google will reject internal Google domains (such as `oauth.googleusercontent.com` or `accounts.google.com`) with *"Invalid Redirect: uses a forbidden domain"*.
+   - **For web dashboard login**:
+     - `http://localhost:8000/api/auth/google/callback` (for local dev)
+     - `https://<your-service>-<hash>.a.run.app/api/auth/google/callback` (e.g. `https://home-taskmanager-4ln37ygzvq-ew.a.run.app/api/auth/google/callback`)
+   - **For Gemini on Web**: If Gemini's MCP setup dialog displays a specific callback URI (such as `https://vertexaisearch.cloud.google.com/oauth-redirect`), add that URI here.
 8. Click **Create** and copy your **Client ID** and **Client Secret**.
 
 ### Step 4: Create Local `.env.gcp` Configuration

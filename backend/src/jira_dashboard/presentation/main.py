@@ -19,7 +19,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote, urlencode
 
+import httpx
 from fastapi import (
     FastAPI,
     Header,
@@ -31,7 +33,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -63,6 +65,7 @@ from jira_dashboard.presentation import auth as auth_module
 from jira_dashboard.presentation.auth import (
     DEFAULT_SESSION_MAX_AGE,
     SESSION_COOKIE_NAME,
+    AuthMode,
     AuthProvider,
     GoogleAuthUser,
     create_session_token,
@@ -526,7 +529,16 @@ async def auth_and_access_middleware(request: Request, call_next: Any) -> Respon
 
     # Public bypass endpoints
     if (
-        path in ("/health", "/api/health", "/api/auth/google", "/api/auth/logout")
+        path
+        in (
+            "/health",
+            "/api/health",
+            "/api/auth/config",
+            "/api/auth/google",
+            "/api/auth/google/login",
+            "/api/auth/google/callback",
+            "/api/auth/logout",
+        )
         or path.startswith("/api/webhooks/")
         or path.startswith("/api/test/")
         or request.method == "OPTIONS"
@@ -552,6 +564,148 @@ async def auth_and_access_middleware(request: Request, call_next: Any) -> Respon
 # ---------------------------------------------------------------------------
 # Authentication Endpoints
 # ---------------------------------------------------------------------------
+
+
+@app.get("/api/auth/config")
+def auth_config(request: Request) -> dict[str, Any]:
+    """Retrieve public auth configuration and current session status."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    authenticated = False
+    user_info = None
+    try:
+        user = provider.authenticate_request(request)
+        authenticated = True
+        user_info = user.model_dump()
+    except Exception:
+        authenticated = False
+
+    return {
+        "auth_mode": provider.resolved_mode.value,
+        "google_client_id": (
+            current_settings.google_client_id
+            if provider.resolved_mode == AuthMode.GCP_OAUTH
+            else None
+        ),
+        "authenticated": authenticated,
+        "user": user_info,
+    }
+
+
+@app.get("/api/auth/google/login")
+def auth_google_login(request: Request) -> Response:
+    """Initiate Google OAuth2 authorization code flow."""
+    current_settings = JiraDashboardSettings.load()
+    if not current_settings.google_client_id:
+        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured")
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    redirect_uri = f"{scheme}://{host}{root_path}/api/auth/google/callback"
+
+    params = {
+        "client_id": current_settings.google_client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "online",
+        "prompt": "select_account",
+    }
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    return RedirectResponse(url=auth_url, status_code=307)
+
+
+@app.get("/api/auth/google/callback")
+async def auth_google_callback(
+    request: Request,
+    code: str | None = None,
+    error: str | None = None,
+) -> Response:
+    """Handle Google OAuth2 callback, exchange code, verify user, and set session cookie."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_target = f"{root_path}/" if root_path else "/"
+
+    if error or not code:
+        err_msg = error or "Authorization code missing"
+        return RedirectResponse(url=f"{base_target}?auth_error={quote(err_msg)}", status_code=302)
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    redirect_uri = f"{scheme}://{host}{root_path}/api/auth/google/callback"
+
+    # Exchange code for tokens with Google
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token_res = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": current_settings.google_client_id,
+                    "client_secret": current_settings.google_client_secret,
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+    except Exception as exc:
+        logger.error("Exception exchanging Google OAuth code: %s", exc)
+        err_msg = quote("Connection error exchanging Google token")
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={err_msg}",
+            status_code=302,
+        )
+
+    if token_res.status_code != 200:
+        logger.error("Failed to exchange Google OAuth code: %s", token_res.text)
+        err_msg = quote("Failed to exchange Google authorization token")
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={err_msg}",
+            status_code=302,
+        )
+
+    token_data = token_res.json()
+    id_token_str = token_data.get("id_token")
+    if not id_token_str:
+        err_msg = quote("Google response did not contain ID token")
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={err_msg}",
+            status_code=302,
+        )
+
+    try:
+        info = auth_module.verify_google_id_token(id_token_str, current_settings.google_client_id)
+    except Exception as exc:
+        logger.warning("Google ID token verification failed: %s", exc)
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={quote(str(exc))}",
+            status_code=302,
+        )
+
+    email = str(info.get("email", "")).strip().lower()
+    if not provider.is_email_allowed(email):
+        logger.warning("Google user email '%s' is not in allowed users list", email)
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={quote(f'Access denied for email: {email}')}",
+            status_code=302,
+        )
+
+    user = GoogleAuthUser(
+        email=email,
+        name=str(info.get("name", "")),
+        picture=str(info.get("picture", "")),
+    )
+    token = create_session_token(user, provider.get_signing_secret())
+    response = RedirectResponse(url=base_target, status_code=302)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=DEFAULT_SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
 
 
 @app.post("/api/auth/google")

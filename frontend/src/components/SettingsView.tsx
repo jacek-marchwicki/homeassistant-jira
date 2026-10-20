@@ -15,8 +15,17 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
  * by every app member.
  */
 export function SettingsView() {
-  const { issues, availableUsers, currentUser, accountTypes, setAccountType, closeSettings, errorMessage } =
-    useBoardStore();
+  const {
+    issues,
+    availableUsers,
+    currentUser,
+    accountTypes,
+    setAccountType,
+    closeSettings,
+    errorMessage,
+    authStatus,
+    logout,
+  } = useBoardStore();
 
   const people = useMemo(
     () => getAssigneesFromBoard(issues, availableUsers, currentUser),
@@ -102,6 +111,44 @@ export function SettingsView() {
           })}
         </ul>
       </section>
+
+      {authStatus?.authMode === 'gcp_oauth' && authStatus.user && (
+        <section className="mt-6 pt-6 border-t border-[var(--jira-border)]" aria-labelledby="settings-account-heading">
+          <h2 id="settings-account-heading" className="text-sm font-semibold text-[var(--jira-text-primary)]">
+            Signed in account
+          </h2>
+          <div className="mt-3 p-3 rounded-xl border border-[var(--jira-border)] bg-[var(--jira-surface)] flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {authStatus.user.picture ? (
+                <img
+                  src={authStatus.user.picture}
+                  alt={authStatus.user.name || authStatus.user.email}
+                  className="w-9 h-9 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-[var(--jira-primary)]/20 text-[var(--jira-primary)] flex items-center justify-center font-bold text-xs shrink-0">
+                  {(authStatus.user.name || authStatus.user.email).charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 truncate">
+                <p className="text-sm font-medium text-[var(--jira-text-primary)] truncate">
+                  {authStatus.user.name || authStatus.user.email}
+                </p>
+                <p className="text-xs text-[var(--jira-text-secondary)] truncate">
+                  {authStatus.user.email}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="min-h-[36px] px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-semibold cursor-pointer shrink-0 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        </section>
+      )}
     </main>
     </div>
   );

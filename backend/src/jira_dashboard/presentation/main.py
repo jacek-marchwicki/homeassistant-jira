@@ -576,47 +576,126 @@ async def auth_and_access_middleware(request: Request, call_next: Any) -> Respon
 # ---------------------------------------------------------------------------
 
 
-@app.get("/.well-known/oauth-protected-resource")
-def oauth_protected_resource(request: Request) -> dict[str, Any]:
+@app.api_route(
+    "/.well-known/oauth-protected-resource",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+@app.api_route(
+    "/.well-known/oauth-protected-resource/{resource_path:path}",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+def oauth_protected_resource(request: Request, resource_path: str = "") -> Response:
     """RFC 9728 Protected Resource Metadata for Model Context Protocol clients."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
     root_path = request.scope.get("root_path", "").rstrip("/")
     base_url = f"{scheme}://{host}{root_path}"
 
-    return {
-        "resource": f"{base_url}/mcp",
-        "authorization_servers": [
-            "https://accounts.google.com",
-        ],
-        "scopes_supported": [
-            "openid",
-            "email",
-            "profile",
-        ],
-        "bearer_methods_supported": [
-            "header",
-        ],
-        "resource_documentation": f"{base_url}/docs",
-    }
+    return JSONResponse(
+        content={
+            "resource": f"{base_url}/mcp",
+            "authorization_servers": [
+                "https://accounts.google.com",
+            ],
+            "scopes_supported": [
+                "openid",
+                "email",
+                "profile",
+            ],
+            "bearer_methods_supported": [
+                "header",
+            ],
+            "resource_documentation": f"{base_url}/docs",
+        },
+        headers={
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
 
 
-@app.get("/.well-known/oauth-authorization-server")
-@app.get("/.well-known/openid-configuration")
-def oauth_authorization_server_metadata(request: Request) -> dict[str, Any]:
+@app.api_route(
+    "/.well-known/oauth-authorization-server",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+@app.api_route(
+    "/.well-known/oauth-authorization-server/{subpath:path}",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+@app.api_route(
+    "/.well-known/openid-configuration",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+@app.api_route(
+    "/.well-known/openid-configuration/{subpath:path}",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+def oauth_authorization_server_metadata(request: Request, subpath: str = "") -> Response:
     """RFC 8414 Authorization Server Metadata and OpenID Connect Discovery."""
-    return {
-        "issuer": "https://accounts.google.com",
-        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
-        "token_endpoint": "https://oauth2.googleapis.com/token",
-        "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
-        "jwks_uri": "https://www.googleapis.com/oauth2/v3/certs",
-        "response_types_supported": ["code"],
-        "subject_types_supported": ["public"],
-        "id_token_signing_alg_values_supported": ["RS256"],
-        "scopes_supported": ["openid", "email", "profile"],
-        "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
-    }
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    return JSONResponse(
+        content={
+            "issuer": "https://accounts.google.com",
+            "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+            "token_endpoint": "https://oauth2.googleapis.com/token",
+            "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+            "jwks_uri": "https://www.googleapis.com/oauth2/v3/certs",
+            "response_types_supported": ["code"],
+            "subject_types_supported": ["public"],
+            "id_token_signing_alg_values_supported": ["RS256"],
+            "scopes_supported": ["openid", "email", "profile"],
+            "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
+        },
+        headers={
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -822,16 +901,23 @@ def auth_logout(response: Response) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-@app.api_route("/mcp", methods=["GET", "POST", "HEAD", "OPTIONS"])
+@app.api_route("/mcp", methods=["GET", "POST", "HEAD", "OPTIONS", "DELETE"])
 async def mcp_endpoint(request: Request) -> Response:
     """Streamable HTTP transport endpoint for Model Context Protocol."""
+    session_id = request.headers.get("mcp-session-id") or str(uuid.uuid4())
+    base_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Mcp-Session-Id": session_id,
+        "Access-Control-Expose-Headers": "Mcp-Session-Id, Content-Type, Authorization",
+    }
+
     if request.method == "OPTIONS":
         return Response(
             status_code=200,
             headers={
-                "Allow": "GET, POST, HEAD, OPTIONS",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
+                **base_headers,
+                "Allow": "GET, POST, HEAD, OPTIONS, DELETE",
+                "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS, DELETE",
                 "Access-Control-Allow-Headers": "*",
             },
         )
@@ -840,12 +926,15 @@ async def mcp_endpoint(request: Request) -> Response:
         return Response(
             status_code=200,
             headers={
+                **base_headers,
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
+                "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS, DELETE",
                 "Access-Control-Allow-Headers": "*",
             },
         )
+
+    if request.method == "DELETE":
+        return Response(status_code=200, headers=base_headers)
 
     if request.method == "GET":
         accept = request.headers.get("accept", "")
@@ -858,7 +947,7 @@ async def mcp_endpoint(request: Request) -> Response:
                 "protocolVersion": MCP_PROTOCOL_VERSION,
                 "status": "ready",
             },
-            headers={"Access-Control-Allow-Origin": "*"},
+            headers=base_headers,
         )
 
     # POST method
@@ -868,6 +957,7 @@ async def mcp_endpoint(request: Request) -> Response:
         return JSONResponse(
             status_code=400,
             content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}},
+            headers=base_headers,
         )
 
     method = request_data.get("method") if isinstance(request_data, dict) else None
@@ -887,8 +977,9 @@ async def mcp_endpoint(request: Request) -> Response:
 
         result = await mcp_handler.handle_jsonrpc(request_data)
         if result is None:
-            return Response(status_code=204)
-        return JSONResponse(content=result, headers={"Access-Control-Allow-Origin": "*"})
+            # Per MCP Streamable HTTP specification, notifications return 202 Accepted
+            return Response(status_code=202, headers=base_headers)
+        return JSONResponse(content=result, headers=base_headers)
 
     # Protected execution: tools/call (and other methods)
     current_settings = JiraDashboardSettings.load()
@@ -896,14 +987,14 @@ async def mcp_endpoint(request: Request) -> Response:
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
     root_path = request.scope.get("root_path", "").rstrip("/")
-    prm_url = f"{scheme}://{host}{root_path}/.well-known/oauth-protected-resource"
+    prm_url = f"{scheme}://{host}{root_path}/.well-known/oauth-protected-resource/mcp"
 
     try:
         provider.authenticate_request(request)
     except HTTPException as exc:
-        headers = dict(exc.headers or {})
-        headers["WWW-Authenticate"] = f'Bearer realm="mcp", resource_metadata="{prm_url}"'
-        headers["Access-Control-Allow-Origin"] = "*"
+        resp_headers = dict(exc.headers or {})
+        resp_headers.update(base_headers)
+        resp_headers["WWW-Authenticate"] = f'Bearer realm="mcp", resource_metadata="{prm_url}"'
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -914,13 +1005,13 @@ async def mcp_endpoint(request: Request) -> Response:
                     "message": exc.detail,
                 },
             },
-            headers=headers,
+            headers=resp_headers,
         )
 
     result = await mcp_handler.handle_jsonrpc(request_data)
     if result is None:
-        return Response(status_code=204)
-    return JSONResponse(content=result, headers={"Access-Control-Allow-Origin": "*"})
+        return Response(status_code=202, headers=base_headers)
+    return JSONResponse(content=result, headers=base_headers)
 
 
 @app.get("/sse")

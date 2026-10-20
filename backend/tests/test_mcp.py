@@ -36,6 +36,8 @@ def test_mcp_streamable_http_lifecycle() -> None:
     }
     resp = client.post("/mcp", json=init_payload)
     assert resp.status_code == 200
+    assert "mcp-session-id" in resp.headers
+    session_id = resp.headers["mcp-session-id"]
     data = resp.json()
     assert data["jsonrpc"] == "2.0"
     assert data["id"] == 1
@@ -43,6 +45,11 @@ def test_mcp_streamable_http_lifecycle() -> None:
     assert data["result"]["protocolVersion"] == "2024-11-05"
     assert data["result"]["serverInfo"]["name"] == "jira-dashboard-mcp"
     assert "tools" in data["result"]["capabilities"]
+
+    # 1b. notifications/initialized (returns 202 Accepted per Streamable HTTP spec)
+    notif_payload = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+    resp_notif = client.post("/mcp", json=notif_payload, headers={"Mcp-Session-Id": session_id})
+    assert resp_notif.status_code == 202
 
     # 2. ping
     ping_payload = {"jsonrpc": "2.0", "id": 2, "method": "ping"}
@@ -240,7 +247,7 @@ def test_mcp_oauth_discovery_metadata_endpoints() -> None:
     """Verify RFC 9728 and RFC 8414 metadata discovery endpoints for Gemini & MCP clients."""
     client = TestClient(app)
 
-    # 1. RFC 9728: /.well-known/oauth-protected-resource
+    # 1. RFC 9728: /.well-known/oauth-protected-resource and subpath
     resp_prm = client.get("/.well-known/oauth-protected-resource")
     assert resp_prm.status_code == 200
     data_prm = resp_prm.json()
@@ -248,6 +255,10 @@ def test_mcp_oauth_discovery_metadata_endpoints() -> None:
     assert "https://accounts.google.com" in data_prm["authorization_servers"]
     assert "openid" in data_prm["scopes_supported"]
     assert "header" in data_prm["bearer_methods_supported"]
+
+    resp_prm_sub = client.get("/.well-known/oauth-protected-resource/mcp")
+    assert resp_prm_sub.status_code == 200
+    assert resp_prm_sub.json()["resource"] == data_prm["resource"]
 
     # 2. RFC 8414: /.well-known/oauth-authorization-server
     resp_as = client.get("/.well-known/oauth-authorization-server")

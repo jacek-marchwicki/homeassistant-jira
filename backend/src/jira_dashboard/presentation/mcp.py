@@ -29,7 +29,6 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {},
-            "additionalProperties": False,
         },
     },
     {
@@ -48,7 +47,6 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
                     "description": "Optional substring to filter issue summaries",
                 },
             },
-            "additionalProperties": False,
         },
     },
     {
@@ -63,7 +61,6 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
                 },
             },
             "required": ["issue_key"],
-            "additionalProperties": False,
         },
     },
     {
@@ -92,7 +89,6 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
                 },
             },
             "required": ["summary"],
-            "additionalProperties": False,
         },
     },
     {
@@ -112,7 +108,6 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
                 },
             },
             "required": ["issue_key", "target_category"],
-            "additionalProperties": False,
         },
     },
     {
@@ -131,7 +126,6 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
                 },
             },
             "required": ["issue_key", "body"],
-            "additionalProperties": False,
         },
     },
 ]

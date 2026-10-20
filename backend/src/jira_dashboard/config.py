@@ -141,6 +141,10 @@ class JiraDashboardSettings(BaseModel):
         default=None,
         description="Client Secret for Gemini MCP OAuth authorization",
     )
+    litestream_bucket: str | None = Field(
+        default=None,
+        description="GCS bucket name for Litestream SQLite continuous replication",
+    )
 
     @property
     def allowed_emails_set(self) -> set[str]:

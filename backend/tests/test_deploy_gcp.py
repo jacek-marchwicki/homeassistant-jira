@@ -69,8 +69,13 @@ def test_deploy_service_assembles_cloud_run_flags(tmp_path: Path) -> None:
         deploy_gcp.deploy_service(tmp_path, env_path=str(env_file), skip_ci=True)
 
         # Check call to gcloud run deploy
-        deploy_call = mock_run.call_args_list[0][0][0]
-        assert deploy_call[0:3] == ["gcloud", "run", "deploy"]
+        deploy_calls = [
+            call[0][0]
+            for call in mock_run.call_args_list
+            if len(call[0][0]) >= 3 and call[0][0][0:3] == ["gcloud", "run", "deploy"]
+        ]
+        assert len(deploy_calls) == 1, "Must execute exactly one 'gcloud run deploy' command"
+        deploy_call = deploy_calls[0]
         assert "my-jira-srv" in deploy_call
         assert "--min-instances" in deploy_call
         assert deploy_call[deploy_call.index("--min-instances") + 1] == "0"

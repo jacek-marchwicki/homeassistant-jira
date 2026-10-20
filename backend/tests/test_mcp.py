@@ -182,8 +182,32 @@ def test_mcp_auth_protection(monkeypatch: pytest.MonkeyPatch) -> None:
 
     client = TestClient(app)
 
-    # 1. Call without auth -> 401 with RFC 9728 WWW-Authenticate header
-    resp = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
+    # 1. HEAD /mcp -> 200 OK (pre-flight reachability probe)
+    resp_head = client.head("/mcp")
+    assert resp_head.status_code == 200
+
+    # 2. GET /mcp -> 200 OK (server status)
+    resp_get = client.get("/mcp")
+    assert resp_get.status_code == 200
+    assert resp_get.json()["name"] == "jira-dashboard-mcp"
+
+    # 3. Unauthenticated discovery (initialize, ping, tools/list) -> 200
+    resp_init = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    assert resp_init.status_code == 200
+    assert "protocolVersion" in resp_init.json()["result"]
+
+    resp_tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    assert resp_tools.status_code == 200
+    assert "tools" in resp_tools.json()["result"]
+
+    # 4. Protected tool execution (tools/call) without auth -> 401 with RFC 9728 challenge
+    call_payload = {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {"name": "jira_get_board", "arguments": {}},
+    }
+    resp = client.post("/mcp", json=call_payload)
     assert resp.status_code == 401
     assert "www-authenticate" in resp.headers
     www_auth = resp.headers["www-authenticate"]
@@ -191,22 +215,22 @@ def test_mcp_auth_protection(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "resource_metadata=" in www_auth
     assert ".well-known/oauth-protected-resource" in www_auth
 
-    # 2. Call with unauthorized token -> 403
-    with patch("jira_dashboard.presentation.auth.verify_google_id_token") as mock_verify:
+    # 5. Call tools/call with unauthorized token -> 403
+    with patch("jira_dashboard.presentation.auth.verify_google_bearer_token") as mock_verify:
         mock_verify.return_value = {"email": "unauthorized@example.com"}
         resp = client.post(
             "/mcp",
-            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            json=call_payload,
             headers={"Authorization": "Bearer mock-token"},
         )
         assert resp.status_code == 403
 
-    # 3. Call with authorized token -> 200
-    with patch("jira_dashboard.presentation.auth.verify_google_id_token") as mock_verify:
+    # 6. Call tools/call with authorized token -> 200
+    with patch("jira_dashboard.presentation.auth.verify_google_bearer_token") as mock_verify:
         mock_verify.return_value = {"email": "authorized@example.com"}
         resp = client.post(
             "/mcp",
-            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            json=call_payload,
             headers={"Authorization": "Bearer mock-token"},
         )
         assert resp.status_code == 200

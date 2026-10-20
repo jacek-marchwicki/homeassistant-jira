@@ -137,6 +137,47 @@ def verify_google_id_token(token: str, client_id: str | None = None) -> dict[str
     return id_info
 
 
+def verify_google_bearer_token(token: str, client_id: str | None = None) -> dict[str, Any]:
+    """Verify a Google bearer token (ID token JWT or OAuth 2.0 access token)."""
+    # 1. Try verifying as an ID token (JWT with 3 segments)
+    if token.count(".") == 2:
+        try:
+            return verify_google_id_token(token, client_id)
+        except Exception as exc:
+            logger.debug("Token not a valid Google ID token, trying userinfo endpoint: %s", exc)
+
+    # 2. Try verifying as a Google OAuth 2.0 Access Token via Google userinfo endpoint
+    import httpx
+
+    try:
+        resp = httpx.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, dict) and "email" in data:
+                return data
+    except Exception as exc:
+        logger.debug("Failed to verify access token via Google userinfo: %s", exc)
+
+    # 3. Fallback to Google OAuth tokeninfo endpoint
+    try:
+        resp = httpx.get(
+            f"https://oauth2.googleapis.com/tokeninfo?access_token={token}",
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, dict) and "email" in data:
+                return data
+    except Exception as exc:
+        logger.debug("Failed to verify access token via Google tokeninfo: %s", exc)
+
+    raise ValueError("Invalid or expired Google bearer token")
+
+
 class AuthProvider:
     """Central authentication and access-control provider."""
 
@@ -201,7 +242,7 @@ class AuthProvider:
         if auth_header and auth_header.lower().startswith("bearer "):
             token = auth_header[7:].strip()
             try:
-                info = verify_google_id_token(token, self.settings.google_client_id)
+                info = verify_google_bearer_token(token, self.settings.google_client_id)
                 email = str(info.get("email", "")).strip().lower()
                 if not email or not self.is_email_allowed(email):
                     raise HTTPException(
@@ -216,7 +257,7 @@ class AuthProvider:
             except HTTPException:
                 raise
             except Exception as exc:
-                logger.warning("Google ID token verification failed: %s", exc)
+                logger.warning("Google bearer token verification failed: %s", exc)
                 raise HTTPException(
                     status_code=401,
                     detail="Invalid or expired Google bearer token",

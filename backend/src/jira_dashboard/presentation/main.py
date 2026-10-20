@@ -70,7 +70,12 @@ from jira_dashboard.presentation.auth import (
     GoogleAuthUser,
     create_session_token,
 )
-from jira_dashboard.presentation.mcp import MCPServerHandler
+from jira_dashboard.presentation.mcp import (
+    MCP_PROTOCOL_VERSION,
+    SERVER_NAME,
+    SERVER_VERSION,
+    MCPServerHandler,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -524,10 +529,10 @@ class GoogleLoginRequest(BaseModel):
 
 @app.middleware("http")
 async def auth_and_access_middleware(request: Request, call_next: Any) -> Response:
-    """Enforce authentication on API and MCP endpoints when enabled."""
+    """Enforce authentication on API endpoints when enabled."""
     path = request.url.path
 
-    # Public bypass endpoints
+    # Public bypass endpoints (including MCP transport routes which enforce granular tool auth)
     if (
         path
         in (
@@ -538,31 +543,25 @@ async def auth_and_access_middleware(request: Request, call_next: Any) -> Respon
             "/api/auth/google/login",
             "/api/auth/google/callback",
             "/api/auth/logout",
+            "/mcp",
+            "/sse",
+            "/messages",
         )
         or path.startswith("/.well-known/")
         or path.startswith("/api/webhooks/")
         or path.startswith("/api/test/")
-        or request.method == "OPTIONS"
+        or request.method in ("OPTIONS", "HEAD")
     ):
         return await call_next(request)
 
-    # Protected paths: /api/*, /mcp, /sse, /messages
-    if path.startswith("/api/") or path in ("/mcp", "/sse", "/messages"):
+    # Protected paths: /api/*
+    if path.startswith("/api/"):
         current_settings = JiraDashboardSettings.load()
         provider = AuthProvider(current_settings)
         try:
             provider.authenticate_request(request)
         except HTTPException as exc:
             headers = dict(exc.headers or {})
-            if exc.status_code == 401 and path in ("/mcp", "/sse", "/messages"):
-                scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-                host = request.headers.get(
-                    "x-forwarded-host", request.headers.get("host", request.url.netloc)
-                )
-                root_path = request.scope.get("root_path", "").rstrip("/")
-                prm_url = f"{scheme}://{host}{root_path}/.well-known/oauth-protected-resource"
-                headers["WWW-Authenticate"] = f'Bearer realm="mcp", resource_metadata="{prm_url}"'
-
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.detail},
@@ -606,13 +605,8 @@ def oauth_protected_resource(request: Request) -> dict[str, Any]:
 @app.get("/.well-known/openid-configuration")
 def oauth_authorization_server_metadata(request: Request) -> dict[str, Any]:
     """RFC 8414 Authorization Server Metadata and OpenID Connect Discovery."""
-    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
-    root_path = request.scope.get("root_path", "").rstrip("/")
-    base_url = f"{scheme}://{host}{root_path}"
-
     return {
-        "issuer": base_url,
+        "issuer": "https://accounts.google.com",
         "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
         "token_endpoint": "https://oauth2.googleapis.com/token",
         "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
@@ -828,13 +822,105 @@ def auth_logout(response: Response) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-@app.post("/mcp")
-async def mcp_endpoint(request_data: dict[str, Any]) -> Any:
+@app.api_route("/mcp", methods=["GET", "POST", "HEAD", "OPTIONS"])
+async def mcp_endpoint(request: Request) -> Response:
     """Streamable HTTP transport endpoint for Model Context Protocol."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "GET, POST, HEAD, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    if request.method == "GET":
+        accept = request.headers.get("accept", "")
+        if "text/event-stream" in accept:
+            return await mcp_sse_endpoint(request)
+        return JSONResponse(
+            content={
+                "name": SERVER_NAME,
+                "version": SERVER_VERSION,
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "status": "ready",
+            },
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+    # POST method
+    try:
+        request_data = await request.json()
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}},
+        )
+
+    method = request_data.get("method") if isinstance(request_data, dict) else None
+
+    # Handle unauthenticated discovery and handshake methods:
+    # initialize, ping, tools/list, notifications/initialized
+    if method in ("initialize", "ping", "tools/list", "notifications/initialized"):
+        # If client optionally provided a bearer token, verify it
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.lower().startswith("bearer "):
+            try:
+                current_settings = JiraDashboardSettings.load()
+                provider = AuthProvider(current_settings)
+                provider.authenticate_request(request)
+            except HTTPException:
+                pass
+
+        result = await mcp_handler.handle_jsonrpc(request_data)
+        if result is None:
+            return Response(status_code=204)
+        return JSONResponse(content=result, headers={"Access-Control-Allow-Origin": "*"})
+
+    # Protected execution: tools/call (and other methods)
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    prm_url = f"{scheme}://{host}{root_path}/.well-known/oauth-protected-resource"
+
+    try:
+        provider.authenticate_request(request)
+    except HTTPException as exc:
+        headers = dict(exc.headers or {})
+        headers["WWW-Authenticate"] = f'Bearer realm="mcp", resource_metadata="{prm_url}"'
+        headers["Access-Control-Allow-Origin"] = "*"
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "jsonrpc": "2.0",
+                "id": request_data.get("id") if isinstance(request_data, dict) else None,
+                "error": {
+                    "code": -32001,
+                    "message": exc.detail,
+                },
+            },
+            headers=headers,
+        )
+
     result = await mcp_handler.handle_jsonrpc(request_data)
     if result is None:
         return Response(status_code=204)
-    return result
+    return JSONResponse(content=result, headers={"Access-Control-Allow-Origin": "*"})
 
 
 @app.get("/sse")
@@ -872,16 +958,54 @@ async def mcp_sse_endpoint(request: Request) -> StreamingResponse:
 
 @app.post("/messages")
 async def mcp_messages_endpoint(
-    request_data: dict[str, Any],
+    request: Request,
     session_id: str = Query(...),
 ) -> Any:
     """JSON-RPC message receiver endpoint for active SSE sessions."""
+    try:
+        request_data = await request.json()
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}},
+        )
+
+    method = request_data.get("method") if isinstance(request_data, dict) else None
+
+    # Protect tools/call
+    if method == "tools/call":
+        current_settings = JiraDashboardSettings.load()
+        provider = AuthProvider(current_settings)
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get(
+            "x-forwarded-host", request.headers.get("host", request.url.netloc)
+        )
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        prm_url = f"{scheme}://{host}{root_path}/.well-known/oauth-protected-resource"
+        try:
+            provider.authenticate_request(request)
+        except HTTPException as exc:
+            headers = dict(exc.headers or {})
+            headers["WWW-Authenticate"] = f'Bearer realm="mcp", resource_metadata="{prm_url}"'
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "jsonrpc": "2.0",
+                    "id": request_data.get("id") if isinstance(request_data, dict) else None,
+                    "error": {
+                        "code": -32001,
+                        "message": exc.detail,
+                    },
+                },
+                headers=headers,
+            )
+
     result = await mcp_handler.handle_jsonrpc(request_data)
     if result is not None:
         queue = mcp_handler.sessions.get(session_id)
         if queue is not None:
             await queue.put(json.dumps(result))
-        return result
+        return JSONResponse(content=result)
     return Response(status_code=202)
 
 

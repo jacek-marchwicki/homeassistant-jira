@@ -227,7 +227,7 @@ def test_bearer_token_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
     assert resp.status_code == 401
 
     # 2. With valid Bearer token for allowed email -> 200
-    with patch("jira_dashboard.presentation.auth.verify_google_id_token") as mock_verify:
+    with patch("jira_dashboard.presentation.auth.verify_google_bearer_token") as mock_verify:
         mock_verify.return_value = {
             "email": "gemini-user@example.com",
             "name": "Gemini User",
@@ -237,3 +237,34 @@ def test_bearer_token_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
             headers={"Authorization": "Bearer mock-google-token"},
         )
         assert resp.status_code == 200
+
+
+def test_verify_google_bearer_token_modes() -> None:
+    """Verify verify_google_bearer_token handles ID tokens and Access tokens."""
+    from jira_dashboard.presentation.auth import verify_google_bearer_token
+
+    # 1. ID token (JWT format: 3 segments)
+    with patch("jira_dashboard.presentation.auth.verify_google_id_token") as mock_id:
+        mock_id.return_value = {"email": "jwt@example.com"}
+        res = verify_google_bearer_token("seg1.seg2.seg3", client_id="cid")
+        assert res["email"] == "jwt@example.com"
+
+    # 2. Access token (ya29. format) via userinfo endpoint
+    class MockResp:
+        def __init__(self, status_code: int, data: dict):
+            self.status_code = status_code
+            self._data = data
+
+        def json(self):
+            return self._data
+
+    with patch("httpx.get") as mock_http:
+        mock_http.return_value = MockResp(200, {"email": "access@example.com"})
+        res = verify_google_bearer_token("ya29.mock_access_token")
+        assert res["email"] == "access@example.com"
+
+    # 3. Invalid token raises ValueError
+    with patch("httpx.get") as mock_http:
+        mock_http.return_value = MockResp(401, {"error": "invalid_token"})
+        with pytest.raises(ValueError):
+            verify_google_bearer_token("invalid_token_value")

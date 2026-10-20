@@ -241,6 +241,17 @@ class AuthProvider:
         auth_header = authorization or request.headers.get("Authorization")
         if auth_header and auth_header.lower().startswith("bearer "):
             token = auth_header[7:].strip()
+            # 1. First check if it's our own HMAC session / OAuth bearer token
+            session_user = verify_session_token(token, self.get_signing_secret())
+            if session_user:
+                if not self.is_email_allowed(session_user.email):
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Email '{session_user.email}' is not in allowed users list",
+                    )
+                return session_user
+
+            # 2. Otherwise verify as an external Google bearer token
             try:
                 info = verify_google_bearer_token(token, self.settings.google_client_id)
                 email = str(info.get("email", "")).strip().lower()

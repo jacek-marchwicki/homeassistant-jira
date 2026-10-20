@@ -8,6 +8,7 @@ dynamic Ingress root_path handling, and fallback background polling.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -69,6 +70,7 @@ from jira_dashboard.presentation.auth import (
     AuthProvider,
     GoogleAuthUser,
     create_session_token,
+    verify_session_token,
 )
 from jira_dashboard.presentation.mcp import (
     SERVER_NAME,
@@ -542,6 +544,8 @@ async def auth_and_access_middleware(request: Request, call_next: Any) -> Respon
             "/api/auth/google/login",
             "/api/auth/google/callback",
             "/api/auth/logout",
+            "/oauth/authorize",
+            "/oauth/token",
             "/mcp",
             "/sse",
             "/messages",
@@ -615,9 +619,10 @@ def oauth_protected_resource(request: Request, resource_path: str = "") -> Respo
         content={
             "resource": f"{base_url}/mcp",
             "authorization_servers": [
-                "https://accounts.google.com",
+                f"{base_url}",
             ],
             "scopes_supported": [
+                "jira",
                 "openid",
                 "email",
                 "profile",
@@ -675,24 +680,263 @@ def oauth_authorization_server_metadata(request: Request, subpath: str = "") -> 
             },
         )
 
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
+
     return JSONResponse(
         content={
-            "issuer": "https://accounts.google.com",
-            "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
-            "token_endpoint": "https://oauth2.googleapis.com/token",
-            "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
-            "jwks_uri": "https://www.googleapis.com/oauth2/v3/certs",
+            "issuer": f"{base_url}",
+            "authorization_endpoint": f"{base_url}/oauth/authorize",
+            "token_endpoint": f"{base_url}/oauth/token",
             "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code"],
             "subject_types_supported": ["public"],
-            "id_token_signing_alg_values_supported": ["RS256"],
-            "scopes_supported": ["openid", "email", "profile"],
-            "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
+            "scopes_supported": ["jira", "openid", "email", "profile"],
+            "token_endpoint_auth_methods_supported": [
+                "client_secret_post",
+                "client_secret_basic",
+                "none",
+            ],
         },
         headers={
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
             "Access-Control-Allow-Headers": "*",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# OAuth 2.0 Authorization Server Endpoints (for Gemini & MCP clients)
+# ---------------------------------------------------------------------------
+
+
+@app.api_route("/oauth/authorize", methods=["GET", "HEAD", "OPTIONS"])
+def oauth_authorize(
+    request: Request,
+    client_id: str = "",
+    redirect_uri: str = "",
+    response_type: str = "code",
+    state: str = "",
+    scope: str = "",
+) -> Response:
+    """OAuth 2.0 Authorization Endpoint for Model Context Protocol & Gemini."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    if request.method == "HEAD":
+        return Response(status_code=200)
+
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+
+    if response_type != "code":
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "unsupported_response_type",
+                "error_description": "Only response_type=code is supported",
+            },
+        )
+
+    # Basic redirect_uri validation: allow Gemini relay, localhost, or standard https
+    is_gemini_relay = redirect_uri.startswith("https://oauth-redirect.googleusercontent.com/")
+    if not (
+        is_gemini_relay
+        or redirect_uri.startswith(("http://localhost", "http://127.0.0.1", "https://"))
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_request",
+                "error_description": "Invalid or untrusted redirect_uri",
+            },
+        )
+
+    # Check client_id if explicitly configured
+    if current_settings.mcp_client_id and client_id and client_id != current_settings.mcp_client_id:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_client",
+                "error_description": f"Unknown client_id '{client_id}'",
+            },
+        )
+
+    # Check if user is currently logged in via session cookie
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    user: GoogleAuthUser | None = None
+    if cookie_token:
+        user = verify_session_token(cookie_token, provider.get_signing_secret())
+
+    if not user:
+        # User not logged in: initiate Google login and return back here
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get(
+            "x-forwarded-host", request.headers.get("host", request.url.netloc)
+        )
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        full_return = f"{scheme}://{host}{root_path}{request.url.path}"
+        if request.url.query:
+            full_return += f"?{request.url.query}"
+        login_url = f"{root_path}/api/auth/google/login?return_to={quote(full_return)}"
+        return RedirectResponse(url=login_url, status_code=307)
+
+    # Verify user email is allowed
+    if not provider.is_email_allowed(user.email):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "access_denied",
+                "error_description": (
+                    f"User '{user.email}' is not authorized to access this dashboard"
+                ),
+            },
+        )
+
+    # Issue single-use authorization code
+    auth_code = str(uuid.uuid4())
+    storage.save_oauth_code(
+        code=auth_code,
+        email=user.email,
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        ttl_seconds=300,
+    )
+
+    sep = "&" if "?" in redirect_uri else "?"
+    target = f"{redirect_uri}{sep}code={quote(auth_code)}"
+    if state:
+        target += f"&state={quote(state)}"
+    return RedirectResponse(url=target, status_code=302)
+
+
+@app.api_route("/oauth/token", methods=["POST", "OPTIONS"])
+async def oauth_token(request: Request) -> Response:
+    """OAuth 2.0 Token Endpoint for Model Context Protocol & Gemini."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "POST, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+
+    content_type = request.headers.get("content-type", request.headers.get("Content-Type", ""))
+    params: dict[str, Any] = {}
+    if "application/json" in content_type:
+        try:
+            params = await request.json()
+        except Exception:
+            params = {}
+    else:
+        try:
+            form = await request.form()
+            params = dict(form)
+        except Exception:
+            params = {}
+
+    grant_type = str(params.get("grant_type", ""))
+    code = str(params.get("code", "")).strip()
+    client_id = str(params.get("client_id", "")).strip()
+    client_secret = str(params.get("client_secret", "")).strip()
+
+    # Support HTTP Basic Auth for client credentials (RFC 6749 §2.3.1)
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.lower().startswith("basic "):
+        try:
+            cred_bytes = base64.b64decode(auth_header[6:].strip())
+            cred_str = cred_bytes.decode("utf-8")
+            if ":" in cred_str:
+                basic_id, basic_secret = cred_str.split(":", 1)
+                client_id = client_id or basic_id
+                client_secret = client_secret or basic_secret
+        except Exception:
+            pass
+
+    # Verify client credentials if configured
+    if current_settings.mcp_client_secret:
+        if client_secret != current_settings.mcp_client_secret:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "invalid_client",
+                    "error_description": "Invalid client_secret",
+                },
+                headers={"WWW-Authenticate": "Basic"},
+            )
+
+    if grant_type != "authorization_code":
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "unsupported_grant_type",
+                "error_description": "Only grant_type=authorization_code is supported",
+            },
+        )
+
+    if not code:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_request",
+                "error_description": "Missing required code parameter",
+            },
+        )
+
+    code_data = storage.consume_oauth_code(code)
+    if not code_data:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_grant",
+                "error_description": "Invalid or expired authorization code",
+            },
+        )
+
+    user_email = code_data["email"]
+    if not provider.is_email_allowed(user_email):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "access_denied",
+                "error_description": f"User '{user_email}' is not authorized",
+            },
+        )
+
+    access_token = create_session_token(
+        GoogleAuthUser(email=user_email, name="Gemini MCP User"),
+        secret=provider.get_signing_secret(),
+        max_age_seconds=DEFAULT_SESSION_MAX_AGE,
+    )
+
+    return JSONResponse(
+        content={
+            "access_token": access_token,
+            "token_type": "Bearer",
+            "expires_in": DEFAULT_SESSION_MAX_AGE,
+            "scope": "jira",
+        },
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+            "Access-Control-Allow-Origin": "*",
         },
     )
 
@@ -729,7 +973,7 @@ def auth_config(request: Request) -> dict[str, Any]:
 
 
 @app.get("/api/auth/google/login")
-def auth_google_login(request: Request) -> Response:
+def auth_google_login(request: Request, return_to: str | None = None) -> Response:
     """Initiate Google OAuth2 authorization code flow."""
     current_settings = JiraDashboardSettings.load()
     if not current_settings.google_client_id:
@@ -748,6 +992,9 @@ def auth_google_login(request: Request) -> Response:
         "access_type": "online",
         "prompt": "select_account",
     }
+    if return_to:
+        params["state"] = return_to
+
     auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
     return RedirectResponse(url=auth_url, status_code=307)
 
@@ -757,6 +1004,7 @@ async def auth_google_callback(
     request: Request,
     code: str | None = None,
     error: str | None = None,
+    state: str | None = None,
 ) -> Response:
     """Handle Google OAuth2 callback, exchange code, verify user, and set session cookie."""
     current_settings = JiraDashboardSettings.load()
@@ -833,7 +1081,9 @@ async def auth_google_callback(
         picture=str(info.get("picture", "")),
     )
     token = create_session_token(user, provider.get_signing_secret())
-    response = RedirectResponse(url=base_target, status_code=302)
+    is_valid_target = state and state.startswith(("/", "http://", "https://"))
+    target_url = state if is_valid_target else base_target
+    response = RedirectResponse(url=target_url, status_code=302)
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,

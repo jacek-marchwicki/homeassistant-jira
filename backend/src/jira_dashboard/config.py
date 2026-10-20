@@ -133,6 +133,14 @@ class JiraDashboardSettings(BaseModel):
         default=None,
         description="Secret key for signing session tokens and cookies",
     )
+    mcp_client_id: str = Field(
+        default="gemini-mcp-client",
+        description="Client ID for Gemini MCP OAuth authorization",
+    )
+    mcp_client_secret: str | None = Field(
+        default=None,
+        description="Client Secret for Gemini MCP OAuth authorization",
+    )
 
     @property
     def allowed_emails_set(self) -> set[str]:

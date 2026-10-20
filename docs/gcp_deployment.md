@@ -155,17 +155,16 @@ Once deployed, connect Gemini to your custom Jira MCP server:
 2. Go to **Settings > Connected Apps > Custom apps > Add a custom app**.
 3. In the setup dialog:
    - **Server URL**: `https://<your-cloud-run-service-url>/mcp`
-   - Notice the **Redirect URI** provided by Gemini (e.g. `https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-...`).
-4. In your **Google Cloud Console** > **APIs & Services > Credentials** > Edit your OAuth 2.0 Client ID:
-   - Add this exact Gemini redirect URI to **Authorized redirect URIs**.
-   - Click **Save**.
-5. Back in Gemini, enter your credentials when prompted:
-   - **Client ID**: Your `GOOGLE_CLIENT_ID` (from `.env.gcp`)
-   - **Client Secret**: Your `GOOGLE_CLIENT_SECRET` (from `.env.gcp`)
-6. Click **Connect** and authorize access with your allowed Google account.
+   - **Authentication**: **OAuth 2.0**
+   - **Client ID**: `gemini-mcp-client` (or value of `MCP_CLIENT_ID` if customized)
+   - **Client Secret**: Leave blank unless `MCP_CLIENT_SECRET` was configured in Cloud Run
+4. Click **Connect** (or **Next**):
+   - Gemini automatically discovers the OAuth endpoints from `/.well-known/oauth-authorization-server` and redirects your browser to authorize access.
+   - If not already signed in, sign in with your allowed Google account (`ALLOWED_EMAILS`).
+   - You will be redirected back to Gemini, completing the connection!
 
 > [!NOTE]
-> The server automatically implements **RFC 9728** and **RFC 8414** discovery endpoints (`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`). When unauthenticated MCP requests arrive, the server responds with standard `WWW-Authenticate: Bearer resource_metadata="..."` headers, allowing Gemini to authenticate via standard OAuth 2.0.
+> The server implements **RFC 9728** and **RFC 8414** discovery metadata (`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`) and standard OAuth 2.0 authorization code flow (`/oauth/authorize` and `/oauth/token`). Access to all Jira tools is protected and restricted strictly to the emails configured in `ALLOWED_EMAILS`.
 
 ### Available MCP Tools Exposed to Gemini:
 - `jira_get_board`: Retrieve active sprint columns, backlog items, and ticket summaries.

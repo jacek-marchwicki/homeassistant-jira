@@ -388,3 +388,40 @@ def test_account_types_persist_across_connections(temp_db_path: Path) -> None:
     reopened.clear_account_types()
     assert reopened.get_account_types() == {}
     reopened.close()
+
+
+def test_oauth_codes_storage_lifecycle(temp_db_path: Path) -> None:
+    """Verify storing, retrieving, single-use consumption, and expiration of OAuth codes."""
+    storage = SQLiteStorage(temp_db_path)
+    storage.init_db()
+
+    # 1. Save and consume valid code
+    storage.save_oauth_code(
+        code="test-code-123",
+        email="jacek@example.com",
+        client_id="gemini-client",
+        redirect_uri="https://oauth-redirect.googleusercontent.com/r/test",
+        ttl_seconds=300,
+    )
+
+    data = storage.consume_oauth_code("test-code-123")
+    assert data is not None
+    assert data["code"] == "test-code-123"
+    assert data["email"] == "jacek@example.com"
+    assert data["client_id"] == "gemini-client"
+    assert data["redirect_uri"] == "https://oauth-redirect.googleusercontent.com/r/test"
+
+    # Single-use: consuming again must return None
+    assert storage.consume_oauth_code("test-code-123") is None
+
+    # 2. Expired code must return None
+    storage.save_oauth_code(
+        code="expired-code",
+        email="test@example.com",
+        ttl_seconds=-10,  # Already expired
+    )
+    assert storage.consume_oauth_code("expired-code") is None
+
+    # 3. Nonexistent code
+    assert storage.consume_oauth_code("nonexistent") is None
+    storage.close()

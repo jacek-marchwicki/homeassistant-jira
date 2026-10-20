@@ -308,8 +308,8 @@ def test_mcp_oauth_discovery_metadata_endpoints() -> None:
     assert resp_prm.status_code == 200
     data_prm = resp_prm.json()
     assert "resource" in data_prm
-    assert "https://accounts.google.com" in data_prm["authorization_servers"]
-    assert "openid" in data_prm["scopes_supported"]
+    assert "http://testserver" in data_prm["authorization_servers"]
+    assert "jira" in data_prm["scopes_supported"]
     assert "header" in data_prm["bearer_methods_supported"]
 
     resp_prm_sub = client.get("/.well-known/oauth-protected-resource/mcp")
@@ -320,12 +320,10 @@ def test_mcp_oauth_discovery_metadata_endpoints() -> None:
     resp_as = client.get("/.well-known/oauth-authorization-server")
     assert resp_as.status_code == 200
     data_as = resp_as.json()
-    assert data_as["authorization_endpoint"] == "https://accounts.google.com/o/oauth2/v2/auth"
-    assert data_as["token_endpoint"] == "https://oauth2.googleapis.com/token"
+    assert data_as["authorization_endpoint"] == "http://testserver/oauth/authorize"
+    assert data_as["token_endpoint"] == "http://testserver/oauth/token"
 
     # 3. OpenID Connect fallback: /.well-known/openid-configuration
     resp_oidc = client.get("/.well-known/openid-configuration")
     assert resp_oidc.status_code == 200
-    assert (
-        resp_oidc.json()["authorization_endpoint"] == "https://accounts.google.com/o/oauth2/v2/auth"
-    )
+    assert resp_oidc.json()["authorization_endpoint"] == "http://testserver/oauth/authorize"

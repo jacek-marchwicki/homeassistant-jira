@@ -17,6 +17,7 @@ dependencies = [
     "pyyaml>=6.0",
     "google-genai>=0.1.0",
     "google-auth>=2.20.0",
+    "python-multipart>=0.0.18",
 ]
 
 [project.optional-dependencies]

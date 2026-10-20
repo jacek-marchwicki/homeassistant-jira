@@ -47,6 +47,8 @@ def test_oauth_discovery_metadata(client: TestClient) -> None:
     assert as_data["authorization_endpoint"].endswith("/oauth/authorize")
     assert as_data["token_endpoint"].endswith("/oauth/token")
     assert "authorization_code" in as_data["grant_types_supported"]
+    assert "refresh_token" in as_data["grant_types_supported"]
+    assert "S256" in as_data["code_challenge_methods_supported"]
     assert "code" in as_data["response_types_supported"]
 
 
@@ -180,9 +182,10 @@ def test_oauth_token_exchange_success(client: TestClient) -> None:
         assert res.status_code == 200
         token_data = res.json()
         assert "access_token" in token_data
+        assert "refresh_token" in token_data
         assert token_data["token_type"] == "Bearer"
         assert token_data["expires_in"] == DEFAULT_SESSION_MAX_AGE
-        assert token_data["scope"] == "jira"
+        assert "jira" in token_data["scope"]
 
         # Code is single use; attempting to exchange again must fail
         res_repeat = client.post(
@@ -274,3 +277,197 @@ def test_oauth_bearer_token_executes_mcp_tools(client: TestClient) -> None:
         result = res_auth.json().get("result", {})
         assert not result.get("isError")
         assert len(result.get("content", [])) > 0
+
+
+def test_oauth_pkce_end_to_end_flow(client: TestClient) -> None:
+    """Verify full PKCE RFC 7636 flow: challenge, authorization, and verified token exchange."""
+    import hashlib
+
+    with patch.dict(
+        os.environ,
+        {
+            "AUTH_MODE": "gcp_oauth",
+            "ALLOWED_EMAILS": "pkce-user@example.com",
+            "GOOGLE_CLIENT_ID": "test-google-client-id",
+        },
+    ):
+        settings = JiraDashboardSettings.load()
+        provider = AuthProvider(settings)
+
+        # Authenticate session
+        session_token = create_session_token(
+            GoogleAuthUser(email="pkce-user@example.com", name="PKCE User"),
+            secret=provider.get_signing_secret(),
+        )
+
+        # Generate PKCE verifier and challenge
+        verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+        # Step 1: /oauth/authorize with PKCE challenge
+        auth_res = client.get(
+            "/oauth/authorize",
+            params={
+                "client_id": "gemini-mcp-client",
+                "redirect_uri": "https://oauth-redirect.googleusercontent.com/r/gemini-app",
+                "response_type": "code",
+                "state": "state-pkce-123",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+            cookies={SESSION_COOKIE_NAME: session_token},
+            follow_redirects=False,
+        )
+        assert auth_res.status_code == 302
+        target_url = auth_res.headers.get("location", "")
+        parsed = urlparse(target_url)
+        query = parse_qs(parsed.query)
+        auth_code = query["code"][0]
+
+        # Step 2a: Attempt token exchange missing code_verifier -> Rejected (400)
+        # Store a duplicate code to test missing verifier rejection
+        storage.save_oauth_code(
+            code="test-code-pkce-missing",
+            email="pkce-user@example.com",
+            client_id="gemini-mcp-client",
+            code_challenge=challenge,
+            code_challenge_method="S256",
+        )
+        res_missing = client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": "test-code-pkce-missing",
+            },
+        )
+        assert res_missing.status_code == 400
+        assert "Missing PKCE code_verifier" in res_missing.json()["error_description"]
+
+        # Step 2b: Attempt token exchange with wrong code_verifier -> Rejected (400)
+        storage.save_oauth_code(
+            code="test-code-pkce-wrong",
+            email="pkce-user@example.com",
+            client_id="gemini-mcp-client",
+            code_challenge=challenge,
+            code_challenge_method="S256",
+        )
+        res_wrong = client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": "test-code-pkce-wrong",
+                "code_verifier": "completely-wrong-verifier-1234567890",
+            },
+        )
+        assert res_wrong.status_code == 400
+        assert "PKCE code_verifier verification failed" in res_wrong.json()["error_description"]
+
+        # Step 2c: Exchange real issued code with matching code_verifier -> 200 OK
+        res_valid = client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": auth_code,
+                "redirect_uri": "https://oauth-redirect.googleusercontent.com/r/gemini-app",
+                "client_id": "gemini-mcp-client",
+                "code_verifier": verifier,
+            },
+        )
+        assert res_valid.status_code == 200
+        tok_data = res_valid.json()
+        assert "access_token" in tok_data
+        assert "refresh_token" in tok_data
+        assert tok_data["token_type"] == "Bearer"
+
+
+def test_oauth_token_raw_urlencoded_payload(client: TestClient) -> None:
+    """Verify parsing raw application/x-www-form-urlencoded body without multipart parser."""
+    with patch.dict(
+        os.environ,
+        {
+            "AUTH_MODE": "gcp_oauth",
+            "ALLOWED_EMAILS": "raw-form@example.com",
+            "GOOGLE_CLIENT_ID": "test-client-id",
+        },
+    ):
+        storage.save_oauth_code(code="raw-auth-code", email="raw-form@example.com")
+
+        raw_payload = b"grant_type=authorization_code&code=raw-auth-code&client_id=gemini"
+        res = client.post(
+            "/oauth/token",
+            content=raw_payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded; charset=utf-8"},
+        )
+        assert res.status_code == 200
+        assert "access_token" in res.json()
+
+
+def test_oauth_refresh_token_lifecycle(client: TestClient) -> None:
+    """Verify refreshing an access token using grant_type=refresh_token."""
+    with patch.dict(
+        os.environ,
+        {
+            "AUTH_MODE": "gcp_oauth",
+            "ALLOWED_EMAILS": "refresher@example.com",
+            "GOOGLE_CLIENT_ID": "test-client-id",
+        },
+    ):
+        # 1. Issue an authorization code and exchange for access & refresh tokens
+        storage.save_oauth_code(code="refresh-auth-code", email="refresher@example.com")
+        tok_res = client.post(
+            "/oauth/token",
+            data={"grant_type": "authorization_code", "code": "refresh-auth-code"},
+        )
+        assert tok_res.status_code == 200
+        tok_data = tok_res.json()
+        assert "access_token" in tok_data
+        refresh_token = tok_data["refresh_token"]
+
+        # 2. Use refresh_token to obtain a new access token
+        refresh_res = client.post(
+            "/oauth/token",
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+        )
+        assert refresh_res.status_code == 200
+        refreshed_data = refresh_res.json()
+        assert "access_token" in refreshed_data
+        assert refreshed_data["token_type"] == "Bearer"
+        assert refreshed_data["refresh_token"] == refresh_token
+
+        # 3. Invalid refresh token should be rejected (400)
+        invalid_res = client.post(
+            "/oauth/token",
+            data={"grant_type": "refresh_token", "refresh_token": "non-existent-token"},
+        )
+        assert invalid_res.status_code == 400
+        assert invalid_res.json()["error"] == "invalid_grant"
+
+
+def test_oauth_token_redirect_uri_mismatch(client: TestClient) -> None:
+    """Verify that a mismatch in redirect_uri between authorize and token endpoints is rejected."""
+    with patch.dict(
+        os.environ,
+        {
+            "AUTH_MODE": "gcp_oauth",
+            "ALLOWED_EMAILS": "redirect@example.com",
+            "GOOGLE_CLIENT_ID": "test-client-id",
+        },
+    ):
+        storage.save_oauth_code(
+            code="redirect-check-code",
+            email="redirect@example.com",
+            redirect_uri="https://oauth-redirect.googleusercontent.com/r/expected-uri",
+        )
+
+        res = client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": "redirect-check-code",
+                "redirect_uri": "https://oauth-redirect.googleusercontent.com/r/different-uri",
+            },
+        )
+        assert res.status_code == 400
+        assert res.json()["error"] == "invalid_grant"
+        assert "redirect_uri mismatch" in res.json()["error_description"]

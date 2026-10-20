@@ -158,3 +158,99 @@ def test_official_mcp_client_sdk_with_oauth_bearer_token(local_mcp_server: str) 
                         assert len(call_res.content) > 0
 
         asyncio.run(_test())
+
+
+def test_official_mcp_client_sdk_with_pkce_and_refresh_flow(local_mcp_server: str) -> None:
+    """Verify official MCP client SDK connecting via PKCE exchange and subsequent token refresh."""
+    pytest.importorskip("mcp", reason="official mcp package not installed")
+    import asyncio
+    import base64
+    import hashlib
+    import os
+    from unittest.mock import patch
+
+    import httpx
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamable_http_client
+
+    from jira_dashboard.presentation.main import storage
+
+    with patch.dict(
+        os.environ,
+        {
+            "AUTH_MODE": "gcp_oauth",
+            "ALLOWED_EMAILS": "pkce-client@example.com",
+            "GOOGLE_CLIENT_ID": "test-client-id",
+        },
+    ):
+        # 1. Generate PKCE verifier and challenge
+        verifier = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-wi"
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+        storage.save_oauth_code(
+            code="pkce-sdk-code",
+            email="pkce-client@example.com",
+            client_id="gemini-mcp-client",
+            redirect_uri="https://oauth-redirect.googleusercontent.com/r/gemini-app",
+            code_challenge=challenge,
+            code_challenge_method="S256",
+        )
+
+        async def _test() -> None:
+            token_url = f"{local_mcp_server}/oauth/token"
+            mcp_url = f"{local_mcp_server}/mcp"
+
+            # 2. Exchange code with code_verifier via form-urlencoded POST
+            async with httpx.AsyncClient() as http:
+                tok_res = await http.post(
+                    token_url,
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": "pkce-sdk-code",
+                        "redirect_uri": "https://oauth-redirect.googleusercontent.com/r/gemini-app",
+                        "client_id": "gemini-mcp-client",
+                        "code_verifier": verifier,
+                    },
+                )
+                assert tok_res.status_code == 200
+                data = tok_res.json()
+                access_token = data["access_token"]
+                refresh_token = data["refresh_token"]
+
+            # 3. Call MCP with initial access token
+            async with httpx.AsyncClient(
+                headers={"Authorization": f"Bearer {access_token}"}
+            ) as authed_http:
+                async with streamable_http_client(mcp_url, http_client=authed_http) as (
+                    read_stream,
+                    write_stream,
+                ):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        res = await session.call_tool("jira_list_issues", {})
+                        assert not res.is_error
+
+            # 4. Refresh token to obtain new access token
+            async with httpx.AsyncClient() as http:
+                ref_res = await http.post(
+                    token_url,
+                    data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+                )
+                assert ref_res.status_code == 200
+                new_access_token = ref_res.json()["access_token"]
+
+            # 5. Connect and call MCP with refreshed access token
+            async with httpx.AsyncClient(
+                headers={"Authorization": f"Bearer {new_access_token}"}
+            ) as authed_http2:
+                async with streamable_http_client(mcp_url, http_client=authed_http2) as (
+                    read_stream2,
+                    write_stream2,
+                ):
+                    async with ClientSession(read_stream2, write_stream2) as session2:
+                        await session2.initialize()
+                        res2 = await session2.call_tool("jira_get_board", {})
+                        assert not res2.is_error
+
+        asyncio.run(_test())

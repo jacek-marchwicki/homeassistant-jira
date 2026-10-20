@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
 import re
+import secrets
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -20,7 +23,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qs, quote, urlencode
 
 import httpx
 from fastapi import (
@@ -691,7 +694,8 @@ def oauth_authorization_server_metadata(request: Request, subpath: str = "") -> 
             "authorization_endpoint": f"{base_url}/oauth/authorize",
             "token_endpoint": f"{base_url}/oauth/token",
             "response_types_supported": ["code"],
-            "grant_types_supported": ["authorization_code"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "code_challenge_methods_supported": ["S256", "plain"],
             "subject_types_supported": ["public"],
             "scopes_supported": ["jira", "openid", "email", "profile"],
             "token_endpoint_auth_methods_supported": [
@@ -709,6 +713,17 @@ def oauth_authorization_server_metadata(request: Request, subpath: str = "") -> 
     )
 
 
+def verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") -> bool:
+    """Verify PKCE code_verifier against code_challenge (RFC 7636)."""
+    if method == "plain":
+        return hmac.compare_digest(code_verifier, code_challenge)
+    if method == "S256":
+        digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+        computed = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+        return hmac.compare_digest(computed, code_challenge)
+    return False
+
+
 # ---------------------------------------------------------------------------
 # OAuth 2.0 Authorization Server Endpoints (for Gemini & MCP clients)
 # ---------------------------------------------------------------------------
@@ -722,6 +737,8 @@ def oauth_authorize(
     response_type: str = "code",
     state: str = "",
     scope: str = "",
+    code_challenge: str = "",
+    code_challenge_method: str = "S256",
 ) -> Response:
     """OAuth 2.0 Authorization Endpoint for Model Context Protocol & Gemini."""
     if request.method == "OPTIONS":
@@ -811,6 +828,8 @@ def oauth_authorize(
         email=user.email,
         client_id=client_id,
         redirect_uri=redirect_uri,
+        code_challenge=code_challenge.strip(),
+        code_challenge_method=(code_challenge_method.strip() or "S256"),
         ttl_seconds=300,
     )
 
@@ -838,21 +857,33 @@ async def oauth_token(request: Request) -> Response:
     current_settings = JiraDashboardSettings.load()
     provider = AuthProvider(current_settings)
 
-    content_type = request.headers.get("content-type", request.headers.get("Content-Type", ""))
+    body_bytes = await request.body()
+    content_type = request.headers.get(
+        "content-type", request.headers.get("Content-Type", "")
+    ).lower()
+
     params: dict[str, Any] = {}
     if "application/json" in content_type:
         try:
-            params = await request.json()
+            params = json.loads(body_bytes.decode("utf-8"))
         except Exception:
             params = {}
     else:
         try:
-            form = await request.form()
-            params = dict(form)
+            parsed = parse_qs(body_bytes.decode("utf-8"))
+            params = {
+                k: v[0] if isinstance(v, list) and len(v) == 1 else v for k, v in parsed.items()
+            }
         except Exception:
             params = {}
 
-    grant_type = str(params.get("grant_type", ""))
+    if not params and body_bytes:
+        try:
+            params = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            pass
+
+    grant_type = str(params.get("grant_type", "")).strip()
     code = str(params.get("code", "")).strip()
     client_id = str(params.get("client_id", "")).strip()
     client_secret = str(params.get("client_secret", "")).strip()
@@ -873,6 +904,7 @@ async def oauth_token(request: Request) -> Response:
     # Verify client credentials if configured
     if current_settings.mcp_client_secret:
         if client_secret != current_settings.mcp_client_secret:
+            logger.warning("OAuth token invalid client_secret")
             return JSONResponse(
                 status_code=401,
                 content={
@@ -882,63 +914,181 @@ async def oauth_token(request: Request) -> Response:
                 headers={"WWW-Authenticate": "Basic"},
             )
 
-    if grant_type != "authorization_code":
+    logger.info(
+        "OAuth token request: grant_type=%s, client_id=%s, code=%s, has_verifier=%s",
+        grant_type,
+        client_id,
+        bool(code),
+        bool(params.get("code_verifier")),
+    )
+
+    if grant_type == "authorization_code":
+        if not code:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_request",
+                    "error_description": "Missing required code parameter",
+                },
+            )
+
+        code_data = storage.consume_oauth_code(code)
+        if not code_data:
+            logger.warning("OAuth token request with invalid or expired code")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_grant",
+                    "error_description": "Invalid or expired authorization code",
+                },
+            )
+
+        # Verify redirect_uri if client provided one
+        req_redirect = str(params.get("redirect_uri", "")).strip()
+        expected_redirect = str(code_data.get("redirect_uri", "")).strip()
+        if req_redirect and expected_redirect and req_redirect != expected_redirect:
+            logger.warning(
+                "OAuth token redirect_uri mismatch: %s != %s", req_redirect, expected_redirect
+            )
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_grant",
+                    "error_description": "redirect_uri mismatch",
+                },
+            )
+
+        # Verify PKCE if code_challenge was present in authorization request (RFC 7636)
+        stored_challenge = str(code_data.get("code_challenge", "")).strip()
+        stored_method = str(code_data.get("code_challenge_method", "S256")).strip() or "S256"
+        if stored_challenge:
+            code_verifier = str(params.get("code_verifier", "")).strip()
+            if not code_verifier:
+                logger.warning("OAuth token missing PKCE code_verifier for challenged code")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_grant",
+                        "error_description": "Missing PKCE code_verifier parameter",
+                    },
+                )
+            if not verify_pkce(code_verifier, stored_challenge, stored_method):
+                logger.warning(
+                    "OAuth token failed PKCE verification against %s challenge", stored_method
+                )
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_grant",
+                        "error_description": "PKCE code_verifier verification failed",
+                    },
+                )
+
+        user_email = code_data["email"]
+        if not provider.is_email_allowed(user_email):
+            logger.warning("OAuth token denied for disallowed email: %s", user_email)
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "access_denied",
+                    "error_description": f"User '{user_email}' is not authorized",
+                },
+            )
+
+        access_token = create_session_token(
+            GoogleAuthUser(email=user_email, name="Gemini MCP User"),
+            secret=provider.get_signing_secret(),
+            max_age_seconds=DEFAULT_SESSION_MAX_AGE,
+        )
+        refresh_token = secrets.token_urlsafe(32)
+        storage.save_refresh_token(
+            token=refresh_token,
+            email=user_email,
+            client_id=client_id or code_data.get("client_id", ""),
+            ttl_seconds=86400 * 30,
+        )
+
+        return JSONResponse(
+            content={
+                "access_token": access_token,
+                "token_type": "Bearer",
+                "expires_in": DEFAULT_SESSION_MAX_AGE,
+                "refresh_token": refresh_token,
+                "scope": "jira openid email profile",
+            },
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
+
+    elif grant_type == "refresh_token":
+        req_refresh_token = str(params.get("refresh_token", "")).strip()
+        if not req_refresh_token:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_request",
+                    "error_description": "Missing refresh_token parameter",
+                },
+            )
+
+        refresh_data = storage.get_refresh_token(req_refresh_token)
+        if not refresh_data:
+            logger.warning("OAuth token refresh with invalid or expired token")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_grant",
+                    "error_description": "Invalid or expired refresh token",
+                },
+            )
+
+        user_email = refresh_data["email"]
+        if not provider.is_email_allowed(user_email):
+            logger.warning("OAuth token refresh denied for disallowed email: %s", user_email)
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "access_denied",
+                    "error_description": f"User '{user_email}' is not authorized",
+                },
+            )
+
+        new_access_token = create_session_token(
+            GoogleAuthUser(email=user_email, name="Gemini MCP User"),
+            secret=provider.get_signing_secret(),
+            max_age_seconds=DEFAULT_SESSION_MAX_AGE,
+        )
+
+        return JSONResponse(
+            content={
+                "access_token": new_access_token,
+                "token_type": "Bearer",
+                "expires_in": DEFAULT_SESSION_MAX_AGE,
+                "refresh_token": req_refresh_token,
+                "scope": "jira openid email profile",
+            },
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
+
+    else:
+        logger.warning("OAuth token unsupported grant_type: '%s'", grant_type)
         return JSONResponse(
             status_code=400,
             content={
                 "error": "unsupported_grant_type",
-                "error_description": "Only grant_type=authorization_code is supported",
+                "error_description": (
+                    f"Grant type '{grant_type}' is not supported "
+                    "(use authorization_code or refresh_token)"
+                ),
             },
         )
-
-    if not code:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": "invalid_request",
-                "error_description": "Missing required code parameter",
-            },
-        )
-
-    code_data = storage.consume_oauth_code(code)
-    if not code_data:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": "invalid_grant",
-                "error_description": "Invalid or expired authorization code",
-            },
-        )
-
-    user_email = code_data["email"]
-    if not provider.is_email_allowed(user_email):
-        return JSONResponse(
-            status_code=403,
-            content={
-                "error": "access_denied",
-                "error_description": f"User '{user_email}' is not authorized",
-            },
-        )
-
-    access_token = create_session_token(
-        GoogleAuthUser(email=user_email, name="Gemini MCP User"),
-        secret=provider.get_signing_secret(),
-        max_age_seconds=DEFAULT_SESSION_MAX_AGE,
-    )
-
-    return JSONResponse(
-        content={
-            "access_token": access_token,
-            "token_type": "Bearer",
-            "expires_in": DEFAULT_SESSION_MAX_AGE,
-            "scope": "jira",
-        },
-        headers={
-            "Cache-Control": "no-store",
-            "Pragma": "no-cache",
-            "Access-Control-Allow-Origin": "*",
-        },
-    )
 
 
 # ---------------------------------------------------------------------------

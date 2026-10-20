@@ -183,6 +183,29 @@ class SQLiteStorage:
                         email TEXT NOT NULL,
                         client_id TEXT,
                         redirect_uri TEXT,
+                        code_challenge TEXT,
+                        code_challenge_method TEXT,
+                        expires_at REAL NOT NULL
+                    );
+                    """
+                )
+                cur_oauth = conn.execute("PRAGMA table_info(oauth_codes);")
+                oauth_cols = {
+                    row["name"] if isinstance(row, sqlite3.Row) else row[1]
+                    for row in cur_oauth.fetchall()
+                }
+                if "code_challenge" not in oauth_cols:
+                    conn.execute("ALTER TABLE oauth_codes ADD COLUMN code_challenge TEXT;")
+                if "code_challenge_method" not in oauth_cols:
+                    conn.execute("ALTER TABLE oauth_codes ADD COLUMN code_challenge_method TEXT;")
+
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+                        token TEXT PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        client_id TEXT,
+                        created_at REAL NOT NULL,
                         expires_at REAL NOT NULL
                     );
                     """
@@ -801,9 +824,11 @@ class SQLiteStorage:
         email: str,
         client_id: str = "",
         redirect_uri: str = "",
+        code_challenge: str = "",
+        code_challenge_method: str = "",
         ttl_seconds: int = 300,
     ) -> None:
-        """Store an ephemeral OAuth 2.0 authorization code."""
+        """Store an ephemeral OAuth 2.0 authorization code (with optional PKCE challenge)."""
         with self._lock:
             conn = self._get_connection()
             expires_at = time.time() + ttl_seconds
@@ -811,10 +836,19 @@ class SQLiteStorage:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO oauth_codes (
-                        code, email, client_id, redirect_uri, expires_at
-                    ) VALUES (?, ?, ?, ?, ?);
+                        code, email, client_id, redirect_uri,
+                        code_challenge, code_challenge_method, expires_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?);
                     """,
-                    (code, email, client_id, redirect_uri, expires_at),
+                    (
+                        code,
+                        email,
+                        client_id,
+                        redirect_uri,
+                        code_challenge,
+                        code_challenge_method,
+                        expires_at,
+                    ),
                 )
 
     def consume_oauth_code(self, code: str) -> dict[str, Any] | None:
@@ -827,7 +861,8 @@ class SQLiteStorage:
                 conn.execute("DELETE FROM oauth_codes WHERE expires_at < ?;", (now,))
                 cur = conn.execute(
                     """
-                    SELECT code, email, client_id, redirect_uri, expires_at
+                    SELECT code, email, client_id, redirect_uri,
+                           code_challenge, code_challenge_method, expires_at
                     FROM oauth_codes
                     WHERE code = ? AND expires_at >= ?;
                     """,
@@ -841,10 +876,67 @@ class SQLiteStorage:
                     "email": str(row["email"]),
                     "client_id": str(row["client_id"] or ""),
                     "redirect_uri": str(row["redirect_uri"] or ""),
+                    "code_challenge": str(row["code_challenge"] or ""),
+                    "code_challenge_method": str(row["code_challenge_method"] or ""),
                     "expires_at": float(row["expires_at"]),
                 }
                 conn.execute("DELETE FROM oauth_codes WHERE code = ?;", (code,))
                 return result
+
+    def save_refresh_token(
+        self,
+        token: str,
+        email: str,
+        client_id: str = "",
+        ttl_seconds: int = 86400 * 30,
+    ) -> None:
+        """Store an OAuth 2.0 refresh token."""
+        with self._lock:
+            conn = self._get_connection()
+            now = time.time()
+            expires_at = now + ttl_seconds
+            with conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO oauth_refresh_tokens (
+                        token, email, client_id, created_at, expires_at
+                    ) VALUES (?, ?, ?, ?, ?);
+                    """,
+                    (token, email, client_id, now, expires_at),
+                )
+
+    def get_refresh_token(self, token: str) -> dict[str, Any] | None:
+        """Retrieve an OAuth 2.0 refresh token if valid and not expired."""
+        with self._lock:
+            conn = self._get_connection()
+            now = time.time()
+            with conn:
+                conn.execute("DELETE FROM oauth_refresh_tokens WHERE expires_at < ?;", (now,))
+                cur = conn.execute(
+                    """
+                    SELECT token, email, client_id, created_at, expires_at
+                    FROM oauth_refresh_tokens
+                    WHERE token = ? AND expires_at >= ?;
+                    """,
+                    (token, now),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                    "token": str(row["token"]),
+                    "email": str(row["email"]),
+                    "client_id": str(row["client_id"] or ""),
+                    "created_at": float(row["created_at"]),
+                    "expires_at": float(row["expires_at"]),
+                }
+
+    def revoke_refresh_token(self, token: str) -> None:
+        """Revoke and delete an OAuth 2.0 refresh token."""
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                conn.execute("DELETE FROM oauth_refresh_tokens WHERE token = ?;", (token,))
 
     def close(self) -> None:
         """Close SQLite database connection."""

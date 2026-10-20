@@ -193,8 +193,10 @@ def test_mcp_streamable_http_sse_and_delete() -> None:
         assert resp.headers["mcp-protocol-version"] == "2025-11-25"
 
         first_chunk = await resp.body_iterator.__anext__()
-        assert "event: endpoint" not in first_chunk
-        assert "event: message" in first_chunk
+        assert first_chunk == ": ping\n\n"
+        second_chunk = await resp.body_iterator.__anext__()
+        assert "event: endpoint" not in second_chunk
+        assert "event: message" in second_chunk
         await resp.body_iterator.aclose()
 
     asyncio.run(_test_gen())

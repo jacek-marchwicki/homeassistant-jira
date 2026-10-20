@@ -259,9 +259,6 @@ class MCPServerHandler:
                     "protocolVersion": client_version,
                     "capabilities": {
                         "tools": {"listChanged": False},
-                        "resources": {"subscribe": False, "listChanged": False},
-                        "prompts": {"listChanged": False},
-                        "logging": {},
                     },
                     "serverInfo": {
                         "name": SERVER_NAME,

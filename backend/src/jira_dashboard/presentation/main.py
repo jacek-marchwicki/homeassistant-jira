@@ -949,6 +949,8 @@ async def mcp_endpoint(request: Request) -> Response:
             queue = mcp_handler.get_or_create_session(session_id)
 
             async def streamable_event_generator() -> AsyncGenerator[str, None]:
+                # Immediately yield keep-alive comment to establish SSE & flush HTTP headers
+                yield ": ping\n\n"
                 try:
                     while True:
                         try:

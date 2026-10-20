@@ -255,10 +255,14 @@ def test_offline_queue_drain_and_conflict_resolution(client: TestClient) -> None
         # Step 2: Restore Jira connection
         client.post("/api/test/simulate-error", json={"enable": False})
 
-    # Drain the outbox asynchronously
+    # Drain the outbox asynchronously (handling any concurrent opportunistic sync tasks)
     async def _drain() -> None:
-        processed = await sync_worker.drain_once()
-        assert processed >= 1
+        for _ in range(30):
+            await sync_worker.drain_once()
+            if len(storage.get_pending_outbox()) == 0:
+                break
+            await asyncio.sleep(0.05)
+        assert len(storage.get_pending_outbox()) == 0
 
     asyncio.run(_drain())
 

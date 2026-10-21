@@ -1,6 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+val keystorePropertiesFile = rootProject.file("keystore.properties").takeIf { it.exists() }
+    ?: project.file("keystore.properties")
+
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        load(keystorePropertiesFile.inputStream())
+    }
 }
 
 kotlin {
@@ -26,10 +37,16 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("release.jks")
-            storePassword = "testapp123"
-            keyAlias = "testapp"
-            keyPassword = "testapp123"
+            val keyStoreRelativePath = keystoreProperties.getProperty("storeFile") ?: "release.jks"
+            // Support relative to app module or project root
+            storeFile = if (file(keyStoreRelativePath).exists()) {
+                file(keyStoreRelativePath)
+            } else {
+                rootProject.file(keyStoreRelativePath)
+            }
+            storePassword = keystoreProperties.getProperty("storePassword") ?: "testapp123"
+            keyAlias = keystoreProperties.getProperty("keyAlias") ?: "testapp"
+            keyPassword = keystoreProperties.getProperty("keyPassword") ?: "testapp123"
         }
     }
 

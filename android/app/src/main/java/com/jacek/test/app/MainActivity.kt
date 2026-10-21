@@ -80,7 +80,7 @@ fun HelloWorldScreen() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Image(
-                painter = painterResource(id = R.mipmap.ic_launcher),
+                painter = painterResource(id = R.drawable.app_logo),
                 contentDescription = stringResource(R.string.app_name),
                 modifier = Modifier
                     .size(108.dp)

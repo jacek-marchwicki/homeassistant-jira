@@ -756,14 +756,12 @@ export function calculateRankBetween(
       if (num > 0) {
         return match[1] + String(num - 1).padStart(match[2].length, '0') + match[3];
       }
+      return `${match[1]}${match[2]}0${match[3]}`;
     }
-    for (let i = nextRank.length - 1; i >= 0; i--) {
-      const code = nextRank.charCodeAt(i);
-      if (code > 33) {
-        return nextRank.slice(0, i) + String.fromCharCode(code - 1) + nextRank.slice(i + 1);
-      }
+    if (nextRank.endsWith(':')) {
+      return `${nextRank.slice(0, -1)}0:`;
     }
-    return '0|00000:';
+    return `0|${nextRank}`;
   }
 
   if (prevRank && !nextRank) {
@@ -963,6 +961,15 @@ export function handleBacklogDragEnd(
       const nextItem = params.boardIssues[targetIndex];
       const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
       params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+    } else {
+      const remainingBoard = params.boardIssues.filter((i) => i.key !== activeKey);
+      if (remainingBoard.length > 0) {
+        const firstItem = remainingBoard[0];
+        const targetRank = calculateRankBetween(null, firstItem.rank);
+        params.rankIssueOptimistic(activeKey, firstItem.key, undefined, targetRank);
+      } else {
+        params.rankIssueOptimistic(activeKey, undefined, undefined, '0|i00001:');
+      }
     }
   } else if (targetType === 'backlog' && !isCurrentlyBacklog) {
     params.moveToBacklog(activeKey);
@@ -972,6 +979,15 @@ export function handleBacklogDragEnd(
       const nextItem = params.backlogIssues[targetIndex];
       const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
       params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+    } else {
+      const remainingBacklog = params.backlogIssues.filter((i) => i.key !== activeKey);
+      if (remainingBacklog.length > 0) {
+        const firstItem = remainingBacklog[0];
+        const targetRank = calculateRankBetween(null, firstItem.rank);
+        params.rankIssueOptimistic(activeKey, firstItem.key, undefined, targetRank);
+      } else {
+        params.rankIssueOptimistic(activeKey, undefined, undefined, '0|i00001:');
+      }
     }
   } else {
     // Intra-list reordering (same section)
@@ -985,6 +1001,14 @@ export function handleBacklogDragEnd(
         const nextItem = newIndex < reordered.length - 1 ? reordered[newIndex + 1] : null;
         const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
         params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+      }
+    } else if (!overItem) {
+      // Dropped onto section container/header -> move to top of the current section
+      const remaining = currentList.filter((i) => i.key !== activeKey);
+      if (remaining.length > 0) {
+        const firstItem = remaining[0];
+        const targetRank = calculateRankBetween(null, firstItem.rank);
+        params.rankIssueOptimistic(activeKey, firstItem.key, undefined, targetRank);
       }
     }
   }
@@ -1337,11 +1361,52 @@ export function handlePeopleDragEnd(
     }
   }
 
-  // Rank reordering if dropped over another issue card
-  const overItem = params.issues.find((i) => i.key === overKey);
-  if (overItem && overKey !== activeKey) {
-    const targetRank = calculateRankBetween(overItem.rank, null);
-    params.rankIssueOptimistic(activeKey, undefined, overItem.key, targetRank);
+  // Rank reordering within or across people columns
+  if (targetPerson) {
+    const targetColIssues = sortIssuesByRank(
+      params.issues.filter(
+        (i) =>
+          isAssignedToPersonOrUnassigned(i, targetPerson!.displayName, targetPerson!.accountId) &&
+          !isBacklogIssue(i)
+      )
+    );
+    const overItem = params.issues.find((i) => i.key === overKey);
+
+    if (overItem && overKey !== activeKey) {
+      const isAlreadyInCol = targetColIssues.some((i) => i.key === activeKey);
+      if (isAlreadyInCol) {
+        // Intra-column reorder
+        const oldIndex = targetColIssues.findIndex((i) => i.key === activeKey);
+        const newIndex = targetColIssues.findIndex((i) => i.key === overKey);
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reordered = arrayMove(targetColIssues, oldIndex, newIndex);
+          const prevItem = newIndex > 0 ? reordered[newIndex - 1] : null;
+          const nextItem = newIndex < reordered.length - 1 ? reordered[newIndex + 1] : null;
+          const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+          params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+        }
+      } else {
+        // Inter-column drop over a card
+        const targetIndex = targetColIssues.findIndex((i) => i.key === overKey);
+        if (targetIndex !== -1) {
+          const prevItem = targetIndex > 0 ? targetColIssues[targetIndex - 1] : null;
+          const nextItem = targetColIssues[targetIndex];
+          const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+          params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+        }
+      }
+    } else if (!overItem) {
+      // Dropped onto the column container / header -> rank at the TOP of the column
+      const remainingIssues = targetColIssues.filter((i) => i.key !== activeKey);
+      if (remainingIssues.length > 0) {
+        const firstItem = remainingIssues[0];
+        const targetRank = calculateRankBetween(null, firstItem.rank);
+        params.rankIssueOptimistic(activeKey, firstItem.key, undefined, targetRank);
+      } else {
+        const targetRank = calculateRankBetween(null, null);
+        params.rankIssueOptimistic(activeKey, undefined, undefined, targetRank);
+      }
+    }
   }
 }
 

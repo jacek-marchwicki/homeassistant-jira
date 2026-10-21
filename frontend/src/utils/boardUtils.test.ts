@@ -1121,6 +1121,31 @@ describe('boardUtils', () => {
       const afterLast = calculateRankBetween('0|i00002:', null);
       expect(afterLast > '0|i00002:').toBe(true);
     });
+
+    it('calculates rank before zero-based LexoRanks strictly descending', () => {
+      const r0 = '0|i00001:';
+      const r1 = calculateRankBetween(null, r0);
+      expect(r1 < r0).toBe(true);
+      expect(r1).toBe('0|i00000:');
+
+      const r2 = calculateRankBetween(null, r1);
+      expect(r2 < r1).toBe(true);
+      expect(r2).toBe('0|i000000:');
+
+      const r3 = calculateRankBetween(null, r2);
+      expect(r3 < r2).toBe(true);
+      expect(r3).toBe('0|i0000000:');
+
+      const r4 = calculateRankBetween(null, r3);
+      expect(r4 < r3).toBe(true);
+      expect(r4).toBe('0|i00000000:');
+    });
+
+    it('calculates rank before custom LexoRank prefixes strictly descending', () => {
+      const customRank = '0|hzzzzz:';
+      const beforeCustom = calculateRankBetween(null, customRank);
+      expect(beforeCustom < customRank).toBe(true);
+    });
   });
 
   describe('handleKanbanDragEnd and handleBacklogDragEnd', () => {
@@ -1217,6 +1242,68 @@ describe('boardUtils', () => {
       expect(moveToBoard).not.toHaveBeenCalled();
       expect(moveToBacklog).not.toHaveBeenCalled();
       expect(rankIssueOptimistic).toHaveBeenCalledWith('B2', 'B1', undefined, expect.any(String));
+    });
+
+    it('handleBacklogDragEnd: moves issue to top of sprint list when dropped on sprint container', () => {
+      const s1: JiraIssue = { ...mockBaseIssue, key: 'S1', rank: '0|i00001:', status: { id: '1', name: 'Ready', category: 'todo' } };
+      const s2: JiraIssue = { ...mockBaseIssue, key: 'S2', rank: '0|i00002:', status: { id: '1', name: 'Ready', category: 'todo' } };
+      const issues = [s1, s2];
+
+      const rankIssueOptimistic = vi.fn();
+      const moveToBoard = vi.fn();
+      const moveToBacklog = vi.fn();
+
+      handleBacklogDragEnd(
+        { active: { id: 'S2' }, over: { id: 'backlog-view-sprint-list', data: { current: { targetType: 'board' } } } } as any,
+        {
+          issues,
+          boardIssues: [s1, s2],
+          backlogIssues: [],
+          moveToBoard,
+          moveToBacklog,
+          rankIssueOptimistic,
+        }
+      );
+
+      expect(rankIssueOptimistic).toHaveBeenCalledWith(
+        'S2',
+        'S1',
+        undefined,
+        expect.stringMatching(/.+/)
+      );
+      const callArgs = rankIssueOptimistic.mock.calls[0];
+      expect(callArgs[3] < '0|i00001:').toBe(true);
+    });
+
+    it('handleBacklogDragEnd: moves issue to top of backlog list when dropped on backlog container', () => {
+      const b1: JiraIssue = { ...mockBaseIssue, key: 'B1', rank: '0|i00001:', status: { id: '0', name: 'Backlog', category: 'todo' } };
+      const b2: JiraIssue = { ...mockBaseIssue, key: 'B2', rank: '0|i00002:', status: { id: '0', name: 'Backlog', category: 'todo' } };
+      const issues = [b1, b2];
+
+      const rankIssueOptimistic = vi.fn();
+      const moveToBoard = vi.fn();
+      const moveToBacklog = vi.fn();
+
+      handleBacklogDragEnd(
+        { active: { id: 'B2' }, over: { id: 'backlog-view-backlog-list', data: { current: { targetType: 'backlog' } } } } as any,
+        {
+          issues,
+          boardIssues: [],
+          backlogIssues: [b1, b2],
+          moveToBoard,
+          moveToBacklog,
+          rankIssueOptimistic,
+        }
+      );
+
+      expect(rankIssueOptimistic).toHaveBeenCalledWith(
+        'B2',
+        'B1',
+        undefined,
+        expect.stringMatching(/.+/)
+      );
+      const callArgs = rankIssueOptimistic.mock.calls[0];
+      expect(callArgs[3] < '0|i00001:').toBe(true);
     });
   });
 
@@ -1492,6 +1579,155 @@ describe('boardUtils', () => {
           assignee_name: 'Alex Lead',
           assignee_account_id: 'usr-alex',
         });
+      });
+
+      it('reorders issue to top of the column when dropped over the first card', () => {
+        const taskA: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'TASK-A',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          rank: '0|i00001:',
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        };
+        const taskB: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'TASK-B',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          rank: '0|i00002:',
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        };
+        const taskC: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'TASK-C',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          rank: '0|i00003:',
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        };
+        const issues = [taskA, taskB, taskC];
+        const updateIssueOptimistic = vi.fn();
+        const rankIssueOptimistic = vi.fn();
+        const moveToBacklog = vi.fn();
+        const moveToBoard = vi.fn();
+
+        const people = [
+          { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        ];
+
+        // Drag TASK-C over TASK-A
+        handlePeopleDragEnd(
+          {
+            active: {
+              id: 'usr-jacek:TASK-C',
+              data: {
+                current: {
+                  type: 'Issue',
+                  issue: taskC,
+                  sourceColumnId: 'usr-jacek',
+                },
+              },
+            },
+            over: {
+              id: 'usr-jacek:TASK-A',
+              data: {
+                current: {
+                  type: 'Issue',
+                  issue: taskA,
+                  sourceColumnId: 'usr-jacek',
+                  columnPersonName: 'Jacek Marchwicki',
+                },
+              },
+            },
+          } as any,
+          {
+            issues,
+            backlogIssues: [],
+            people,
+            updateIssueOptimistic,
+            rankIssueOptimistic,
+            moveToBacklog,
+            moveToBoard,
+          }
+        );
+
+        expect(rankIssueOptimistic).toHaveBeenCalledWith(
+          'TASK-C',
+          'TASK-A',
+          undefined,
+          expect.stringMatching(/.+/)
+        );
+        const targetRank = rankIssueOptimistic.mock.calls[0][3];
+        expect(targetRank < '0|i00001:').toBe(true);
+      });
+
+      it('moves issue to top of column when dropped onto the column container/header', () => {
+        const taskA: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'TASK-A',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          rank: '0|i00001:',
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        };
+        const taskB: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'TASK-B',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          rank: '0|i00002:',
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        };
+        const issues = [taskA, taskB];
+        const updateIssueOptimistic = vi.fn();
+        const rankIssueOptimistic = vi.fn();
+        const moveToBacklog = vi.fn();
+        const moveToBoard = vi.fn();
+
+        const people = [
+          { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        ];
+
+        // Drag TASK-B over column container
+        handlePeopleDragEnd(
+          {
+            active: {
+              id: 'usr-jacek:TASK-B',
+              data: {
+                current: {
+                  type: 'Issue',
+                  issue: taskB,
+                  sourceColumnId: 'usr-jacek',
+                },
+              },
+            },
+            over: {
+              id: 'people-column-usr-jacek',
+              data: {
+                current: {
+                  type: 'PeopleColumn',
+                  columnId: 'usr-jacek',
+                  personName: 'Jacek Marchwicki',
+                  accountId: 'usr-jacek',
+                },
+              },
+            },
+          } as any,
+          {
+            issues,
+            backlogIssues: [],
+            people,
+            updateIssueOptimistic,
+            rankIssueOptimistic,
+            moveToBacklog,
+            moveToBoard,
+          }
+        );
+
+        expect(rankIssueOptimistic).toHaveBeenCalledWith(
+          'TASK-B',
+          'TASK-A',
+          undefined,
+          expect.stringMatching(/.+/)
+        );
+        const targetRank = rankIssueOptimistic.mock.calls[0][3];
+        expect(targetRank < '0|i00001:').toBe(true);
       });
     });
   });

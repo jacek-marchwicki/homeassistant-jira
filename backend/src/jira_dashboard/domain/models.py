@@ -158,3 +158,39 @@ def issue_sort_key(issue: JiraIssue) -> tuple[int, str, float, str]:
     # Negative epoch for descending updated_at order
     updated_epoch = -parse_iso_timestamp(issue.updated_at)
     return (has_rank, rank_str, updated_epoch, issue.key or "")
+
+
+def compute_top_rank_and_before_key(
+    existing_issues: list[JiraIssue],
+) -> tuple[str, str | None]:
+    """Calculate the next top rank strictly smaller than all existing issues,
+    and the top real issue key.
+    """
+    real_issues = [
+        i for i in existing_issues if not i.key.startswith("TEMP-") and "-TEMP-" not in i.key
+    ]
+    rank_before_key: str | None = None
+    if real_issues:
+        real_issues_sorted = sorted(real_issues, key=issue_sort_key)
+        rank_before_key = real_issues_sorted[0].key
+
+    ranked = [i.rank for i in existing_issues if i.rank]
+    if ranked:
+        ranked.sort()
+        base_r = ranked[0]
+        match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
+        if match:
+            num = int(match.group(2))
+            if num > 0:
+                new_rank = f"{match.group(1)}{num - 1:05d}{match.group(3)}"
+            else:
+                new_rank = f"{match.group(1)}{match.group(2)}0{match.group(3)}"
+        else:
+            if base_r.endswith(":"):
+                new_rank = f"{base_r[:-1]}0:"
+            else:
+                new_rank = f"0|{base_r}"
+    else:
+        new_rank = "0|i00001:"
+
+    return new_rank, rank_before_key

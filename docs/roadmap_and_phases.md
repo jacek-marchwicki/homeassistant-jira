@@ -359,3 +359,18 @@ This document details the architectural phases, delivered features, and evolutio
     - Tested in [`backend/tests/test_deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_deploy_gcp.py).
   - [x] **Complete Deployment Documentation**:
     - Comprehensive guide published at [`docs/gcp_deployment.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/gcp_deployment.md) and linked directly from [`README.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/README.md).
+
+- [x] **Phase 5.25: Task Order Top-Placement & Deterministic Move-to-Top Ranking**
+  - [x] **Deterministic Move to Top in Drag & Drop (PeopleBoard & BacklogView)**:
+    - Fixed rank reordering in [`handlePeopleDragEnd`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/boardUtils.ts): Dropping a card onto the first card or dropping onto the column container/header now places it at the top before the first card (previously it incorrectly ranked after the target card or ignored container drops).
+    - Fixed [`handleBacklogDragEnd`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/boardUtils.ts): Dropping cards onto list containers (`backlog-view-sprint-list`, `backlog-view-backlog-list`) ranks and moves tasks to the very top.
+    - Upgraded [`calculateRankBetween`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/boardUtils.ts): Successive rank-to-top calculations strictly decrease lexicographically without producing non-LexoRank characters when the numeric suffix reaches zero (`0|i00000:` -> `0|i000000:` -> `0|i0000000:`).
+  - [x] **Unified Top-Placement for New Tasks (Board & MCP)**:
+    - Introduced [`compute_top_rank_and_before_key`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/domain/models.py) in domain logic shared across backend API endpoints and MCP server.
+    - Both board UI creations ([`boardStore.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.ts) / `POST /api/issues`) and MCP tool calls (`jira_create_issue` in [`backend/src/jira_dashboard/presentation/mcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/presentation/mcp.py)) now automatically calculate the top rank and supply `rank_before_key`.
+    - Handled boards with unranked issues gracefully: new tasks target the top real issue via `rank_before_key` and assign an initial top rank so they land deterministically at index 0.
+    - MCP `jira_create_issue` now broadcasts `issue_created` to active WebSockets and maintains cache consistency so newly created tasks appear at the top immediately across all clients.
+  - [x] **Comprehensive Automated Test Coverage**:
+    - Vitest unit tests in `frontend/src/utils/boardUtils.test.ts` and `frontend/src/store/boardStore.test.ts` (38 test files, 363 tests passing).
+    - Pytest backend suite in `backend/tests/test_mcp.py` verifying MCP rank calculation, `rank_before_key` propagation, and WebSocket delta broadcast (198 tests passing).
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.

@@ -10,6 +10,7 @@ from jira_dashboard.domain.models import (
     JiraUser,
     Priority,
     StatusCategory,
+    compute_top_rank_and_before_key,
     issue_sort_key,
     parse_iso_timestamp,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "JiraUser",
     "Priority",
     "StatusCategory",
+    "compute_top_rank_and_before_key",
     "issue_sort_key",
     "parse_iso_timestamp",
 ]

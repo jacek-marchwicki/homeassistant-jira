@@ -65,14 +65,21 @@ def test_mcp_streamable_http_lifecycle() -> None:
     assert resp.status_code == 200
     tools = resp.json()["result"]["tools"]
     tool_names = [t["name"] for t in tools]
-    assert "jira_get_board" in tool_names
-    assert "jira_list_users" in tool_names
-    assert "jira_list_issues" in tool_names
-    assert "jira_get_issue" in tool_names
-    assert "jira_create_issue" in tool_names
-    assert "jira_assign_issue" in tool_names
-    assert "jira_transition_issue" in tool_names
-    assert "jira_add_comment" in tool_names
+    assert "home_tasks_get_board" in tool_names
+    assert "home_tasks_list_users" in tool_names
+    assert "home_tasks_list_tasks" in tool_names
+    assert "home_tasks_get_task" in tool_names
+    assert "home_tasks_create_task" in tool_names
+    assert "home_tasks_edit_task" in tool_names
+    assert "home_tasks_assign_task" in tool_names
+    assert "home_tasks_transition_task" in tool_names
+    assert "home_tasks_add_comment" in tool_names
+
+    # Jira must not be mentioned anywhere in tool names or schemas
+    for t in tools:
+        assert not t["name"].startswith("jira_")
+        serialized = json.dumps(t).lower()
+        assert "jira" not in serialized, f"Tool {t['name']} mentions Jira: {serialized}"
 
     # Verify annotations on all tools
     for t in tools:
@@ -83,12 +90,12 @@ def test_mcp_streamable_http_lifecycle() -> None:
         assert "idempotentHint" in ann
         assert ann["openWorldHint"] is False
 
-    # 4. tools/call -> jira_get_board
+    # 4. tools/call -> home_tasks_get_board
     call_payload = {
         "jsonrpc": "2.0",
         "id": 4,
         "method": "tools/call",
-        "params": {"name": "jira_get_board", "arguments": {}},
+        "params": {"name": "home_tasks_get_board", "arguments": {}},
     }
     resp = client.post("/mcp", json=call_payload)
     assert resp.status_code == 200
@@ -97,19 +104,19 @@ def test_mcp_streamable_http_lifecycle() -> None:
     assert len(res["content"]) > 0
     text_content = res["content"][0]["text"]
     board_data = json.loads(text_content)
-    assert "issues" in board_data
+    assert "tasks" in board_data
 
-    # 5. tools/call -> jira_create_issue
+    # 5. tools/call -> home_tasks_create_task
     create_payload = {
         "jsonrpc": "2.0",
         "id": 5,
         "method": "tools/call",
         "params": {
-            "name": "jira_create_issue",
+            "name": "home_tasks_create_task",
             "arguments": {
                 "summary": "Clean the kitchen counter",
                 "description": "Wipe surfaces and empty dishwasher",
-                "issue_type": "Task",
+                "task_type": "Task",
                 "priority": "Medium",
             },
         },
@@ -120,30 +127,53 @@ def test_mcp_streamable_http_lifecycle() -> None:
     assert "key" in create_res
     created_key = create_res["key"]
 
-    # 6. tools/call -> jira_get_issue
+    # 5b. tools/call -> home_tasks_edit_task
+    edit_payload = {
+        "jsonrpc": "2.0",
+        "id": 51,
+        "method": "tools/call",
+        "params": {
+            "name": "home_tasks_edit_task",
+            "arguments": {
+                "task_key": created_key,
+                "summary": "Clean and sanitize kitchen counter",
+                "priority": "High",
+                "due_date": "2026-10-31",
+            },
+        },
+    }
+    resp_edit = client.post("/mcp", json=edit_payload)
+    assert resp_edit.status_code == 200
+    edit_res = json.loads(resp_edit.json()["result"]["content"][0]["text"])
+    assert edit_res["key"] == created_key
+    assert edit_res["summary"] == "Clean and sanitize kitchen counter"
+    assert edit_res["priority"].lower() == "high"
+    assert edit_res["due_date"] == "2026-10-31"
+
+    # 6. tools/call -> home_tasks_get_task
     get_payload = {
         "jsonrpc": "2.0",
         "id": 6,
         "method": "tools/call",
         "params": {
-            "name": "jira_get_issue",
-            "arguments": {"issue_key": created_key},
+            "name": "home_tasks_get_task",
+            "arguments": {"task_key": created_key},
         },
     }
     resp = client.post("/mcp", json=get_payload)
     assert resp.status_code == 200
     get_res = json.loads(resp.json()["result"]["content"][0]["text"])
     assert get_res["key"] == created_key
-    assert get_res["summary"] == "Clean the kitchen counter"
+    assert get_res["summary"] == "Clean and sanitize kitchen counter"
 
-    # 7. tools/call -> jira_transition_issue
+    # 7. tools/call -> home_tasks_transition_task
     trans_payload = {
         "jsonrpc": "2.0",
         "id": 7,
         "method": "tools/call",
         "params": {
-            "name": "jira_transition_issue",
-            "arguments": {"issue_key": created_key, "target_category": "done"},
+            "name": "home_tasks_transition_task",
+            "arguments": {"task_key": created_key, "target_category": "done"},
         },
     }
     resp = client.post("/mcp", json=trans_payload)
@@ -151,20 +181,35 @@ def test_mcp_streamable_http_lifecycle() -> None:
     trans_res = json.loads(resp.json()["result"]["content"][0]["text"])
     assert trans_res["status"]["category"] == "done"
 
-    # 8. tools/call -> jira_add_comment
+    # 8. tools/call -> home_tasks_add_comment
     comment_payload = {
         "jsonrpc": "2.0",
         "id": 8,
         "method": "tools/call",
         "params": {
-            "name": "jira_add_comment",
-            "arguments": {"issue_key": created_key, "body": "Finished ahead of schedule!"},
+            "name": "home_tasks_add_comment",
+            "arguments": {"task_key": created_key, "body": "Finished ahead of schedule!"},
         },
     }
     resp = client.post("/mcp", json=comment_payload)
     assert resp.status_code == 200
     comment_res = json.loads(resp.json()["result"]["content"][0]["text"])
     assert comment_res["body"] == "Finished ahead of schedule!"
+
+    # 9. Verify backwards compatibility aliases: calling legacy jira_* names still works
+    legacy_payload = {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {
+            "name": "jira_get_issue",
+            "arguments": {"issue_key": created_key},
+        },
+    }
+    resp_legacy = client.post("/mcp", json=legacy_payload)
+    assert resp_legacy.status_code == 200
+    legacy_res = json.loads(resp_legacy.json()["result"]["content"][0]["text"])
+    assert legacy_res["key"] == created_key
 
 
 def test_mcp_streamable_http_sse_and_delete() -> None:
@@ -591,3 +636,166 @@ def test_mcp_create_and_assign_issue() -> None:
     assert resp_unassign.status_code == 200
     unassigned = json.loads(resp_unassign.json()["result"]["content"][0]["text"])
     assert unassigned["assignee"] == "Unassigned"
+
+
+def test_mcp_edit_task_comprehensive() -> None:
+    """Verify home_tasks_edit_task allows editing all task fields, status, and assignees."""
+    from jira_dashboard.presentation.main import storage
+
+    client = TestClient(app)
+
+    # 1. Create a baseline task
+    create_payload = {
+        "jsonrpc": "2.0",
+        "id": 40,
+        "method": "tools/call",
+        "params": {
+            "name": "home_tasks_create_task",
+            "arguments": {
+                "summary": "Original Task Title",
+                "description": "Original description",
+                "priority": "Low",
+                "task_type": "Task",
+                "status": "To Do",
+                "assignee": "Jacek",
+            },
+        },
+    }
+    resp_create = client.post("/mcp", json=create_payload)
+    assert resp_create.status_code == 200
+    created = json.loads(resp_create.json()["result"]["content"][0]["text"])
+    task_key = created["key"]
+
+    # 2. Edit fields: summary, description, priority, task_type, dates, recreate_after, story_points
+    edit_payload = {
+        "jsonrpc": "2.0",
+        "id": 41,
+        "method": "tools/call",
+        "params": {
+            "name": "home_tasks_edit_task",
+            "arguments": {
+                "task_key": task_key,
+                "summary": "Updated Task Title",
+                "description": "Updated rich markdown description",
+                "priority": "Highest",
+                "task_type": "Story",
+                "start_date": "2026-11-01",
+                "due_date": "2026-11-05",
+                "recreate_after": "2w",
+                "story_points": 8.0,
+            },
+        },
+    }
+    resp_edit = client.post("/mcp", json=edit_payload)
+    assert resp_edit.status_code == 200
+    edited = json.loads(resp_edit.json()["result"]["content"][0]["text"])
+    assert edited["key"] == task_key
+    assert edited["summary"] == "Updated Task Title"
+    assert edited["description"] == "Updated rich markdown description"
+    assert edited["priority"].lower() == "highest"
+    assert edited["issue_type"].lower() == "story"
+    assert edited["start_date"] == "2026-11-01"
+    assert edited["due_date"] == "2026-11-05"
+    assert edited["end_date"] == "2026-11-05"
+    assert edited["recreate_after"] == "2w"
+
+    # Verify updated values persisted in SQLite storage
+    stored = storage.get_issue(task_key)
+    assert stored is not None
+    assert stored.summary == "Updated Task Title"
+    assert stored.description == "Updated rich markdown description"
+    assert stored.priority.value.lower() == "highest"
+
+    # 3. Reassign to another user (e.g. Alex) via home_tasks_edit_task
+    reassign_payload = {
+        "jsonrpc": "2.0",
+        "id": 42,
+        "method": "tools/call",
+        "params": {
+            "name": "home_tasks_edit_task",
+            "arguments": {
+                "task_key": task_key,
+                "assignee": "Alex",
+            },
+        },
+    }
+    resp_reassign = client.post("/mcp", json=reassign_payload)
+    assert resp_reassign.status_code == 200
+    reassigned = json.loads(resp_reassign.json()["result"]["content"][0]["text"])
+    assert "Alex" in reassigned["assignee"]
+
+    # 4. Unassign via home_tasks_edit_task
+    unassign_payload = {
+        "jsonrpc": "2.0",
+        "id": 43,
+        "method": "tools/call",
+        "params": {
+            "name": "home_tasks_edit_task",
+            "arguments": {
+                "task_key": task_key,
+                "assignee": "unassigned",
+            },
+        },
+    }
+    resp_unassign = client.post("/mcp", json=unassign_payload)
+    assert resp_unassign.status_code == 200
+    unassigned = json.loads(resp_unassign.json()["result"]["content"][0]["text"])
+    assert unassigned["assignee"] == "Unassigned"
+
+    # 5. Transition status via home_tasks_edit_task
+    transition_payload = {
+        "jsonrpc": "2.0",
+        "id": 44,
+        "method": "tools/call",
+        "params": {
+            "name": "home_tasks_edit_task",
+            "arguments": {
+                "task_key": task_key,
+                "status": "In Progress",
+            },
+        },
+    }
+    resp_trans = client.post("/mcp", json=transition_payload)
+    assert resp_trans.status_code == 200
+    transitioned = json.loads(resp_trans.json()["result"]["content"][0]["text"])
+    assert (
+        transitioned["status_name"] == "In Progress"
+        or transitioned["status"]["category"] == "in_progress"
+    )
+
+    # 6. Verify compatibility alias: issue_key instead of task_key
+    alias_payload = {
+        "jsonrpc": "2.0",
+        "id": 45,
+        "method": "tools/call",
+        "params": {
+            "name": "home_tasks_edit_task",
+            "arguments": {
+                "issue_key": task_key,
+                "summary": "Aliased Parameter Update",
+            },
+        },
+    }
+    resp_alias = client.post("/mcp", json=alias_payload)
+    assert resp_alias.status_code == 200
+    aliased = json.loads(resp_alias.json()["result"]["content"][0]["text"])
+    assert aliased["summary"] == "Aliased Parameter Update"
+
+    # 7. Non-existent task error handling
+    invalid_payload = {
+        "jsonrpc": "2.0",
+        "id": 46,
+        "method": "tools/call",
+        "params": {
+            "name": "home_tasks_edit_task",
+            "arguments": {
+                "task_key": "NONEXISTENT-99999",
+                "summary": "Should Fail",
+            },
+        },
+    }
+    resp_invalid = client.post("/mcp", json=invalid_payload)
+    assert resp_invalid.status_code == 200
+    invalid_res = resp_invalid.json()["result"]
+    assert invalid_res["isError"] is True
+    assert "not found" in invalid_res["content"][0]["text"].lower()

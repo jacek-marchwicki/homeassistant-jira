@@ -1,4 +1,4 @@
-"""Model Context Protocol (MCP) Server for Home Assistant Jira Dashboard.
+"""Model Context Protocol (MCP) Server for Home Assistant and Home Tasks Dashboard.
 
 Exposes standard JSON-RPC 2.0 endpoints for Gemini, Claude, and other MCP clients:
 - Streamable HTTP: POST /mcp
@@ -34,7 +34,7 @@ SERVER_VERSION = __version__
 
 AVAILABLE_TOOLS: list[dict[str, Any]] = [
     {
-        "name": "jira_get_board",
+        "name": "home_tasks_get_board",
         "description": (
             "Retrieve tasks from the board formatted as on the People board, grouped by "
             "person/assignee. Defaults to showing active tasks (start_date <= today) and "
@@ -88,7 +88,7 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "jira_list_users",
+        "name": "home_tasks_list_users",
         "description": (
             "List all known and assignable users on the task board, with their display names, "
             "account IDs, and account types (parent/child)."
@@ -110,27 +110,32 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "jira_create_issue",
+        "name": "home_tasks_create_task",
         "description": (
-            "Create a new task/issue on the board with full GUI options and defaults. "
-            "Defaults: issue_type='Task', priority='Medium', status='To Do'."
+            "Create a new task on the board with full GUI options and defaults. "
+            "Defaults: task_type='Task', priority='Medium', status='To Do'."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "summary": {
                     "type": "string",
-                    "description": "Summary or title of the issue (required)",
+                    "description": "Summary or title of the task (required)",
                 },
                 "description": {
                     "type": "string",
                     "description": "Detailed description or markdown content",
                 },
-                "issue_type": {
+                "task_type": {
                     "type": "string",
                     "enum": ["Task", "Story", "Bug", "Epic", "Subtask"],
                     "default": "Task",
-                    "description": "Issue type (defaults to Task)",
+                    "description": "Task type (defaults to Task)",
+                },
+                "issue_type": {
+                    "type": "string",
+                    "enum": ["Task", "Story", "Bug", "Epic", "Subtask"],
+                    "description": "Alias for task_type",
                 },
                 "priority": {
                     "type": "string",
@@ -176,17 +181,110 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "jira_assign_issue",
+        "name": "home_tasks_edit_task",
         "description": (
-            "Assign or reassign an issue to a user by username/display name or account ID, "
+            "Edit an existing task on the board. Supports modifying summary, description, "
+            "task_type, priority, status, assignee, start_date, due_date, recreate_after, "
+            "and story_points."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_key": {
+                    "type": "string",
+                    "description": "Task key to edit (e.g. HOME-101)",
+                },
+                "issue_key": {
+                    "type": "string",
+                    "description": "Alias for task_key",
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "New summary or title of the task",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "New detailed markdown description",
+                },
+                "task_type": {
+                    "type": "string",
+                    "enum": ["Task", "Story", "Bug", "Epic", "Subtask"],
+                    "description": "New task type",
+                },
+                "issue_type": {
+                    "type": "string",
+                    "enum": ["Task", "Story", "Bug", "Epic", "Subtask"],
+                    "description": "Alias for task_type",
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["Lowest", "Low", "Medium", "High", "Highest"],
+                    "description": "New priority level",
+                },
+                "status": {
+                    "type": "string",
+                    "description": (
+                        "Target status name (e.g. 'To Do', 'In Progress', 'Done') or "
+                        "category ('todo', 'in_progress', 'done')"
+                    ),
+                },
+                "assignee": {
+                    "type": "string",
+                    "description": (
+                        "Username, display name, or account ID of new assignee. "
+                        "Pass empty string or 'unassigned' to unassign."
+                    ),
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in YYYY-MM-DD format (pass empty string to clear)",
+                },
+                "due_date": {
+                    "type": "string",
+                    "description": (
+                        "Due / end date in YYYY-MM-DD format (pass empty string to clear)"
+                    ),
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "Alias for due_date (YYYY-MM-DD)",
+                },
+                "recreate_after": {
+                    "type": "string",
+                    "description": (
+                        "Recurring schedule interval (e.g. '1d', '1w', '2w', '1m', '1y', "
+                        "or empty string to clear)"
+                    ),
+                },
+                "story_points": {
+                    "type": "number",
+                    "description": "Story points estimate",
+                },
+            },
+        },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    },
+    {
+        "name": "home_tasks_assign_task",
+        "description": (
+            "Assign or reassign a task to a user by username/display name or account ID, "
             "or unassign it by passing an empty string or 'unassigned'."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
+                "task_key": {
+                    "type": "string",
+                    "description": "Task key (e.g. HOME-101)",
+                },
                 "issue_key": {
                     "type": "string",
-                    "description": "Jira issue key (e.g. HOME-11635)",
+                    "description": "Alias for task_key",
                 },
                 "assignee": {
                     "type": "string",
@@ -196,7 +294,7 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
                     ),
                 },
             },
-            "required": ["issue_key", "assignee"],
+            "required": ["assignee"],
         },
         "annotations": {
             "readOnlyHint": False,
@@ -206,19 +304,19 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "jira_list_issues",
-        "description": "List all issues on the Jira board with optional category filtering.",
+        "name": "home_tasks_list_tasks",
+        "description": "List all tasks on the board with optional category filtering.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "category": {
                     "type": "string",
                     "enum": ["todo", "in_progress", "done"],
-                    "description": "Filter issues by status category",
+                    "description": "Filter tasks by status category",
                 },
                 "search": {
                     "type": "string",
-                    "description": "Optional substring to filter issue summaries",
+                    "description": "Optional substring to filter task summaries",
                 },
             },
         },
@@ -230,17 +328,20 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "jira_get_issue",
-        "description": "Retrieve full details and comments for an issue by key (e.g. PROJ-101).",
+        "name": "home_tasks_get_task",
+        "description": "Retrieve full details and comments for a task by key (e.g. HOME-101).",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "task_key": {
+                    "type": "string",
+                    "description": "Task key (e.g. HOME-101)",
+                },
                 "issue_key": {
                     "type": "string",
-                    "description": "Jira issue key (e.g. PROJ-101)",
+                    "description": "Alias for task_key",
                 },
             },
-            "required": ["issue_key"],
         },
         "annotations": {
             "readOnlyHint": True,
@@ -250,14 +351,18 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "jira_transition_issue",
-        "description": "Transition an issue to a target category (todo, in_progress, done).",
+        "name": "home_tasks_transition_task",
+        "description": "Transition a task to a target category (todo, in_progress, done).",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "task_key": {
+                    "type": "string",
+                    "description": "Task key (e.g. HOME-101)",
+                },
                 "issue_key": {
                     "type": "string",
-                    "description": "Jira issue key (e.g. PROJ-101)",
+                    "description": "Alias for task_key",
                 },
                 "target_category": {
                     "type": "string",
@@ -265,7 +370,7 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
                     "description": "Target status category",
                 },
             },
-            "required": ["issue_key", "target_category"],
+            "required": ["target_category"],
         },
         "annotations": {
             "readOnlyHint": False,
@@ -275,21 +380,25 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "jira_add_comment",
-        "description": "Add a text comment to an existing Jira issue.",
+        "name": "home_tasks_add_comment",
+        "description": "Add a text comment to an existing task.",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "task_key": {
+                    "type": "string",
+                    "description": "Task key (e.g. HOME-101)",
+                },
                 "issue_key": {
                     "type": "string",
-                    "description": "Jira issue key (e.g. PROJ-101)",
+                    "description": "Alias for task_key",
                 },
                 "body": {
                     "type": "string",
                     "description": "Text body of the comment",
                 },
             },
-            "required": ["issue_key", "body"],
+            "required": ["body"],
         },
         "annotations": {
             "readOnlyHint": False,
@@ -407,17 +516,37 @@ class MCPServerHandler:
     async def execute_tool(
         self, name: str, arguments: dict[str, Any], base_url: str = ""
     ) -> dict[str, Any]:
-        """Execute a registered Jira MCP tool and return result."""
+        """Execute a registered Home Tasks MCP tool and return result."""
         effective_base = base_url or self.base_url
 
-        if name == "jira_list_users":
+        # Normalize tool names for backward compatibility and aliases
+        alias_map = {
+            "jira_get_board": "home_tasks_get_board",
+            "jira_list_users": "home_tasks_list_users",
+            "jira_create_issue": "home_tasks_create_task",
+            "home_tasks_create_issue": "home_tasks_create_task",
+            "jira_edit_issue": "home_tasks_edit_task",
+            "home_tasks_edit_issue": "home_tasks_edit_task",
+            "jira_assign_issue": "home_tasks_assign_task",
+            "home_tasks_assign_issue": "home_tasks_assign_task",
+            "jira_list_issues": "home_tasks_list_tasks",
+            "home_tasks_list_issues": "home_tasks_list_tasks",
+            "jira_get_issue": "home_tasks_get_task",
+            "home_tasks_get_issue": "home_tasks_get_task",
+            "jira_transition_issue": "home_tasks_transition_task",
+            "home_tasks_transition_issue": "home_tasks_transition_task",
+            "jira_add_comment": "home_tasks_add_comment",
+        }
+        normalized_name = alias_map.get(name, name)
+
+        if normalized_name == "home_tasks_list_users":
             users = await self.get_known_users()
             search = str(arguments.get("search", "")).strip().lower()
             if search:
                 users = [u for u in users if search in u["display_name"].lower()]
             return {"users": users}
 
-        if name == "jira_get_board":
+        if normalized_name == "home_tasks_get_board":
             issues = self.storage.get_issues() or await self.jira_client.get_board_issues(
                 "engineering-1"
             )
@@ -557,7 +686,7 @@ class MCPServerHandler:
                 "issues": formatted_tasks,
             }
 
-        if name == "jira_list_issues":
+        if normalized_name == "home_tasks_list_tasks":
             issues = self.storage.get_issues() or await self.jira_client.get_board_issues(
                 "engineering-1"
             )
@@ -568,19 +697,31 @@ class MCPServerHandler:
                 filtered = [i for i in filtered if i.status.category.value == category]
             if search:
                 filtered = [i for i in filtered if search in i.summary.lower()]
-            return {"issues": [self.format_issue(i, effective_base) for i in filtered]}
+            formatted_issues = [self.format_issue(i, effective_base) for i in filtered]
+            return {"issues": formatted_issues, "tasks": formatted_issues}
 
-        if name == "jira_get_issue":
-            issue_key = arguments.get("issue_key", "")
-            issue = self.storage.get_issue(issue_key) or await self.jira_client.get_issue(issue_key)
+        if normalized_name == "home_tasks_get_task":
+            task_key = str(
+                arguments.get("task_key")
+                or arguments.get("issue_key")
+                or arguments.get("key")
+                or ""
+            ).strip()
+            if not task_key:
+                raise ValueError("task_key is required")
+            issue = self.storage.get_issue(task_key) or await self.jira_client.get_issue(task_key)
             if not issue:
-                raise ValueError(f"Issue {issue_key} not found")
+                raise ValueError(f"Task {task_key} not found")
             return self.format_issue(issue, effective_base)
 
-        if name == "jira_create_issue":
+        if normalized_name == "home_tasks_create_task":
             summary = arguments.get("summary", "")
             description = arguments.get("description", "")
-            issue_type_str = str(arguments.get("issue_type", "task")).lower().strip()
+            issue_type_str = (
+                str(arguments.get("task_type") or arguments.get("issue_type", "task"))
+                .lower()
+                .strip()
+            )
             priority_str = str(arguments.get("priority", "medium")).lower().strip()
             status_name = str(arguments.get("status", "To Do")).strip()
             start_date = arguments.get("start_date")
@@ -624,13 +765,108 @@ class MCPServerHandler:
             self.storage.upsert_issue(created)
             return self.format_issue(created, effective_base)
 
-        if name == "jira_assign_issue":
-            issue_key = arguments.get("issue_key", "")
+        if normalized_name == "home_tasks_edit_task":
+            task_key = str(
+                arguments.get("task_key")
+                or arguments.get("issue_key")
+                or arguments.get("key")
+                or ""
+            ).strip()
+            if not task_key:
+                raise ValueError("task_key is required")
+
+            issue = self.storage.get_issue(task_key) or await self.jira_client.get_issue(task_key)
+            if not issue:
+                raise ValueError(f"Task {task_key} not found")
+
+            summary = arguments.get("summary")
+            description = arguments.get("description")
+            type_str = arguments.get("task_type") or arguments.get("issue_type")
+            issue_type = IssueType(str(type_str).lower().strip()) if type_str else None
+            prio_str = arguments.get("priority")
+            priority = Priority(str(prio_str).lower().strip()) if prio_str else None
+
+            start_date = arguments.get("start_date")
+            due_date = (
+                arguments.get("due_date") if "due_date" in arguments else arguments.get("end_date")
+            )
+            recreate_after = arguments.get("recreate_after")
+            story_points = arguments.get("story_points")
+            if story_points is not None:
+                story_points = float(story_points)
+
+            assignee_arg = arguments.get("assignee")
+            assignee_name: str | None = None
+            assignee_account_id: str | None = None
+            if assignee_arg is not None:
+                clean_assignee = str(assignee_arg).strip()
+                if clean_assignee.lower() in ("", "unassigned", "none"):
+                    assignee_name = ""
+                    assignee_account_id = None
+                else:
+                    known = await self.get_known_users()
+                    matched_user = next(
+                        (
+                            u
+                            for u in known
+                            if u["account_id"].lower() == clean_assignee.lower()
+                            or u["display_name"].lower() == clean_assignee.lower()
+                            or clean_assignee.lower() in u["display_name"].lower()
+                        ),
+                        None,
+                    )
+                    if matched_user:
+                        assignee_name = matched_user["display_name"]
+                        assignee_account_id = matched_user["account_id"]
+                    else:
+                        assignee_name = clean_assignee
+
+            status_arg = (
+                arguments.get("status")
+                or arguments.get("status_name")
+                or arguments.get("target_category")
+            )
+            status_name: str | None = None
+            status_category: StatusCategory | None = None
+            if status_arg:
+                clean_status = str(status_arg).strip().lower()
+                try:
+                    status_category = StatusCategory(clean_status)
+                except ValueError:
+                    status_name = str(status_arg).strip()
+
+            updated = await self.jira_client.update_issue(
+                issue_key=task_key,
+                summary=summary,
+                description=description,
+                issue_type=issue_type,
+                priority=priority,
+                status_category=status_category,
+                status_name=status_name,
+                assignee_name=assignee_name,
+                assignee_account_id=assignee_account_id,
+                story_points=story_points,
+                due_date=due_date,
+                start_date=start_date,
+                recreate_after=recreate_after,
+            )
+            self.storage.upsert_issue(updated)
+            return self.format_issue(updated, effective_base)
+
+        if normalized_name == "home_tasks_assign_task":
+            task_key = str(
+                arguments.get("task_key")
+                or arguments.get("issue_key")
+                or arguments.get("key")
+                or ""
+            ).strip()
+            if not task_key:
+                raise ValueError("task_key is required")
             assignee_arg = str(arguments.get("assignee", "")).strip()
 
-            issue = self.storage.get_issue(issue_key) or await self.jira_client.get_issue(issue_key)
+            issue = self.storage.get_issue(task_key) or await self.jira_client.get_issue(task_key)
             if not issue:
-                raise ValueError(f"Issue {issue_key} not found")
+                raise ValueError(f"Task {task_key} not found")
 
             if assignee_arg.lower() in ("", "unassigned", "none"):
                 assignee_name = ""
@@ -656,31 +892,46 @@ class MCPServerHandler:
                     assignee_account_id = None
 
             updated = await self.jira_client.update_issue(
-                issue_key=issue_key,
+                issue_key=task_key,
                 assignee_name=assignee_name,
                 assignee_account_id=assignee_account_id,
             )
             self.storage.upsert_issue(updated)
             return self.format_issue(updated, effective_base)
 
-        if name == "jira_transition_issue":
-            issue_key = arguments.get("issue_key", "")
+        if normalized_name == "home_tasks_transition_task":
+            task_key = str(
+                arguments.get("task_key")
+                or arguments.get("issue_key")
+                or arguments.get("key")
+                or ""
+            ).strip()
+            if not task_key:
+                raise ValueError("task_key is required")
             target_category = arguments.get("target_category", "done")
             cat_enum = StatusCategory(target_category)
-            transitioned = await self.jira_client.transition_issue(issue_key, cat_enum)
+            transitioned = await self.jira_client.transition_issue(task_key, cat_enum)
             self.storage.upsert_issue(transitioned)
             return self.format_issue(transitioned, effective_base)
 
-        if name == "jira_add_comment":
-            issue_key = arguments.get("issue_key", "")
+        if normalized_name == "home_tasks_add_comment":
+            task_key = str(
+                arguments.get("task_key")
+                or arguments.get("issue_key")
+                or arguments.get("key")
+                or ""
+            ).strip()
+            if not task_key:
+                raise ValueError("task_key is required")
             body = arguments.get("body", "")
-            comment = await self.jira_client.add_comment(issue_key, body)
-            issue = await self.jira_client.get_issue(issue_key)
+            comment = await self.jira_client.add_comment(task_key, body)
+            issue = await self.jira_client.get_issue(task_key)
             if issue:
                 self.storage.upsert_issue(issue)
             result = comment.model_dump(mode="json")
             host = (effective_base or "http://localhost:8000").rstrip("/")
-            result["issue_url"] = f"{host}/task/{issue_key}"
+            result["issue_url"] = f"{host}/task/{task_key}"
+            result["task_url"] = f"{host}/task/{task_key}"
             return result
 
         raise ValueError(f"Unknown tool: {name}")

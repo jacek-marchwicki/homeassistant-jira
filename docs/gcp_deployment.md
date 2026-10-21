@@ -166,13 +166,16 @@ Once deployed, connect Gemini to your custom Jira MCP server:
 > [!NOTE]
 > The server implements **RFC 9728** and **RFC 8414** discovery metadata (`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`) and standard OAuth 2.0 authorization code flow (`/oauth/authorize` and `/oauth/token`). Access to all Jira tools is protected and restricted strictly to the emails configured in `ALLOWED_EMAILS`.
 
-### Available MCP Tools Exposed to Gemini:
-- `jira_get_board`: Retrieve active sprint columns, backlog items, and ticket summaries.
-- `jira_list_issues`: Search and filter issues across the board.
-- `jira_get_issue`: Get detailed specifications, descriptions, and comments for any ticket (`PROJ-101`).
-- `jira_create_issue`: Create chores, tasks, or bugs with summary and description.
-- `jira_transition_issue`: Move issues between `todo`, `in_progress`, and `done`.
-- `jira_add_comment`: Post comments directly to Jira issues.
+### Available MCP Tools Exposed to Gemini & AI Clients:
+- `home_tasks_get_board`: Retrieve active board tasks grouped by person, active filter, and task summaries.
+- `home_tasks_list_users`: List assignable users and account types.
+- `home_tasks_list_tasks`: Search and filter tasks across the board.
+- `home_tasks_get_task`: Get detailed specifications, descriptions, and comments for any task (`HOME-101`).
+- `home_tasks_create_task`: Create chores, tasks, or bugs with summary, description, and board metadata.
+- `home_tasks_edit_task`: Edit existing tasks (title, description, status, priority, assignee, dates, recurring schedule, estimate).
+- `home_tasks_assign_task`: Assign or unassign tasks.
+- `home_tasks_transition_task`: Move tasks between `todo`, `in_progress`, and `done`.
+- `home_tasks_add_comment`: Post comments directly to tasks.
 
 ---
 

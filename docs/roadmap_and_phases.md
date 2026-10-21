@@ -359,3 +359,13 @@ This document details the architectural phases, delivered features, and evolutio
     - Tested in [`backend/tests/test_deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_deploy_gcp.py).
   - [x] **Complete Deployment Documentation**:
     - Comprehensive guide published at [`docs/gcp_deployment.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/gcp_deployment.md) and linked directly from [`README.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/README.md).
+
+- [x] **Phase 5.25: Task Editing via MCP & Neutral Home Tasks Naming**
+  - [x] **Neutral "Home Tasks" MCP Naming (Zero Jira Exposure)**:
+    - Standardized all Model Context Protocol (MCP) tool names and schema descriptions under the neutral "Home Tasks" domain (`home_tasks_*`), completely eliminating external "Jira" terminology from MCP discovery and AI assistant prompts.
+    - Exposed tools in `tools/list`: `home_tasks_get_board`, `home_tasks_list_users`, `home_tasks_list_tasks`, `home_tasks_get_task`, `home_tasks_create_task`, `home_tasks_edit_task`, `home_tasks_assign_task`, `home_tasks_transition_task`, and `home_tasks_add_comment`.
+    - Maintained backward-compatibility aliases in `execute_tool` so existing scripts and client integrations continue functioning without interruption.
+  - [x] **Comprehensive Task Editing Tool (`home_tasks_edit_task`)**:
+    - Added dedicated task editing capability to the MCP server with support for updating `summary`, `description`, `task_type` / `issue_type`, `priority`, `status` (status name or status category transition), `assignee` (with user matching and unassign support), `start_date`, `due_date` / `end_date`, `recreate_after`, and `story_points`.
+    - Synchronizes changes to Jira and updates local SQLite storage cache with updated task details and dashboard task URL (`/task/<KEY>`).
+    - Covered by comprehensive unit tests in [`backend/tests/test_mcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_mcp.py) and verified across the local CI runner.

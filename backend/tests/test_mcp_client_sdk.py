@@ -75,23 +75,24 @@ def test_official_mcp_client_sdk_lifecycle(local_mcp_server: str) -> None:
                 # 2. list_tools
                 tools_res = await session.list_tools()
                 tool_names = [t.name for t in tools_res.tools]
-                assert "jira_get_board" in tool_names
-                assert "jira_list_users" in tool_names
-                assert "jira_list_issues" in tool_names
-                assert "jira_get_issue" in tool_names
-                assert "jira_create_issue" in tool_names
-                assert "jira_assign_issue" in tool_names
-                assert "jira_transition_issue" in tool_names
-                assert "jira_add_comment" in tool_names
+                assert "home_tasks_get_board" in tool_names
+                assert "home_tasks_list_users" in tool_names
+                assert "home_tasks_list_tasks" in tool_names
+                assert "home_tasks_get_task" in tool_names
+                assert "home_tasks_create_task" in tool_names
+                assert "home_tasks_edit_task" in tool_names
+                assert "home_tasks_assign_task" in tool_names
+                assert "home_tasks_transition_task" in tool_names
+                assert "home_tasks_add_comment" in tool_names
 
-                # 3. call_tool -> jira_list_issues
-                list_res = await session.call_tool("jira_list_issues", {})
+                # 3. call_tool -> home_tasks_list_tasks
+                list_res = await session.call_tool("home_tasks_list_tasks", {})
                 assert not list_res.is_error
                 assert len(list_res.content) > 0
 
-                # 4. call_tool -> jira_create_issue
+                # 4. call_tool -> home_tasks_create_task
                 create_res = await session.call_tool(
-                    "jira_create_issue",
+                    "home_tasks_create_task",
                     {"summary": "Created by official MCP client SDK"},
                 )
                 assert not create_res.is_error
@@ -153,10 +154,10 @@ def test_official_mcp_client_sdk_with_oauth_bearer_token(local_mcp_server: str) 
                         assert init_res.server_info.name == "home-tasks-manager"
 
                         tools_res = await session.list_tools()
-                        assert len(tools_res.tools) == 8
+                        assert len(tools_res.tools) == 9
 
                         # Call tool requiring authentication
-                        call_res = await session.call_tool("jira_list_issues", {})
+                        call_res = await session.call_tool("home_tasks_list_tasks", {})
                         assert not call_res.is_error
                         assert len(call_res.content) > 0
 
@@ -231,7 +232,7 @@ def test_official_mcp_client_sdk_with_pkce_and_refresh_flow(local_mcp_server: st
                 ):
                     async with ClientSession(read_stream, write_stream) as session:
                         await session.initialize()
-                        res = await session.call_tool("jira_list_issues", {})
+                        res = await session.call_tool("home_tasks_list_tasks", {})
                         assert not res.is_error
 
             # 4. Refresh token to obtain new access token
@@ -253,7 +254,7 @@ def test_official_mcp_client_sdk_with_pkce_and_refresh_flow(local_mcp_server: st
                 ):
                     async with ClientSession(read_stream2, write_stream2) as session2:
                         await session2.initialize()
-                        res2 = await session2.call_tool("jira_get_board", {})
+                        res2 = await session2.call_tool("home_tasks_get_board", {})
                         assert not res2.is_error
 
         asyncio.run(_test())

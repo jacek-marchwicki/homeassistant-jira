@@ -39,7 +39,9 @@ export function CommentsSection({
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch(getApiUrl(`/api/issues/${issueKey}/comments`));
+        const res = await fetch(getApiUrl(`/api/issues/${issueKey}/comments`), {
+          credentials: 'include',
+        });
         if (!res.ok) {
           throw new Error(`Failed to load comments (HTTP ${res.status})`);
         }
@@ -73,6 +75,7 @@ export function CommentsSection({
     try {
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/comments`), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           body: trimmed,
@@ -117,6 +120,7 @@ export function CommentsSection({
     try {
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/comments/${commentId}`), {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: trimmed }),
       });
@@ -142,6 +146,7 @@ export function CommentsSection({
     try {
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/comments/${commentId}`), {
         method: 'DELETE',
+        credentials: 'include',
       });
 
       if (!res.ok) {

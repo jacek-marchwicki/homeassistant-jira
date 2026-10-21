@@ -237,6 +237,9 @@ class JiraDashboardSettings(BaseModel):
             "google_client_id": "GOOGLE_CLIENT_ID",
             "google_client_secret": "GOOGLE_CLIENT_SECRET",
             "session_secret_key": "SESSION_SECRET_KEY",
+            "mcp_client_id": "MCP_CLIENT_ID",
+            "mcp_client_secret": "MCP_CLIENT_SECRET",
+            "litestream_bucket": "LITESTREAM_BUCKET",
         }
 
         int_fields = {

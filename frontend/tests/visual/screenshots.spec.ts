@@ -412,6 +412,18 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(datesBar).toContainText('Created:');
     await expect(datesBar).toContainText('Updated:');
     await expect(datesBar).toHaveScreenshot('component-edit-dates.png');
+
+    // 7. Verify dynamic replacement of X with Cancel when edits occur
+    const header = modal.getByTestId('edit-issue-modal-header');
+    await expect(header.getByRole('button', { name: 'Close edit dialog' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Cancel' })).not.toBeVisible();
+    await expect(header.getByRole('button', { name: 'Save' })).toBeVisible();
+
+    // Make an edit to trigger dirty state
+    await modal.locator('#edit-summary').fill('Updated Summary for Dirty Snapshot');
+    await expect(header.getByRole('button', { name: 'Close edit dialog' })).not.toBeVisible();
+    await expect(header.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await expect(dialogBox).toHaveScreenshot('component-modal-edit-dirty.png');
   });
 
   test('Capture Mobile Edit Issue Full-Screen Modal Snapshot (375x667)', async ({ page }) => {

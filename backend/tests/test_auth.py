@@ -213,6 +213,32 @@ def test_google_oauth_redirect_flow(monkeypatch: pytest.MonkeyPatch) -> None:
         assert resp_cb.headers["location"].endswith("/")
         assert "ha_jira_session" in resp_cb.cookies
 
+        # 4. /api/auth/google/callback with valid relative state preserves path
+        resp_rel = client.get(
+            "/api/auth/google/callback?code=mock-code-123&state=/task/HOME-123",
+            follow_redirects=False,
+        )
+        assert resp_rel.status_code == 302
+        assert resp_rel.headers["location"] == "/task/HOME-123"
+
+        # 5. Open redirect attempt with external URL is rejected and safely falls back
+        resp_evil = client.get(
+            "/api/auth/google/callback?code=mock-code-123&state=https://evil.com/phish",
+            follow_redirects=False,
+        )
+        assert resp_evil.status_code == 302
+        assert resp_evil.headers["location"].endswith("/")
+        assert not resp_evil.headers["location"].startswith("https://evil.com")
+
+        # 6. Open redirect attempt with protocol-relative URL is rejected
+        resp_proto = client.get(
+            "/api/auth/google/callback?code=mock-code-123&state=//evil.com",
+            follow_redirects=False,
+        )
+        assert resp_proto.status_code == 302
+        assert resp_proto.headers["location"].endswith("/")
+        assert not resp_proto.headers["location"].startswith("//evil.com")
+
 
 def test_bearer_token_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify Authorization: Bearer <google_token> works for API/MCP requests."""
@@ -268,3 +294,49 @@ def test_verify_google_bearer_token_modes() -> None:
         mock_http.return_value = MockResp(401, {"error": "invalid_token"})
         with pytest.raises(ValueError):
             verify_google_bearer_token("invalid_token_value")
+
+
+def test_websocket_auth_in_gcp_oauth_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify WebSocket endpoint closes with code 1008 when unauthenticated in GCP_OAUTH mode."""
+    from starlette.websockets import WebSocketDisconnect
+
+    monkeypatch.setenv("AUTH_MODE", "gcp_oauth")
+    monkeypatch.setenv("ALLOWED_EMAILS", "family@example.com")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "mock-client-id")
+    monkeypatch.setenv("SESSION_SECRET_KEY", "secret-key-123")
+    monkeypatch.setenv("JIRA_WEBHOOK_SECRET", "secret-key-123")
+
+    client = TestClient(app)
+
+    # 1. Unauthenticated connection rejected with 1008
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect("/ws"):
+            pass
+    assert exc_info.value.code == 1008
+
+    # 2. Authenticated connection via cookie succeeds
+    user = GoogleAuthUser(email="family@example.com", name="Family Member")
+    token = create_session_token(user, secret="secret-key-123")
+    client.cookies.set("ha_jira_session", token)
+    with client.websocket_connect("/ws") as ws:
+        data = ws.receive_json()
+        assert data["event"] == "connected"
+
+
+def test_fallback_signing_secret_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Verify logger emits warning when fallback signing secret is used in GCP_OAUTH mode."""
+    import logging
+
+    monkeypatch.setenv("AUTH_MODE", "gcp_oauth")
+    monkeypatch.delenv("SESSION_SECRET_KEY", raising=False)
+    monkeypatch.delenv("JIRA_WEBHOOK_SECRET", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+
+    s = JiraDashboardSettings.load()
+    provider = AuthProvider(s)
+    with caplog.at_level(logging.WARNING):
+        secret = provider.get_signing_secret()
+        assert secret == "jira-dashboard-gcp-default-signing-key"
+        assert any("fallback default signing secret" in record.message for record in caplog.records)

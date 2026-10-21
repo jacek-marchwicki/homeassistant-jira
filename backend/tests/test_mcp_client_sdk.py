@@ -18,6 +18,7 @@ from collections.abc import Generator
 import pytest
 import uvicorn
 
+from jira_dashboard import __version__
 from jira_dashboard.presentation.main import app
 
 
@@ -68,7 +69,7 @@ def test_official_mcp_client_sdk_lifecycle(local_mcp_server: str) -> None:
                 # 1. initialize
                 init_res = await session.initialize()
                 assert init_res.server_info.name == "home-tasks-manager"
-                assert init_res.server_info.version == "0.5.0"
+                assert init_res.server_info.version == __version__
                 assert init_res.capabilities.tools is not None
 
                 # 2. list_tools

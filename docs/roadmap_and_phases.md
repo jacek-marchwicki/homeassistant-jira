@@ -304,16 +304,46 @@ This document details the architectural phases, delivered features, and evolutio
     - Offline reactivity tests in [`frontend/src/store/offlineReactivity.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/offlineReactivity.test.ts).
     - Playwright visual screenshot snapshot `modal-connection-status-pending-transactions.png` in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) (44/44 tests passing).
 
-- [x] **Phase 5.23: Google Cloud Platform (Cloud Run) Deployment & Model Context Protocol (MCP) Server for Gemini Web**
-  - [x] **Remote Model Context Protocol (MCP) Server**:
-    - Implemented JSON-RPC 2.0 Model Context Protocol support supporting both modern **Streamable HTTP** (`POST /mcp`) and legacy/streaming **Server-Sent Events** (`GET /sse` and `POST /messages?session_id=...`).
-    - Exposed six Jira tools for Gemini on Web and LLM agents: `jira_get_board`, `jira_list_issues`, `jira_get_issue`, `jira_create_issue`, `jira_transition_issue`, and `jira_add_comment`.
+- [x] **Phase 5.23: Details Screen UX Polish, Top Action Buttons & Field Reordering**
+  - [x] **Easily Accessible Top Action Buttons & Left-Aligned Dismissal**:
+    - Placed primary "Save" / "Create" button on the **far right** of the header bar.
+    - Positioned the single dismissal action on the **far left** of the header bar, preceding the issue title, icon, and external Jira link.
+    - Removed bottom action button rows from both [`EditIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.tsx) and [`CreateIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.tsx), completely eliminating the need to scroll past long descriptions, form attributes, dates, or comments to save or discard changes.
+  - [x] **Dynamic "Close" (Back Arrow) / "Cancel" (X) Zero-Shift Toggle**:
+    - In pristine state (no unsaved edits), the far-left button renders as "Close" using an **ArrowLeft** back-arrow icon.
+    - When the user enters any edits that can be saved or discarded (`isDirty`), the button smoothly transitions to "Cancel" using an **X** icon.
+    - Both states share identical dimensions (`w-8 h-8`), padding, and flex properties, guaranteeing **zero UI layout shift** when toggling between pristine and dirty states.
+  - [x] **Optimized Field Ordering**:
+    - Positioned "Assignee" directly after "Description", allowing users reviewing an issue to immediately view or reassign ticket ownership without scanning past workflow statuses.
+    - Positioned "Issue Type" as the last field at the bottom of the form (after "Recreate after"), de-emphasizing static ticket classification in favor of dynamic workflow fields (Status, Priority, Dates, Recurrence).
+  - [x] **Full Test Coverage & Visual Regression Verification**:
+    - Vitest unit tests in [`EditIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.test.tsx) and [`CreateIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.test.tsx) covering field document order, dynamic ArrowLeft-to-X transition, zero-shift CSS class equivalence, Escape key handling, and top button submission (334/334 passed).
+    - Full-stack Playwright E2E tests in [`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts) (17/17 passed).
+    - Playwright visual regression snapshots in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) capturing clean and dirty modal states (43/43 passed).
+
+- [x] **Phase 5.24: Google Cloud Platform (Cloud Run) Deployment, Litestream Persistence & Model Context Protocol (MCP)**
+  - [x] **Remote Model Context Protocol (MCP) Server for Gemini Web & AI Assistants**:
+    - Implemented JSON-RPC 2.0 Model Context Protocol server ("Home Tasks Manager", `home-tasks-manager`) supporting both modern **Streamable HTTP** (`POST /mcp`) and streaming **Server-Sent Events** (`GET /sse` and `POST /messages?session_id=...`).
+    - Exposed eight specialized tools tailored for family task management:
+      - `jira_get_board`: Returns tasks formatted identically to the People board (grouped by assignee, defaulting to active tasks, hiding epics and child account tasks, returning start/due/end dates, recreation recurrence, and dashboard URLs).
+      - `jira_list_users`: Lists all available Jira users/assignees.
+      - `jira_list_issues`: Searches and filters issues.
+      - `jira_get_issue`: Retrieves single issue details with dashboard URLs (`/task/<KEY>`).
+      - `jira_create_issue`: Creates new tasks with full field support matching GUI defaults and assignee assignment.
+      - `jira_transition_issue`: Moves tasks across workflow categories/statuses.
+      - `jira_assign_issue`: Reassigns task ownership to any team/family member.
+      - `jira_add_comment`: Adds comments to issues.
+    - Decorated with official MCP tool annotations: `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint = False`.
     - Tested in [`backend/tests/test_mcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_mcp.py).
   - [x] **Google OAuth 2.0 & Identity Security**:
-    - Added pluggable authentication provider in [`backend/src/jira_dashboard/presentation/auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/presentation/auth.py) supporting `none`, `homeassistant`, and `gcp_oauth`.
-    - Restricts access exclusively to authorized family Gmail accounts (`ALLOWED_EMAILS`), blocking any unauthorized accounts with 403.
+    - Pluggable authentication provider in [`backend/src/jira_dashboard/presentation/auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/presentation/auth.py) supporting `none`, `homeassistant`, and `gcp_oauth`.
+    - Restricts access exclusively to authorized family Gmail accounts (`ALLOWED_EMAILS`), blocking unauthorized access with 403 Forbidden.
     - Verifies Google ID tokens using official `google-auth` library and issues secure, tamper-proof session tokens for web browsers.
+    - Authenticated WebSocket endpoint protecting `/ws` in `GCP_OAUTH` mode (close code 1008).
     - Tested in [`backend/tests/test_auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_auth.py).
+  - [x] **Zero-Downtime State & SQLite Continuous Persistence (Option 2 Architecture)**:
+    - Integrated **Litestream** continuous streaming replication to Google Cloud Storage (`litestream_bucket`), automatically restoring database state on container cold starts and streaming WAL frames every second.
+    - Configured Cloud Storage Volume mount or bucket sync for generated AI background image cache (`/data/background_cache`), ensuring image assets survive deployments and scale-to-zero lifecycles without incurring expensive Cloud SQL managed database costs.
   - [x] **Zero-to-Minimal Cost Guarantee (< $2 USD / month)**:
     - Designed strictly around GCP's **Always Free Tier**:
       - Scale to zero (`--min-instances 0`).
@@ -329,5 +359,3 @@ This document details the architectural phases, delivered features, and evolutio
     - Tested in [`backend/tests/test_deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_deploy_gcp.py).
   - [x] **Complete Deployment Documentation**:
     - Comprehensive guide published at [`docs/gcp_deployment.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/gcp_deployment.md) and linked directly from [`README.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/README.md).
-
-

@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from jira_dashboard import __version__
 from jira_dashboard.adapters import JiraClientProtocol, SQLiteStorage
 from jira_dashboard.domain import (
     IssueType,
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "home-tasks-manager"
-SERVER_VERSION = "0.5.0"
+SERVER_VERSION = __version__
 
 AVAILABLE_TOOLS: list[dict[str, Any]] = [
     {

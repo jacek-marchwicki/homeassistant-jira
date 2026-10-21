@@ -20,8 +20,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from pydantic import BaseModel
+from starlette.requests import HTTPConnection
 
 from jira_dashboard.config import JiraDashboardSettings
 
@@ -210,6 +211,12 @@ class AuthProvider:
             return self.settings.webhook_secret
         if self.settings.google_client_secret:
             return self.settings.google_client_secret
+        if self.resolved_mode == AuthMode.GCP_OAUTH:
+            logger.warning(
+                "Using fallback default signing secret in GCP_OAUTH mode! "
+                "Set SESSION_SECRET_KEY, JIRA_WEBHOOK_SECRET, or GOOGLE_CLIENT_SECRET "
+                "for production security."
+            )
         # Fallback to persistent machine identifier or stable salt
         return "jira-dashboard-gcp-default-signing-key"
 
@@ -222,7 +229,7 @@ class AuthProvider:
 
     def authenticate_request(
         self,
-        request: Request,
+        request: HTTPConnection,
         authorization: str | None = None,
     ) -> GoogleAuthUser:
         """Authenticate an incoming HTTP request across configured providers."""
@@ -239,6 +246,8 @@ class AuthProvider:
 
         # GCP_OAUTH Mode
         auth_header = authorization or request.headers.get("Authorization")
+        if not auth_header and "token" in request.query_params:
+            auth_header = f"Bearer {request.query_params['token']}"
         if auth_header and auth_header.lower().startswith("bearer "):
             token = auth_header[7:].strip()
             # 1. First check if it's our own HMAC session / OAuth bearer token

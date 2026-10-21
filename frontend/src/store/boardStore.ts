@@ -417,6 +417,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     try {
       const res = await fetch(getApiUrl('/api/account-types'), {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ display_name: userName.trim(), account_type: type }),
       });
@@ -798,6 +799,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/transition`), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -961,6 +963,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     try {
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}`), {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
@@ -1107,6 +1110,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     try {
       const res = await fetch(getApiUrl('/api/issues'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalPayload),
       });
@@ -1227,6 +1231,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/rank`), {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -1314,24 +1319,28 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         if (item.action === 'transition_issue' && item.issueKey) {
           res = await fetch(getApiUrl(`/api/issues/${item.issueKey}/transition`), {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });
         } else if (item.action === 'update_issue' && item.issueKey) {
           res = await fetch(getApiUrl(`/api/issues/${item.issueKey}`), {
             method: 'PATCH',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });
         } else if (item.action === 'rank_issue' && item.issueKey) {
           res = await fetch(getApiUrl(`/api/issues/${item.issueKey}/rank`), {
             method: 'PUT',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });
         } else if (item.action === 'create_issue') {
           res = await fetch(getApiUrl('/api/issues'), {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });

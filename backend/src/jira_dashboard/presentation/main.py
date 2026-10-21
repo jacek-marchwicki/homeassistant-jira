@@ -42,6 +42,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from jira_dashboard import __version__
 from jira_dashboard.adapters import (
     DEFAULT_COLUMNS,
     FakeJiraClient,
@@ -506,7 +507,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="Home Assistant Jira Dashboard API",
     description="Real-time backend API and WebSocket hub for Jira dashboard",
-    version="0.5.0",
+    version="0.6.0",
     lifespan=lifespan,
 )
 
@@ -1231,7 +1232,7 @@ async def auth_google_callback(
         picture=str(info.get("picture", "")),
     )
     token = create_session_token(user, provider.get_signing_secret())
-    is_valid_target = state and state.startswith(("/", "http://", "https://"))
+    is_valid_target = bool(state and state.startswith("/") and not state.startswith("//"))
     target_url = state if is_valid_target else base_target
     response = RedirectResponse(url=target_url, status_code=302)
     response.set_cookie(
@@ -1318,7 +1319,11 @@ async def mcp_endpoint(request: Request) -> Response:
         ),
     }
 
-    print(f"[MCP] INCOMING method={request.method} headers={dict(request.headers)}", flush=True)
+    sanitized_headers = {
+        k: ("[REDACTED]" if k.lower() in ("authorization", "cookie", "proxy-authorization") else v)
+        for k, v in request.headers.items()
+    }
+    logger.debug("[MCP] INCOMING method=%s headers=%s", request.method, sanitized_headers)
 
     if request.method == "OPTIONS":
         return Response(
@@ -1391,7 +1396,7 @@ async def mcp_endpoint(request: Request) -> Response:
     # POST method
     try:
         request_data = await request.json()
-        print(f"[MCP] POST payload={request_data}", flush=True)
+        logger.debug("[MCP] POST payload=%s", request_data)
     except Exception:
         return JSONResponse(
             status_code=400,
@@ -1556,7 +1561,7 @@ async def mcp_messages_endpoint(
 @app.get("/api/health")
 def health() -> dict[str, str]:
     """Health check endpoint for container orchestrators and Home Assistant supervision."""
-    return {"status": "ok", "app": "homeassistant-jira", "version": "0.5.0"}
+    return {"status": "ok", "app": "homeassistant-jira", "version": __version__}
 
 
 @app.get("/api/board", response_model=BoardResponse)
@@ -2354,6 +2359,16 @@ def reset_test_state() -> dict[str, Any]:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """WebSocket endpoint for real-time client state updates and heartbeat."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    if provider.resolved_mode == AuthMode.GCP_OAUTH:
+        try:
+            provider.authenticate_request(websocket)
+        except Exception as exc:
+            logger.warning("Rejecting unauthenticated WebSocket connection: %s", exc)
+            await websocket.close(code=1008, reason="Authentication required")
+            return
+
     await ws_hub.connect(websocket)
     try:
         # Send initial connection acknowledgment

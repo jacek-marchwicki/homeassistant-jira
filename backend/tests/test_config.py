@@ -77,12 +77,15 @@ def test_env_var_overlay(monkeypatch) -> None:
 
 
 def test_auth_config_env_vars(monkeypatch) -> None:
-    """Verify auth-related environment variables and allowed_emails_set property."""
+    """Verify auth and deployment environment variables."""
     monkeypatch.setenv("AUTH_MODE", "gcp_oauth")
     monkeypatch.setenv("ALLOWED_EMAILS", " User1@example.com, user2@EXAMPLE.COM , ")
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-123.apps.googleusercontent.com")
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "secret-456")
     monkeypatch.setenv("SESSION_SECRET_KEY", "custom-sign-key")
+    monkeypatch.setenv("MCP_CLIENT_ID", "custom-mcp-client")
+    monkeypatch.setenv("MCP_CLIENT_SECRET", "custom-mcp-secret")
+    monkeypatch.setenv("LITESTREAM_BUCKET", "my-gcs-backup-bucket")
 
     settings = JiraDashboardSettings.load()
     assert settings.auth_mode == "gcp_oauth"
@@ -90,3 +93,6 @@ def test_auth_config_env_vars(monkeypatch) -> None:
     assert settings.google_client_id == "client-123.apps.googleusercontent.com"
     assert settings.google_client_secret == "secret-456"
     assert settings.session_secret_key == "custom-sign-key"
+    assert settings.mcp_client_id == "custom-mcp-client"
+    assert settings.mcp_client_secret == "custom-mcp-secret"
+    assert settings.litestream_bucket == "my-gcs-backup-bucket"

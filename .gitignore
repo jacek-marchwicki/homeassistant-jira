@@ -75,6 +75,7 @@ out/
 .env
 .env.*
 !.env.example
+!.env.gcp.example
 secrets.yaml
 *.secrets.yaml
 options.json

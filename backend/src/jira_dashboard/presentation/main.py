@@ -8,9 +8,14 @@ dynamic Ingress root_path handling, and fallback background polling.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
+import json
 import logging
 import os
 import re
+import secrets
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -18,7 +23,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import parse_qs, quote, urlencode
 
+import httpx
 from fastapi import (
     FastAPI,
     Header,
@@ -30,10 +37,12 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from jira_dashboard import __version__
 from jira_dashboard.adapters import (
     DEFAULT_COLUMNS,
     FakeJiraClient,
@@ -56,6 +65,21 @@ from jira_dashboard.domain import (
     Priority,
     StatusCategory,
     issue_sort_key,
+)
+from jira_dashboard.presentation import auth as auth_module
+from jira_dashboard.presentation.auth import (
+    DEFAULT_SESSION_MAX_AGE,
+    SESSION_COOKIE_NAME,
+    AuthMode,
+    AuthProvider,
+    GoogleAuthUser,
+    create_session_token,
+    verify_session_token,
+)
+from jira_dashboard.presentation.mcp import (
+    SERVER_NAME,
+    SERVER_VERSION,
+    MCPServerHandler,
 )
 
 logger = logging.getLogger(__name__)
@@ -499,6 +523,1034 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+mcp_handler = MCPServerHandler(jira_client=jira_client, storage=storage)
+
+
+class GoogleLoginRequest(BaseModel):
+    """Payload for Google OAuth 2.0 credential verification."""
+
+    credential: str
+
+
+@app.middleware("http")
+async def auth_and_access_middleware(request: Request, call_next: Any) -> Response:
+    """Enforce authentication on API endpoints when enabled."""
+    path = request.url.path
+
+    # Public bypass endpoints (including MCP transport routes which enforce granular tool auth)
+    if (
+        path
+        in (
+            "/health",
+            "/api/health",
+            "/api/auth/config",
+            "/api/auth/google",
+            "/api/auth/google/login",
+            "/api/auth/google/callback",
+            "/api/auth/logout",
+            "/oauth/authorize",
+            "/oauth/token",
+            "/mcp",
+            "/sse",
+            "/messages",
+        )
+        or path.startswith("/.well-known/")
+        or path.startswith("/api/webhooks/")
+        or path.startswith("/api/test/")
+        or request.method in ("OPTIONS", "HEAD")
+    ):
+        return await call_next(request)
+
+    # Protected paths: /api/*
+    if path.startswith("/api/"):
+        current_settings = JiraDashboardSettings.load()
+        provider = AuthProvider(current_settings)
+        try:
+            provider.authenticate_request(request)
+        except HTTPException as exc:
+            headers = dict(exc.headers or {})
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=headers,
+            )
+
+    return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# OAuth Discovery Metadata Endpoints (RFC 9728 & RFC 8414 for MCP & Gemini)
+# ---------------------------------------------------------------------------
+
+
+@app.api_route(
+    "/.well-known/oauth-protected-resource",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+@app.api_route(
+    "/.well-known/oauth-protected-resource/{resource_path:path}",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+def oauth_protected_resource(request: Request, resource_path: str = "") -> Response:
+    """RFC 9728 Protected Resource Metadata for Model Context Protocol clients."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
+
+    return JSONResponse(
+        content={
+            "resource": f"{base_url}/mcp",
+            "authorization_servers": [
+                f"{base_url}",
+            ],
+            "scopes_supported": [
+                "jira",
+                "openid",
+                "email",
+                "profile",
+            ],
+            "bearer_methods_supported": [
+                "header",
+            ],
+            "resource_documentation": f"{base_url}/docs",
+        },
+        headers={
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
+
+@app.api_route(
+    "/.well-known/oauth-authorization-server",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+@app.api_route(
+    "/.well-known/oauth-authorization-server/{subpath:path}",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+@app.api_route(
+    "/.well-known/openid-configuration",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+@app.api_route(
+    "/.well-known/openid-configuration/{subpath:path}",
+    methods=["GET", "HEAD", "OPTIONS"],
+)
+def oauth_authorization_server_metadata(request: Request, subpath: str = "") -> Response:
+    """RFC 8414 Authorization Server Metadata and OpenID Connect Discovery."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
+
+    return JSONResponse(
+        content={
+            "issuer": f"{base_url}",
+            "authorization_endpoint": f"{base_url}/oauth/authorize",
+            "token_endpoint": f"{base_url}/oauth/token",
+            "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "code_challenge_methods_supported": ["S256", "plain"],
+            "subject_types_supported": ["public"],
+            "scopes_supported": ["jira", "openid", "email", "profile"],
+            "token_endpoint_auth_methods_supported": [
+                "client_secret_post",
+                "client_secret_basic",
+                "none",
+            ],
+        },
+        headers={
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
+
+def verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") -> bool:
+    """Verify PKCE code_verifier against code_challenge (RFC 7636)."""
+    if method == "plain":
+        return hmac.compare_digest(code_verifier, code_challenge)
+    if method == "S256":
+        digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+        computed = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+        return hmac.compare_digest(computed, code_challenge)
+    return False
+
+
+# ---------------------------------------------------------------------------
+# OAuth 2.0 Authorization Server Endpoints (for Gemini & MCP clients)
+# ---------------------------------------------------------------------------
+
+
+@app.api_route("/oauth/authorize", methods=["GET", "HEAD", "OPTIONS"])
+def oauth_authorize(
+    request: Request,
+    client_id: str = "",
+    redirect_uri: str = "",
+    response_type: str = "code",
+    state: str = "",
+    scope: str = "",
+    code_challenge: str = "",
+    code_challenge_method: str = "S256",
+) -> Response:
+    """OAuth 2.0 Authorization Endpoint for Model Context Protocol & Gemini."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    if request.method == "HEAD":
+        return Response(status_code=200)
+
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+
+    if response_type != "code":
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "unsupported_response_type",
+                "error_description": "Only response_type=code is supported",
+            },
+        )
+
+    # Basic redirect_uri validation: allow Gemini relay, localhost, or standard https
+    is_gemini_relay = redirect_uri.startswith("https://oauth-redirect.googleusercontent.com/")
+    if not (
+        is_gemini_relay
+        or redirect_uri.startswith(("http://localhost", "http://127.0.0.1", "https://"))
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_request",
+                "error_description": "Invalid or untrusted redirect_uri",
+            },
+        )
+
+    # Check client_id if explicitly configured
+    if current_settings.mcp_client_id and client_id and client_id != current_settings.mcp_client_id:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_client",
+                "error_description": f"Unknown client_id '{client_id}'",
+            },
+        )
+
+    # Check if user is currently logged in via session cookie
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    user: GoogleAuthUser | None = None
+    if cookie_token:
+        user = verify_session_token(cookie_token, provider.get_signing_secret())
+
+    if not user:
+        # User not logged in: initiate Google login and return back here
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get(
+            "x-forwarded-host", request.headers.get("host", request.url.netloc)
+        )
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        full_return = f"{scheme}://{host}{root_path}{request.url.path}"
+        if request.url.query:
+            full_return += f"?{request.url.query}"
+        login_url = f"{root_path}/api/auth/google/login?return_to={quote(full_return)}"
+        return RedirectResponse(url=login_url, status_code=307)
+
+    # Verify user email is allowed
+    if not provider.is_email_allowed(user.email):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "access_denied",
+                "error_description": (
+                    f"User '{user.email}' is not authorized to access this dashboard"
+                ),
+            },
+        )
+
+    # Issue single-use authorization code
+    auth_code = str(uuid.uuid4())
+    storage.save_oauth_code(
+        code=auth_code,
+        email=user.email,
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        code_challenge=code_challenge.strip(),
+        code_challenge_method=(code_challenge_method.strip() or "S256"),
+        ttl_seconds=300,
+    )
+
+    sep = "&" if "?" in redirect_uri else "?"
+    target = f"{redirect_uri}{sep}code={quote(auth_code)}"
+    if state:
+        target += f"&state={quote(state)}"
+    return RedirectResponse(url=target, status_code=302)
+
+
+@app.api_route("/oauth/token", methods=["POST", "OPTIONS"])
+async def oauth_token(request: Request) -> Response:
+    """OAuth 2.0 Token Endpoint for Model Context Protocol & Gemini."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Allow": "POST, OPTIONS",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+
+    body_bytes = await request.body()
+    content_type = request.headers.get(
+        "content-type", request.headers.get("Content-Type", "")
+    ).lower()
+
+    params: dict[str, Any] = {}
+    if "application/json" in content_type:
+        try:
+            params = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            params = {}
+    else:
+        try:
+            parsed = parse_qs(body_bytes.decode("utf-8"))
+            params = {
+                k: v[0] if isinstance(v, list) and len(v) == 1 else v for k, v in parsed.items()
+            }
+        except Exception:
+            params = {}
+
+    if not params and body_bytes:
+        try:
+            params = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            pass
+
+    grant_type = str(params.get("grant_type", "")).strip()
+    code = str(params.get("code", "")).strip()
+    client_id = str(params.get("client_id", "")).strip()
+    client_secret = str(params.get("client_secret", "")).strip()
+
+    # Support HTTP Basic Auth for client credentials (RFC 6749 §2.3.1)
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.lower().startswith("basic "):
+        try:
+            cred_bytes = base64.b64decode(auth_header[6:].strip())
+            cred_str = cred_bytes.decode("utf-8")
+            if ":" in cred_str:
+                basic_id, basic_secret = cred_str.split(":", 1)
+                client_id = client_id or basic_id
+                client_secret = client_secret or basic_secret
+        except Exception:
+            pass
+
+    # Verify client credentials if configured
+    if current_settings.mcp_client_secret:
+        if client_secret != current_settings.mcp_client_secret:
+            logger.warning("OAuth token invalid client_secret")
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "invalid_client",
+                    "error_description": "Invalid client_secret",
+                },
+                headers={"WWW-Authenticate": "Basic"},
+            )
+
+    logger.info(
+        "OAuth token request: grant_type=%s, client_id=%s, code=%s, has_verifier=%s",
+        grant_type,
+        client_id,
+        bool(code),
+        bool(params.get("code_verifier")),
+    )
+
+    if grant_type == "authorization_code":
+        if not code:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_request",
+                    "error_description": "Missing required code parameter",
+                },
+            )
+
+        code_data = storage.consume_oauth_code(code)
+        if not code_data:
+            logger.warning("OAuth token request with invalid or expired code")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_grant",
+                    "error_description": "Invalid or expired authorization code",
+                },
+            )
+
+        # Verify redirect_uri if client provided one
+        req_redirect = str(params.get("redirect_uri", "")).strip()
+        expected_redirect = str(code_data.get("redirect_uri", "")).strip()
+        if req_redirect and expected_redirect and req_redirect != expected_redirect:
+            logger.warning(
+                "OAuth token redirect_uri mismatch: %s != %s", req_redirect, expected_redirect
+            )
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_grant",
+                    "error_description": "redirect_uri mismatch",
+                },
+            )
+
+        # Verify PKCE if code_challenge was present in authorization request (RFC 7636)
+        stored_challenge = str(code_data.get("code_challenge", "")).strip()
+        stored_method = str(code_data.get("code_challenge_method", "S256")).strip() or "S256"
+        if stored_challenge:
+            code_verifier = str(params.get("code_verifier", "")).strip()
+            if not code_verifier:
+                logger.warning("OAuth token missing PKCE code_verifier for challenged code")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_grant",
+                        "error_description": "Missing PKCE code_verifier parameter",
+                    },
+                )
+            if not verify_pkce(code_verifier, stored_challenge, stored_method):
+                logger.warning(
+                    "OAuth token failed PKCE verification against %s challenge", stored_method
+                )
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_grant",
+                        "error_description": "PKCE code_verifier verification failed",
+                    },
+                )
+
+        user_email = code_data["email"]
+        if not provider.is_email_allowed(user_email):
+            logger.warning("OAuth token denied for disallowed email: %s", user_email)
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "access_denied",
+                    "error_description": f"User '{user_email}' is not authorized",
+                },
+            )
+
+        access_token = create_session_token(
+            GoogleAuthUser(email=user_email, name="Gemini MCP User"),
+            secret=provider.get_signing_secret(),
+            max_age_seconds=DEFAULT_SESSION_MAX_AGE,
+        )
+        refresh_token = secrets.token_urlsafe(32)
+        storage.save_refresh_token(
+            token=refresh_token,
+            email=user_email,
+            client_id=client_id or code_data.get("client_id", ""),
+            ttl_seconds=86400 * 30,
+        )
+
+        return JSONResponse(
+            content={
+                "access_token": access_token,
+                "token_type": "Bearer",
+                "expires_in": DEFAULT_SESSION_MAX_AGE,
+                "refresh_token": refresh_token,
+                "scope": "jira openid email profile",
+            },
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
+
+    elif grant_type == "refresh_token":
+        req_refresh_token = str(params.get("refresh_token", "")).strip()
+        if not req_refresh_token:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_request",
+                    "error_description": "Missing refresh_token parameter",
+                },
+            )
+
+        refresh_data = storage.get_refresh_token(req_refresh_token)
+        if not refresh_data:
+            logger.warning("OAuth token refresh with invalid or expired token")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_grant",
+                    "error_description": "Invalid or expired refresh token",
+                },
+            )
+
+        user_email = refresh_data["email"]
+        if not provider.is_email_allowed(user_email):
+            logger.warning("OAuth token refresh denied for disallowed email: %s", user_email)
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "access_denied",
+                    "error_description": f"User '{user_email}' is not authorized",
+                },
+            )
+
+        new_access_token = create_session_token(
+            GoogleAuthUser(email=user_email, name="Gemini MCP User"),
+            secret=provider.get_signing_secret(),
+            max_age_seconds=DEFAULT_SESSION_MAX_AGE,
+        )
+
+        return JSONResponse(
+            content={
+                "access_token": new_access_token,
+                "token_type": "Bearer",
+                "expires_in": DEFAULT_SESSION_MAX_AGE,
+                "refresh_token": req_refresh_token,
+                "scope": "jira openid email profile",
+            },
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
+
+    else:
+        logger.warning("OAuth token unsupported grant_type: '%s'", grant_type)
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "unsupported_grant_type",
+                "error_description": (
+                    f"Grant type '{grant_type}' is not supported "
+                    "(use authorization_code or refresh_token)"
+                ),
+            },
+        )
+
+
+# ---------------------------------------------------------------------------
+# Authentication Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/auth/config")
+def auth_config(request: Request) -> dict[str, Any]:
+    """Retrieve public auth configuration and current session status."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    authenticated = False
+    user_info = None
+    try:
+        user = provider.authenticate_request(request)
+        authenticated = True
+        user_info = user.model_dump()
+    except Exception:
+        authenticated = False
+
+    return {
+        "auth_mode": provider.resolved_mode.value,
+        "google_client_id": (
+            current_settings.google_client_id
+            if provider.resolved_mode == AuthMode.GCP_OAUTH
+            else None
+        ),
+        "authenticated": authenticated,
+        "user": user_info,
+    }
+
+
+@app.get("/api/auth/google/login")
+def auth_google_login(request: Request, return_to: str | None = None) -> Response:
+    """Initiate Google OAuth2 authorization code flow."""
+    current_settings = JiraDashboardSettings.load()
+    if not current_settings.google_client_id:
+        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured")
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    redirect_uri = f"{scheme}://{host}{root_path}/api/auth/google/callback"
+
+    params = {
+        "client_id": current_settings.google_client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "online",
+        "prompt": "select_account",
+    }
+    if return_to:
+        params["state"] = return_to
+
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    return RedirectResponse(url=auth_url, status_code=307)
+
+
+@app.get("/api/auth/google/callback")
+async def auth_google_callback(
+    request: Request,
+    code: str | None = None,
+    error: str | None = None,
+    state: str | None = None,
+) -> Response:
+    """Handle Google OAuth2 callback, exchange code, verify user, and set session cookie."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_target = f"{root_path}/" if root_path else "/"
+
+    if error or not code:
+        err_msg = error or "Authorization code missing"
+        return RedirectResponse(url=f"{base_target}?auth_error={quote(err_msg)}", status_code=302)
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    redirect_uri = f"{scheme}://{host}{root_path}/api/auth/google/callback"
+
+    # Exchange code for tokens with Google
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token_res = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": current_settings.google_client_id,
+                    "client_secret": current_settings.google_client_secret,
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+    except Exception as exc:
+        logger.error("Exception exchanging Google OAuth code: %s", exc)
+        err_msg = quote("Connection error exchanging Google token")
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={err_msg}",
+            status_code=302,
+        )
+
+    if token_res.status_code != 200:
+        logger.error("Failed to exchange Google OAuth code: %s", token_res.text)
+        err_msg = quote("Failed to exchange Google authorization token")
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={err_msg}",
+            status_code=302,
+        )
+
+    token_data = token_res.json()
+    id_token_str = token_data.get("id_token")
+    if not id_token_str:
+        err_msg = quote("Google response did not contain ID token")
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={err_msg}",
+            status_code=302,
+        )
+
+    try:
+        info = auth_module.verify_google_id_token(id_token_str, current_settings.google_client_id)
+    except Exception as exc:
+        logger.warning("Google ID token verification failed: %s", exc)
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={quote(str(exc))}",
+            status_code=302,
+        )
+
+    email = str(info.get("email", "")).strip().lower()
+    if not provider.is_email_allowed(email):
+        logger.warning("Google user email '%s' is not in allowed users list", email)
+        return RedirectResponse(
+            url=f"{base_target}?auth_error={quote(f'Access denied for email: {email}')}",
+            status_code=302,
+        )
+
+    user = GoogleAuthUser(
+        email=email,
+        name=str(info.get("name", "")),
+        picture=str(info.get("picture", "")),
+    )
+    token = create_session_token(user, provider.get_signing_secret())
+    is_valid_target = bool(state and state.startswith("/") and not state.startswith("//"))
+    target_url = state if is_valid_target else base_target
+    response = RedirectResponse(url=target_url, status_code=302)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=DEFAULT_SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/api/auth/google")
+def auth_google(payload: GoogleLoginRequest, response: Response) -> dict[str, Any]:
+    """Exchange Google ID token credential for an authenticated session cookie."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    try:
+        info = auth_module.verify_google_id_token(
+            payload.credential, current_settings.google_client_id
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid Google ID token: {exc}") from exc
+
+    email = str(info.get("email", "")).strip().lower()
+    if not provider.is_email_allowed(email):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Email '{email}' is not in allowed users list",
+        )
+
+    user = GoogleAuthUser(
+        email=email,
+        name=str(info.get("name", "")),
+        picture=str(info.get("picture", "")),
+    )
+    token = create_session_token(user, provider.get_signing_secret())
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=DEFAULT_SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+    )
+    return user.model_dump()
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request) -> dict[str, Any]:
+    """Retrieve currently authenticated user profile."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    user = provider.authenticate_request(request)
+    return user.model_dump()
+
+
+@app.post("/api/auth/logout")
+def auth_logout(response: Response) -> dict[str, str]:
+    """Log out current user and invalidate session cookie."""
+    response.delete_cookie(key=SESSION_COOKIE_NAME)
+    return {"status": "logged_out"}
+
+
+# ---------------------------------------------------------------------------
+# Model Context Protocol (MCP) Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.api_route("/mcp", methods=["GET", "POST", "HEAD", "OPTIONS", "DELETE"])
+async def mcp_endpoint(request: Request) -> Response:
+    """Streamable HTTP transport endpoint for Model Context Protocol."""
+    session_id = request.headers.get("mcp-session-id") or str(uuid.uuid4())
+    protocol_version = request.headers.get("mcp-protocol-version") or "2025-11-25"
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
+    base_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Mcp-Session-Id": session_id,
+        "Mcp-Protocol-Version": protocol_version,
+        "Access-Control-Expose-Headers": (
+            "Mcp-Session-Id, Mcp-Protocol-Version, Content-Type, Authorization"
+        ),
+    }
+
+    sanitized_headers = {
+        k: ("[REDACTED]" if k.lower() in ("authorization", "cookie", "proxy-authorization") else v)
+        for k, v in request.headers.items()
+    }
+    logger.debug("[MCP] INCOMING method=%s headers=%s", request.method, sanitized_headers)
+
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                **base_headers,
+                "Allow": "GET, POST, HEAD, OPTIONS, DELETE",
+                "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS, DELETE",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                **base_headers,
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS, DELETE",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    if request.method == "DELETE":
+        del_session_id = request.headers.get("mcp-session-id") or session_id
+        mcp_handler.remove_session(del_session_id)
+        return Response(status_code=200, headers=base_headers)
+
+    if request.method == "GET":
+        accept = request.headers.get("accept", "")
+        if "text/event-stream" in accept:
+            queue = mcp_handler.get_or_create_session(session_id)
+
+            async def streamable_event_generator() -> AsyncGenerator[str, None]:
+                # Immediately yield keep-alive comment to establish SSE & flush HTTP headers
+                yield ": ping\n\n"
+                try:
+                    while True:
+                        try:
+                            msg = await asyncio.wait_for(queue.get(), timeout=15.0)
+                            yield f"event: message\ndata: {msg}\n\n"
+                        except asyncio.TimeoutError:
+                            yield ": ping\n\n"
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    mcp_handler.remove_session(session_id)
+
+            return StreamingResponse(
+                streamable_event_generator(),
+                media_type="text/event-stream",
+                headers={
+                    **base_headers,
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+        return JSONResponse(
+            content={
+                "name": SERVER_NAME,
+                "version": SERVER_VERSION,
+                "protocolVersion": protocol_version,
+                "status": "ready",
+            },
+            headers=base_headers,
+        )
+
+    # POST method
+    try:
+        request_data = await request.json()
+        logger.debug("[MCP] POST payload=%s", request_data)
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}},
+            headers=base_headers,
+        )
+
+    method = request_data.get("method") if isinstance(request_data, dict) else None
+    if method == "initialize" and isinstance(request_data, dict):
+        client_proto = request_data.get("params", {}).get("protocolVersion")
+        if client_proto:
+            base_headers["Mcp-Protocol-Version"] = client_proto
+
+    # Handle unauthenticated discovery and handshake methods:
+    # initialize, ping, tools/list, notifications/initialized
+    if method in ("initialize", "ping", "tools/list", "notifications/initialized"):
+        # If client optionally provided a bearer token, verify it
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.lower().startswith("bearer "):
+            try:
+                current_settings = JiraDashboardSettings.load()
+                provider = AuthProvider(current_settings)
+                provider.authenticate_request(request)
+            except HTTPException:
+                pass
+
+        result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
+        if result is None:
+            # Per MCP Streamable HTTP specification, notifications return 202 Accepted
+            return Response(status_code=202, headers=base_headers)
+        return JSONResponse(content=result, headers=base_headers)
+
+    # Protected execution: tools/call (and other methods)
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    prm_url = f"{scheme}://{host}{root_path}/.well-known/oauth-protected-resource/mcp"
+
+    try:
+        provider.authenticate_request(request)
+    except HTTPException as exc:
+        resp_headers = dict(exc.headers or {})
+        resp_headers.update(base_headers)
+        resp_headers["WWW-Authenticate"] = f'Bearer realm="mcp", resource_metadata="{prm_url}"'
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "jsonrpc": "2.0",
+                "id": request_data.get("id") if isinstance(request_data, dict) else None,
+                "error": {
+                    "code": -32001,
+                    "message": exc.detail,
+                },
+            },
+            headers=resp_headers,
+        )
+
+    result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
+    if result is None:
+        return Response(status_code=202, headers=base_headers)
+    return JSONResponse(content=result, headers=base_headers)
+
+
+@app.get("/sse")
+async def mcp_sse_endpoint(request: Request) -> StreamingResponse:
+    """Server-Sent Events (SSE) transport endpoint for Model Context Protocol."""
+    session_id = mcp_handler.create_session()
+    queue = mcp_handler.sessions[session_id]
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        # Emit initial endpoint discovery event for client POST target
+        yield f"event: endpoint\ndata: /messages?session_id={session_id}\n\n"
+        try:
+            while True:
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"event: message\ndata: {msg}\n\n"
+                except asyncio.TimeoutError:
+                    # Heartbeat comment to keep connection alive
+                    yield ": ping\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            mcp_handler.remove_session(session_id)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/messages")
+async def mcp_messages_endpoint(
+    request: Request,
+    session_id: str = Query(...),
+) -> Any:
+    """JSON-RPC message receiver endpoint for active SSE sessions."""
+    try:
+        request_data = await request.json()
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}},
+        )
+
+    method = request_data.get("method") if isinstance(request_data, dict) else None
+
+    # Protect tools/call
+    if method == "tools/call":
+        current_settings = JiraDashboardSettings.load()
+        provider = AuthProvider(current_settings)
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get(
+            "x-forwarded-host", request.headers.get("host", request.url.netloc)
+        )
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        prm_url = f"{scheme}://{host}{root_path}/.well-known/oauth-protected-resource"
+        try:
+            provider.authenticate_request(request)
+        except HTTPException as exc:
+            headers = dict(exc.headers or {})
+            headers["WWW-Authenticate"] = f'Bearer realm="mcp", resource_metadata="{prm_url}"'
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "jsonrpc": "2.0",
+                    "id": request_data.get("id") if isinstance(request_data, dict) else None,
+                    "error": {
+                        "code": -32001,
+                        "message": exc.detail,
+                    },
+                },
+                headers=headers,
+            )
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    base_url = f"{scheme}://{host}{root_path}"
+    result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
+    if result is not None:
+        queue = mcp_handler.sessions.get(session_id)
+        if queue is not None:
+            await queue.put(json.dumps(result))
+        return JSONResponse(content=result)
+    return Response(status_code=202)
+
 
 # ---------------------------------------------------------------------------
 # REST Endpoints
@@ -509,7 +1561,7 @@ app.add_middleware(
 @app.get("/api/health")
 def health() -> dict[str, str]:
     """Health check endpoint for container orchestrators and Home Assistant supervision."""
-    return {"status": "ok", "app": "homeassistant-jira", "version": "0.6.0"}
+    return {"status": "ok", "app": "homeassistant-jira", "version": __version__}
 
 
 @app.get("/api/board", response_model=BoardResponse)
@@ -1307,6 +2359,16 @@ def reset_test_state() -> dict[str, Any]:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """WebSocket endpoint for real-time client state updates and heartbeat."""
+    current_settings = JiraDashboardSettings.load()
+    provider = AuthProvider(current_settings)
+    if provider.resolved_mode == AuthMode.GCP_OAUTH:
+        try:
+            provider.authenticate_request(websocket)
+        except Exception as exc:
+            logger.warning("Rejecting unauthenticated WebSocket connection: %s", exc)
+            await websocket.close(code=1008, reason="Authentication required")
+            return
+
     await ws_hub.connect(websocket)
     try:
         # Send initial connection acknowledgment

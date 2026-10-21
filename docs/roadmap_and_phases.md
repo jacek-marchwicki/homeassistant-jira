@@ -320,3 +320,42 @@ This document details the architectural phases, delivered features, and evolutio
     - Vitest unit tests in [`EditIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.test.tsx) and [`CreateIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.test.tsx) covering field document order, dynamic ArrowLeft-to-X transition, zero-shift CSS class equivalence, Escape key handling, and top button submission (334/334 passed).
     - Full-stack Playwright E2E tests in [`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts) (17/17 passed).
     - Playwright visual regression snapshots in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) capturing clean and dirty modal states (43/43 passed).
+
+- [x] **Phase 5.24: Google Cloud Platform (Cloud Run) Deployment, Litestream Persistence & Model Context Protocol (MCP)**
+  - [x] **Remote Model Context Protocol (MCP) Server for Gemini Web & AI Assistants**:
+    - Implemented JSON-RPC 2.0 Model Context Protocol server ("Home Tasks Manager", `home-tasks-manager`) supporting both modern **Streamable HTTP** (`POST /mcp`) and streaming **Server-Sent Events** (`GET /sse` and `POST /messages?session_id=...`).
+    - Exposed eight specialized tools tailored for family task management:
+      - `jira_get_board`: Returns tasks formatted identically to the People board (grouped by assignee, defaulting to active tasks, hiding epics and child account tasks, returning start/due/end dates, recreation recurrence, and dashboard URLs).
+      - `jira_list_users`: Lists all available Jira users/assignees.
+      - `jira_list_issues`: Searches and filters issues.
+      - `jira_get_issue`: Retrieves single issue details with dashboard URLs (`/task/<KEY>`).
+      - `jira_create_issue`: Creates new tasks with full field support matching GUI defaults and assignee assignment.
+      - `jira_transition_issue`: Moves tasks across workflow categories/statuses.
+      - `jira_assign_issue`: Reassigns task ownership to any team/family member.
+      - `jira_add_comment`: Adds comments to issues.
+    - Decorated with official MCP tool annotations: `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint = False`.
+    - Tested in [`backend/tests/test_mcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_mcp.py).
+  - [x] **Google OAuth 2.0 & Identity Security**:
+    - Pluggable authentication provider in [`backend/src/jira_dashboard/presentation/auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/presentation/auth.py) supporting `none`, `homeassistant`, and `gcp_oauth`.
+    - Restricts access exclusively to authorized family Gmail accounts (`ALLOWED_EMAILS`), blocking unauthorized access with 403 Forbidden.
+    - Verifies Google ID tokens using official `google-auth` library and issues secure, tamper-proof session tokens for web browsers.
+    - Authenticated WebSocket endpoint protecting `/ws` in `GCP_OAUTH` mode (close code 1008).
+    - Tested in [`backend/tests/test_auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_auth.py).
+  - [x] **Zero-Downtime State & SQLite Continuous Persistence (Option 2 Architecture)**:
+    - Integrated **Litestream** continuous streaming replication to Google Cloud Storage (`litestream_bucket`), automatically restoring database state on container cold starts and streaming WAL frames every second.
+    - Configured Cloud Storage Volume mount or bucket sync for generated AI background image cache (`/data/background_cache`), ensuring image assets survive deployments and scale-to-zero lifecycles without incurring expensive Cloud SQL managed database costs.
+  - [x] **Zero-to-Minimal Cost Guarantee (< $2 USD / month)**:
+    - Designed strictly around GCP's **Always Free Tier**:
+      - Scale to zero (`--min-instances 0`).
+      - CPU throttling allocated strictly during active requests.
+      - Instance scaling cap (`--max-instances 2`).
+      - Direct native HTTPS domain mapping avoiding the ~$18/month HTTP(S) Load Balancer trap.
+  - [x] **Privacy & Secret Management Architecture**:
+    - Zero email addresses or credentials stored in Git repository or committed code.
+    - Credentials managed via local `.env.gcp` (git-ignored) and uploaded directly into encrypted **Google Cloud Secret Manager**.
+    - Cloud Run mounts Secret Manager secrets at runtime.
+  - [x] **Python Single-Command Deployment Automation**:
+    - Implemented [`scripts/deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/deploy_gcp.py) with subcommands `sync-secrets`, `deploy`, and `status`.
+    - Tested in [`backend/tests/test_deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_deploy_gcp.py).
+  - [x] **Complete Deployment Documentation**:
+    - Comprehensive guide published at [`docs/gcp_deployment.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/gcp_deployment.md) and linked directly from [`README.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/README.md).

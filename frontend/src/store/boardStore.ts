@@ -75,6 +75,19 @@ export interface ConnectionDetails {
   retryAttempt: number;
 }
 
+export interface AuthUser {
+  email: string;
+  name: string;
+  picture: string;
+}
+
+export interface AuthStatus {
+  authMode: 'none' | 'homeassistant' | 'gcp_oauth' | string;
+  googleClientId: string | null;
+  authenticated: boolean;
+  user: AuthUser | null;
+}
+
 export interface CachedBoardData {
   boardName: string;
   sprintName: string;
@@ -248,10 +261,14 @@ export interface BoardStoreState {
   connectionDetails: ConnectionDetails;
   setConnectionDetails: (details: Partial<ConnectionDetails>) => void;
   availableUsers: JiraUser[];
+  authStatus: AuthStatus | null;
+  isAuthRequired: boolean;
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
   setWsConnected: (connected: boolean) => void;
+  checkAuthStatus: () => Promise<AuthStatus | null>;
+  logout: () => Promise<void>;
   setActiveFilters: (filters: string[]) => void;
   toggleFilter: (filter: string) => void;
   setActiveFilter: (filter: string) => void;
@@ -339,6 +356,47 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     retryAttempt: 0,
   },
   availableUsers: initialCache?.availableUsers || [],
+  authStatus: null,
+  isAuthRequired: false,
+
+  checkAuthStatus: async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/auth/config'), { credentials: 'include' });
+      if (res.ok) {
+        const data = (await res.json()) as AuthStatus;
+        const isAuthRequired = data.authMode === 'gcp_oauth' && !data.authenticated;
+        set({ authStatus: data, isAuthRequired });
+        return data;
+      }
+    } catch {
+      // offline or network error
+    }
+    return null;
+  },
+
+  logout: async () => {
+    try {
+      await fetch(getApiUrl('/api/auth/logout'), {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // ignore
+    }
+    set({
+      authStatus: {
+        authMode: 'gcp_oauth',
+        googleClientId: get().authStatus?.googleClientId || null,
+        authenticated: false,
+        user: null,
+      },
+      isAuthRequired: true,
+      issues: [],
+    });
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  },
 
   setCurrentUser: (userName: string) => {
     const trimmed = userName.trim();
@@ -359,6 +417,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     try {
       const res = await fetch(getApiUrl('/api/account-types'), {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ display_name: userName.trim(), account_type: type }),
       });
@@ -375,7 +434,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
   fetchAccountTypes: async () => {
     try {
-      const res = await fetch(getApiUrl('/api/account-types'));
+      const res = await fetch(getApiUrl('/api/account-types'), { credentials: 'include' });
       if (res.ok) {
         const data = (await res.json()) as { account_types?: Record<string, string> };
         if (data && data.account_types && typeof data.account_types === 'object') {
@@ -622,7 +681,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     get().fetchUsers().catch(() => {});
     get().fetchAccountTypes().catch(() => {});
     try {
-      const res = await fetch(getApiUrl('/api/board'));
+      const res = await fetch(getApiUrl('/api/board'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const nextState: CachedBoardData = {
@@ -639,9 +698,19 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           errorMessage: null,
           isLoading: false,
           isSyncing: false,
+          isAuthRequired: false,
         });
       } else {
         const err = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          set({
+            isAuthRequired: true,
+            errorMessage: null,
+            isLoading: false,
+            isSyncing: false,
+          });
+          return;
+        }
         set({
           errorMessage: err.detail || `Failed to load board (HTTP ${res.status})`,
           isLoading: false,
@@ -659,7 +728,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
   fetchUsers: async () => {
     try {
-      const res = await fetch(getApiUrl('/api/users'));
+      const res = await fetch(getApiUrl('/api/users'), { credentials: 'include' });
       if (res.ok) {
         const users: JiraUser[] = await res.json();
         if (Array.isArray(users)) {
@@ -730,6 +799,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/transition`), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -893,6 +963,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     try {
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}`), {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
@@ -1039,6 +1110,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     try {
       const res = await fetch(getApiUrl('/api/issues'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalPayload),
       });
@@ -1159,6 +1231,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
       const res = await fetch(getApiUrl(`/api/issues/${issueKey}/rank`), {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -1246,24 +1319,28 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         if (item.action === 'transition_issue' && item.issueKey) {
           res = await fetch(getApiUrl(`/api/issues/${item.issueKey}/transition`), {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });
         } else if (item.action === 'update_issue' && item.issueKey) {
           res = await fetch(getApiUrl(`/api/issues/${item.issueKey}`), {
             method: 'PATCH',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });
         } else if (item.action === 'rank_issue' && item.issueKey) {
           res = await fetch(getApiUrl(`/api/issues/${item.issueKey}/rank`), {
             method: 'PUT',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });
         } else if (item.action === 'create_issue') {
           res = await fetch(getApiUrl('/api/issues'), {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });

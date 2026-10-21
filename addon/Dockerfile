@@ -1,4 +1,5 @@
 ARG BUILD_FROM=python:3.11-alpine
+ARG BUILDPLATFORM=linux/amd64
 
 # =============================================================================
 # Stage 1: Build the React 19 Frontend

@@ -117,6 +117,10 @@ def run_native_pipeline(
         f"{YELLOW}(Tip: Run './scripts/run_ci_locally.py --act' to simulate GitHub Actions in Docker){NC}\n"
     )
 
+    # Detect local project virtualenv if available
+    venv_py = project_root / ".venv" / "bin" / "python3"
+    py_exec = str(venv_py) if venv_py.exists() else sys.executable
+
     steps: list[
         tuple[str, list[str] | callable, Path | None, dict[str, str] | None]
     ] = [
@@ -130,25 +134,25 @@ def run_native_pipeline(
         ),
         (
             "Step 2: Checking Backend & Scripts code quality with Ruff...",
-            [sys.executable, "-m", "ruff", "check", "backend/", "scripts/"],
+            [py_exec, "-m", "ruff", "check", "backend/", "scripts/"],
             project_root,
             None,
         ),
         (
             "Step 2b: Checking Backend & Scripts formatting with Ruff...",
-            [sys.executable, "-m", "ruff", "format", "--check", "backend/", "scripts/"],
+            [py_exec, "-m", "ruff", "format", "--check", "backend/", "scripts/"],
             project_root,
             None,
         ),
         (
             "Step 3: Running Backend tests (pytest & unittest)...",
-            [sys.executable, "-m", "pytest", "backend/tests"],
+            [py_exec, "-m", "pytest", "backend/tests"],
             project_root,
             {"PYTHONPATH": str(project_root / "backend" / "src"), "JIRA_USE_FAKE": "1"},
         ),
         (
             "Step 3b: Running Backend tests (standard unittest runner)...",
-            [sys.executable, "-m", "unittest", "discover", "-s", "backend/tests"],
+            [py_exec, "-m", "unittest", "discover", "-s", "backend/tests"],
             project_root,
             {"PYTHONPATH": str(project_root / "backend" / "src"), "JIRA_USE_FAKE": "1"},
         ),

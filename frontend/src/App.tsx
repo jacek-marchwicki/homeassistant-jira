@@ -7,6 +7,7 @@ import { EditIssueModal } from './components/EditIssueModal.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { Header } from './components/Header.tsx';
 import { InstallHelpModal } from './components/InstallHelpModal.tsx';
+import { LoginView } from './components/LoginView.tsx';
 import { MobileInstallBanner } from './components/MobileInstallBanner.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
 import { PeopleBoard } from './components/PeopleBoard.tsx';
@@ -37,6 +38,8 @@ export default function App() {
     applyRoute,
     resolveRouteTask,
     routeTaskKey,
+    isAuthRequired,
+    checkAuthStatus,
   } = useBoardStore();
   const {
     canInstall,
@@ -62,10 +65,11 @@ export default function App() {
     resolveRouteTask();
   }, [resolveRouteTask, routeTaskKey, issues, isLoading]);
 
-  // 1. Initial Load of Board State
+  // 1. Check Authentication Status & Initial Load of Board State
   useEffect(() => {
+    checkAuthStatus();
     loadBoard();
-  }, [loadBoard]);
+  }, [checkAuthStatus, loadBoard]);
 
   // 2. Establish Resilient WebSocket Connection for Real-Time State Sync
   useEffect(() => {
@@ -129,6 +133,10 @@ export default function App() {
       }
     };
   }, [handleWsMessage, setWsConnected]);
+
+  if (isAuthRequired) {
+    return <LoginView />;
+  }
 
   if (isLoading && issues.length === 0) {
     return (

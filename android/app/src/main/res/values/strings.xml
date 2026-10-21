@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TestApp Integrator</string>
+    <string name="hello_world">Hello World!</string>
+    <string name="package_name">com.jacek.test.app</string>
+</resources>

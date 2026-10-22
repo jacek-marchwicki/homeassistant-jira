@@ -798,9 +798,8 @@ class JiraCloudClient(JiraClientProtocol):
         updated = await self.get_issue(issue_key)
         if updated is None:
             raise JiraAPIError(f"Issue {issue_key} not found after ranking", status_code=404)
-        if target_rank:
-            if not updated.rank or updated.rank > target_rank:
-                updated = updated.model_copy(update={"rank": target_rank})
+        if target_rank and not updated.rank:
+            updated = updated.model_copy(update={"rank": target_rank})
         return updated
 
     async def get_myself(self) -> JiraUser | None:

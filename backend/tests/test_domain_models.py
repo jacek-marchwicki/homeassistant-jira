@@ -210,6 +210,26 @@ class TestDomainModels(unittest.TestCase):
         expected_order = ["PROJ-1", "PROJ-2", "PROJ-3", "PROJ-4"]
         self.assertEqual([i.key for i in issues], expected_order)
 
+    def test_rank_before_lexoranks(self) -> None:
+        """Verify rank_before produces strictly smaller LexoRanks across varied formats."""
+        from jira_dashboard.domain import rank_before
+
+        test_ranks = [
+            "0|i02akf:",
+            "0|i02akm:",
+            "0|i02al0:",
+            "0|i000f3:000x",
+            "0|i000f3:000xi",
+            "0|00000:",
+            "0|i00000:",
+            "0|i00001:",
+            "0|0:",
+            "1|000000:",
+        ]
+        for r in test_ranks:
+            bef = rank_before(r)
+            self.assertTrue(bef < r, f"Expected {bef} < {r}")
+
 
 if __name__ == "__main__":
     unittest.main()

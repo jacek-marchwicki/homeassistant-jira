@@ -13,6 +13,7 @@ from jira_dashboard.domain.models import (
     compute_top_rank_and_before_key,
     issue_sort_key,
     parse_iso_timestamp,
+    rank_before,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "compute_top_rank_and_before_key",
     "issue_sort_key",
     "parse_iso_timestamp",
+    "rank_before",
 ]

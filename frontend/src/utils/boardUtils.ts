@@ -735,6 +735,91 @@ export function sortIssuesByRank(issues: JiraIssue[]): JiraIssue[] {
   });
 }
 
+function rankBefore(b: string): string {
+  const pipeIdx = b.indexOf('|');
+  let i = b.length - 1;
+  while (i > pipeIdx && (b[i] === ':' || b[i] === '0')) {
+    i--;
+  }
+  if (i <= pipeIdx) {
+    const colIdx = b.lastIndexOf(':');
+    if (colIdx !== -1) {
+      return b.slice(0, colIdx) + '0:' + b.slice(colIdx + 1);
+    }
+    return b + '0';
+  }
+
+  const c = b[i];
+  let decChar: string;
+  if (c >= '1' && c <= '9') {
+    decChar = String.fromCharCode(c.charCodeAt(0) - 1);
+  } else if (c === 'a') {
+    decChar = '9';
+  } else {
+    decChar = String.fromCharCode(c.charCodeAt(0) - 1);
+  }
+
+  const prefix = b.slice(0, i) + decChar;
+  const colIdx = b.indexOf(':', i);
+  if (colIdx !== -1) {
+    const trailingZerosCount = colIdx - (i + 1);
+    return prefix + 'z'.repeat(trailingZerosCount) + b.slice(colIdx);
+  } else {
+    const trailingZerosCount = b.length - (i + 1);
+    return prefix + 'z'.repeat(trailingZerosCount);
+  }
+}
+
+function rankAfter(a: string): string {
+  if (a.endsWith(':')) {
+    return a.slice(0, -1) + 'i:';
+  }
+  return a + 'i';
+}
+
+function betweenRanks(a: string, b: string): string {
+  if (a >= b) {
+    return rankAfter(a);
+  }
+  let k = 0;
+  while (k < a.length && k < b.length && a[k] === b[k]) k++;
+
+  if (k === a.length) {
+    let j = k;
+    while (j < b.length && (b[j] === '0' || b[j] === ':')) j++;
+    if (j < b.length) {
+      const codeB = b.charCodeAt(j);
+      const midCode = Math.floor((48 + codeB) / 2);
+      let midChar = String.fromCharCode(midCode);
+      if (!/[0-9a-z]/.test(midChar)) midChar = '8';
+      return b.slice(0, j) + midChar;
+    }
+    return a.endsWith(':') ? a.slice(0, -1) + '0i:' : a + '0i';
+  }
+
+  const cA = a.charCodeAt(k);
+  const cB = b.charCodeAt(k);
+
+  if (cB - cA > 1) {
+    let midChar = '';
+    for (let c = cA + 1; c < cB; c++) {
+      const ch = String.fromCharCode(c);
+      if (/[0-9a-z]/.test(ch)) {
+        midChar = ch;
+        break;
+      }
+    }
+    if (midChar) {
+      return a.slice(0, k) + midChar;
+    }
+  }
+
+  if (a.endsWith(':')) {
+    return a.slice(0, -1) + 'i:';
+  }
+  return a + 'i';
+}
+
 /**
  * Calculates a lexicographically intermediate rank between prevRank and nextRank.
  * If prevRank is missing, generates a rank strictly smaller than nextRank.
@@ -748,44 +833,22 @@ export function calculateRankBetween(
   if (!prevRank && !nextRank) {
     return '0|i00001:';
   }
-
   if (!prevRank && nextRank) {
-    const match = nextRank.match(/^(.*?)(\d+)(:*)$/);
-    if (match) {
-      const num = parseInt(match[2], 10);
-      if (num > 0) {
-        return match[1] + String(num - 1).padStart(match[2].length, '0') + match[3];
-      }
-      return `${match[1]}${match[2]}0${match[3]}`;
-    }
-    if (nextRank.endsWith(':')) {
-      return `${nextRank.slice(0, -1)}0:`;
-    }
-    return `0|${nextRank}`;
+    return rankBefore(nextRank);
   }
-
   if (prevRank && !nextRank) {
-    const match = prevRank.match(/^(.*?)(\d+)(:*)$/);
-    if (match) {
-      const num = parseInt(match[2], 10);
-      return match[1] + String(num + 1).padStart(match[2].length, '0') + match[3];
-    }
-    return prevRank + 'z';
+    return rankAfter(prevRank);
   }
 
-  // Both exist: check if they have matching digit pattern
-  const matchA = prevRank!.match(/^(.*?)(\d+)(:*)$/);
-  const matchB = nextRank!.match(/^(.*?)(\d+)(:*)$/);
-  if (matchA && matchB && matchA[1] === matchB[1] && matchA[3] === matchB[3]) {
-    const numA = parseInt(matchA[2], 10);
-    const numB = parseInt(matchB[2], 10);
-    if (numB - numA > 1) {
-      const midNum = Math.floor((numA + numB) / 2);
-      return matchA[1] + String(midNum).padStart(matchA[2].length, '0') + matchA[3];
-    }
+  const res = betweenRanks(prevRank!, nextRank!);
+  if (!(prevRank! < res && res < nextRank!)) {
+    const fb = prevRank!.endsWith(':')
+      ? prevRank!.slice(0, -1) + '8:'
+      : prevRank! + '8';
+    if (prevRank! < fb && fb < nextRank!) return fb;
+    return prevRank! + 'i';
   }
-
-  return prevRank! + 'i';
+  return res;
 }
 
 export interface KanbanDragEndParams {

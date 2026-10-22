@@ -1130,15 +1130,27 @@ describe('boardUtils', () => {
 
       const r2 = calculateRankBetween(null, r1);
       expect(r2 < r1).toBe(true);
-      expect(r2).toBe('0|i000000:');
+      expect(r2).toBe('0|hzzzzz:');
 
       const r3 = calculateRankBetween(null, r2);
       expect(r3 < r2).toBe(true);
-      expect(r3).toBe('0|i0000000:');
 
       const r4 = calculateRankBetween(null, r3);
       expect(r4 < r3).toBe(true);
-      expect(r4).toBe('0|i00000000:');
+    });
+
+    it('calculates intermediate rank between complex real-world Jira LexoRanks', () => {
+      const rA = '0|i000f3:000x';
+      const rB = '0|i000f3:000xi';
+      const mid = calculateRankBetween(rA, rB);
+      expect(mid > rA).toBe(true);
+      expect(mid < rB).toBe(true);
+
+      const beforeA = calculateRankBetween(null, rA);
+      expect(beforeA < rA).toBe(true);
+
+      const afterB = calculateRankBetween(rB, null);
+      expect(afterB > rB).toBe(true);
     });
 
     it('calculates rank before custom LexoRank prefixes strictly descending', () => {
@@ -1657,6 +1669,85 @@ describe('boardUtils', () => {
         );
         const targetRank = rankIssueOptimistic.mock.calls[0][3];
         expect(targetRank < '0|i00001:').toBe(true);
+      });
+
+      it('moves second task before first task with complex real-world Jira LexoRanks', () => {
+        const taskA: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'HOME-15222',
+          status: { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
+          rank: '0|i000f3:000x',
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        };
+        const taskB: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'HOME-15212',
+          status: { id: 'col-todo', name: 'Ready', category: 'todo' },
+          rank: '0|i000f3:000xi',
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        };
+        const taskC: JiraIssue = {
+          ...mockBaseIssue,
+          key: 'HOME-14917',
+          status: { id: 'col-todo', name: 'Ready', category: 'todo' },
+          rank: '0|i000f3:000y',
+          assignee: { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        };
+        const issues = [taskA, taskB, taskC];
+        const updateIssueOptimistic = vi.fn();
+        const rankIssueOptimistic = vi.fn();
+        const moveToBacklog = vi.fn();
+        const moveToBoard = vi.fn();
+
+        const people = [
+          { displayName: 'Jacek Marchwicki', accountId: 'usr-jacek' },
+        ];
+
+        // Drag taskC (HOME-14917) over taskB (HOME-15212)
+        handlePeopleDragEnd(
+          {
+            active: {
+              id: 'usr-jacek:HOME-14917',
+              data: {
+                current: {
+                  type: 'Issue',
+                  issue: taskC,
+                  sourceColumnId: 'usr-jacek',
+                },
+              },
+            },
+            over: {
+              id: 'usr-jacek:HOME-15212',
+              data: {
+                current: {
+                  type: 'Issue',
+                  issue: taskB,
+                  sourceColumnId: 'usr-jacek',
+                  columnPersonName: 'Jacek Marchwicki',
+                },
+              },
+            },
+          } as any,
+          {
+            issues,
+            backlogIssues: [],
+            people,
+            updateIssueOptimistic,
+            rankIssueOptimistic,
+            moveToBacklog,
+            moveToBoard,
+          }
+        );
+
+        expect(rankIssueOptimistic).toHaveBeenCalledWith(
+          'HOME-14917',
+          'HOME-15212',
+          'HOME-15222',
+          expect.stringMatching(/.+/)
+        );
+        const targetRank = rankIssueOptimistic.mock.calls[0][3];
+        expect(targetRank > '0|i000f3:000x').toBe(true);
+        expect(targetRank < '0|i000f3:000xi').toBe(true);
       });
 
       it('moves issue to top of column when dropped onto the column container/header', () => {

@@ -15,11 +15,16 @@ from jira_dashboard.adapters.jira_client import (
     JiraClientProtocol,
 )
 from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
+from jira_dashboard.adapters.blob_storage import (
+    BlobStorageProtocol,
+    LocalDiskBlobStorage,
+)
 from jira_dashboard.adapters.storage import SQLiteStorage
 from jira_dashboard.adapters.storage_protocol import StorageProtocol
 from jira_dashboard.adapters.sync_worker import JiraSyncWorker
 
 __all__ = [
+    "BlobStorageProtocol",
     "DEFAULT_COLUMNS",
     "FakeJiraClient",
     "GeminiImageClient",
@@ -28,6 +33,7 @@ __all__ = [
     "JiraClientProtocol",
     "JiraCloudClient",
     "JiraSyncWorker",
+    "LocalDiskBlobStorage",
     "MockGeminiImageClient",
     "SQLiteStorage",
     "StorageProtocol",

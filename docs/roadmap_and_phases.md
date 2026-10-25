@@ -384,3 +384,21 @@ This document details the architectural phases, delivered features, and evolutio
     - Vitest unit tests in `frontend/src/utils/boardUtils.test.ts` and `frontend/src/store/boardStore.test.ts` (38 test files, 365 tests passing).
     - Pytest backend suite in `backend/tests/test_mcp.py` and `backend/tests/test_domain_models.py` verifying MCP rank calculation, `rank_before_key` propagation, and WebSocket delta broadcast (199 tests passing).
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+
+- [x] **Phase 5.27: Delayed Mark-as-Done with Undo Snackbar**
+  - [x] **Zero-Latency Optimistic UI with Delayed Jira Sync**:
+    - Tapping the quick "Done" button on an issue card updates the UI state immediately (< 50ms) to Done, providing instantaneous visual feedback.
+    - Postpones backend synchronization by 5 seconds, giving users a generous window to undo accidental taps before mutating Jira Cloud state.
+    - If another issue is marked Done within the window, the prior issue is immediately flushed to the backend and the 5-second window starts for the new issue.
+  - [x] **Accessible Undo Snackbar Component (`UndoSnackbar.tsx`)**:
+    - Fixed floating notification at bottom-center adhering to the Design System tokens (`--jira-surface-elevated`, `--jira-border`, `--jira-text-primary`).
+    - Features a 5-second linear progress countdown indicator, clear text label ("Marked KEY as Done"), and an accessible one-tap Undo button meeting the minimum $44 \times 44\text{px}$ touch target guideline.
+    - Fully accessible with `role="status"` and `aria-live="polite"`.
+  - [x] **Offline Resilience & Error Rollback**:
+    - If the user clicks "Undo", the issue reverts immediately (< 50ms) to its original status with zero requests sent to Jira.
+    - If the delayed timer expires while offline, the mutation is automatically captured in `offlineOutbox` (`ha_jira_offline_outbox_v1`) to sync upon reconnection.
+    - If the backend rejects the change, the UI gracefully rolls back to the prior state with non-blocking error feedback.
+  - [x] **Comprehensive Automated Test Coverage**:
+    - Store tests in [`frontend/src/store/boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts) covering immediate optimistic mutation, delayed sync, undo cancellation, rapid successive flushing, and offline outbox queuing.
+    - Component unit tests in [`frontend/src/components/UndoSnackbar.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/UndoSnackbar.test.tsx), [`frontend/src/components/IssueCard.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/IssueCard.test.tsx), and [`frontend/src/App.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/App.test.tsx).
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.

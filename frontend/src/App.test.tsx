@@ -135,4 +135,32 @@ describe('App component loading indicator & board rendering', () => {
     expect(container.textContent).toContain('Engineering Sprint Board');
     expect(container.textContent).toContain('Setup CI/CD pipeline');
   });
+
+  it('renders UndoSnackbar when pendingQuickDone is present', async () => {
+    act(() => {
+      useBoardStore.setState({
+        isLoading: false,
+        boardName: 'Engineering Sprint Board',
+        issues: [testIssue],
+        pendingQuickDone: {
+          issueKey: 'PROJ-101',
+          originalIssue: testIssue,
+          timeoutId: 100 as unknown as ReturnType<typeof setTimeout>,
+          targetCategory: 'done',
+          targetStatus: 'Done',
+          startTime: Date.now(),
+          durationMs: 5000,
+        },
+      });
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const snackbar = container.querySelector('[data-testid="undo-snackbar"]');
+    expect(snackbar).not.toBeNull();
+    expect(snackbar?.textContent).toContain('PROJ-101');
+    expect(snackbar?.textContent).toContain('Undo');
+  });
 });

@@ -33,7 +33,7 @@ export function IssueCard({
   sortableId,
   sourceColumnId,
 }: IssueCardProps) {
-  const { columns, transitionIssueOptimistic, setEditingIssue, accountTypes } = useBoardStore();
+  const { columns, markIssueDoneWithUndo, setEditingIssue, accountTypes } = useBoardStore();
   const currentColumn = getColumnForIssue(issue, columns);
   const isDone = (currentColumn?.category || issue.status.category) === 'done';
   const dueDateStr = issue.due_date ?? issue.dueDate;
@@ -80,7 +80,7 @@ export function IssueCard({
       triggerDoneCelebration();
     }
     const doneCol = columns.find((c) => c.category === 'done');
-    transitionIssueOptimistic(issue.key, 'done', doneCol?.name);
+    markIssueDoneWithUndo(issue.key, 'done', doneCol?.name);
   };
 
   return (

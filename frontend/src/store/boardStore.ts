@@ -67,6 +67,16 @@ export interface OfflineOutboxItem {
   createdAt: number;
 }
 
+export interface PendingQuickDone {
+  issueKey: string;
+  originalIssue: JiraIssue;
+  timeoutId: ReturnType<typeof setTimeout>;
+  targetCategory: JiraStatusCategory;
+  targetStatus?: string;
+  startTime: number;
+  durationMs: number;
+}
+
 export interface ConnectionDetails {
   lastError: string | null;
   lastConnectedAt: number | null;
@@ -252,6 +262,7 @@ export interface BoardStoreState {
   editingIssue: JiraIssue | null;
   isCreateModalOpen: boolean;
   isConnectionModalOpen: boolean;
+  pendingQuickDone: PendingQuickDone | null;
   /** Task key requested by the URL (/task/KEY) that is not yet resolved to an issue. */
   routeTaskKey: string | null;
   offlineOutbox: OfflineOutboxItem[];
@@ -298,6 +309,14 @@ export interface BoardStoreState {
     targetCategory: JiraStatusCategory,
     targetStatus?: string
   ) => Promise<void>;
+  markIssueDoneWithUndo: (
+    issueKey: string,
+    targetCategory?: JiraStatusCategory,
+    targetStatus?: string,
+    delayMs?: number
+  ) => void;
+  undoQuickDone: () => void;
+  flushPendingQuickDone: () => Promise<void>;
   updateIssueOptimistic: (issueKey: string, updates: IssueUpdatePayload) => Promise<void>;
   createIssueOptimistic: (payload: IssueCreatePayload) => Promise<JiraIssue | null>;
   rankIssueOptimistic: (
@@ -315,6 +334,80 @@ export interface BoardStoreState {
 const initialCache = loadCachedBoard();
 const initialOutbox = loadCachedOutbox();
 const initialRoute = getCurrentRoute();
+
+async function syncTransitionToBackend(
+  issueKey: string,
+  originalIssue: JiraIssue,
+  targetCategory: JiraStatusCategory,
+  targetStatus: string | undefined,
+  get: () => BoardStoreState,
+  set: (fn: ((state: BoardStoreState) => Partial<BoardStoreState>) | Partial<BoardStoreState>) => void
+) {
+  try {
+    const payload: { target_category: string; target_status?: string } = {
+      target_category: targetCategory,
+    };
+    if (targetStatus) {
+      payload.target_status = targetStatus;
+    }
+
+    const res = await fetch(getApiUrl(`/api/issues/${issueKey}/transition`), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new ServerRejectionError(`Server returned ${res.status}`);
+    }
+
+    const updated = await res.json();
+    set((state) => ({
+      issues: state.issues.map((item) =>
+        item.key === issueKey ? { ...updated, _optimisticState: 'synced' } : item
+      ),
+    }));
+    persistCurrentBoardState(get);
+  } catch (err) {
+    if (isServerRejectionError(err)) {
+      set((state) => {
+        const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
+        return {
+          issues: state.issues.map((item) =>
+            item.key === issueKey ? { ...rollbackIssue, _optimisticState: 'failed' } : item
+          ),
+          errorMessage: `Failed to transition ${issueKey}. Reverting to previous status.`,
+        };
+      });
+
+      setTimeout(() => {
+        if (get().errorMessage?.includes(issueKey)) {
+          set({ errorMessage: null });
+        }
+      }, 5000);
+    } else {
+      // Network failure / offline: keep optimistic state and queue mutation
+      const outboxItem: OfflineOutboxItem = {
+        id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        action: 'transition_issue',
+        issueKey,
+        payload: targetStatus
+          ? { target_category: targetCategory, target_status: targetStatus }
+          : { target_category: targetCategory },
+        createdAt: Date.now(),
+      };
+      const updatedOutbox = [...get().offlineOutbox, outboxItem];
+      saveCachedOutbox(updatedOutbox);
+      set({
+        offlineOutbox: updatedOutbox,
+        pendingSyncCount: updatedOutbox.length,
+        syncStatus: 'offline',
+      });
+      persistCurrentBoardState(get);
+    }
+  }
+}
 
 export const useBoardStore = create<BoardStoreState>((set, get) => ({
   theme: getInitialTheme(),
@@ -343,6 +436,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   editingIssue: null,
   isCreateModalOpen: initialRoute.kind === 'create',
   isConnectionModalOpen: initialRoute.kind === 'status',
+  pendingQuickDone: null,
   routeTaskKey: initialRoute.kind === 'task' ? initialRoute.key : null,
   offlineOutbox: initialOutbox,
   syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
@@ -749,6 +843,13 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     targetCategory: JiraStatusCategory,
     targetStatus?: string
   ) => {
+    // If this issue has a pending quick done, clear it since we are transitioning now
+    const pending = get().pendingQuickDone;
+    if (pending && pending.issueKey === issueKey) {
+      clearTimeout(pending.timeoutId);
+      set({ pendingQuickDone: null });
+    }
+
     const { issues, columns, rollbackQueue } = get();
     const originalIssue = issues.find((i) => i.key === issueKey);
     if (!originalIssue) return;
@@ -789,72 +890,126 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     persistCurrentBoardState(get);
 
     // 2. Background Asynchronous Sync to Backend & Jira
-    try {
-      const payload: { target_category: string; target_status?: string } = {
-        target_category: targetCategory,
-      };
-      if (targetStatus) {
-        payload.target_status = targetStatus;
-      }
+    await syncTransitionToBackend(
+      issueKey,
+      originalIssue,
+      targetCategory,
+      targetStatus,
+      get,
+      set
+    );
+  },
 
-      const res = await fetch(getApiUrl(`/api/issues/${issueKey}/transition`), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        throw new ServerRejectionError(`Server returned ${res.status}`);
-      }
-
-      const updated = await res.json();
-      set((state) => ({
-        issues: state.issues.map((item) =>
-          item.key === issueKey ? { ...updated, _optimisticState: 'synced' } : item
-        ),
-      }));
-      persistCurrentBoardState(get);
-    } catch (err) {
-      if (isServerRejectionError(err)) {
-        // 3. Graceful Rollback on Server Rejection
-        set((state) => {
-          const rollbackIssue = state.rollbackQueue[issueKey] || originalIssue;
-          return {
-            issues: state.issues.map((item) =>
-              item.key === issueKey ? { ...rollbackIssue, _optimisticState: 'failed' } : item
-            ),
-            errorMessage: `Failed to transition ${issueKey}. Reverting to previous status.`,
-          };
-        });
-
-        // Clear error message after 5 seconds
-        setTimeout(() => {
-          if (get().errorMessage?.includes(issueKey)) {
-            set({ errorMessage: null });
-          }
-        }, 5000);
-      } else {
-        // Network failure / offline: keep optimistic state and queue mutation
-        const outboxItem: OfflineOutboxItem = {
-          id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          action: 'transition_issue',
-          issueKey,
-          payload: targetStatus
-            ? { target_category: targetCategory, target_status: targetStatus }
-            : { target_category: targetCategory },
-          createdAt: Date.now(),
-        };
-        const updatedOutbox = [...get().offlineOutbox, outboxItem];
-        saveCachedOutbox(updatedOutbox);
-        set({
-          offlineOutbox: updatedOutbox,
-          pendingSyncCount: updatedOutbox.length,
-          syncStatus: 'offline',
-        });
-        persistCurrentBoardState(get);
-      }
+  markIssueDoneWithUndo: (
+    issueKey: string,
+    targetCategory: JiraStatusCategory = 'done',
+    targetStatus?: string,
+    delayMs = 5000
+  ) => {
+    // 0. If previous pending exists, flush it immediately to backend
+    const existing = get().pendingQuickDone;
+    if (existing) {
+      clearTimeout(existing.timeoutId);
+      void syncTransitionToBackend(
+        existing.issueKey,
+        existing.originalIssue,
+        existing.targetCategory,
+        existing.targetStatus,
+        get,
+        set
+      );
     }
+
+    const { issues, columns, rollbackQueue } = get();
+    const originalIssue = issues.find((i) => i.key === issueKey);
+    if (!originalIssue) return;
+    if (
+      originalIssue.status.category === targetCategory &&
+      (!targetStatus || originalIssue.status.name === targetStatus)
+    ) {
+      return;
+    }
+
+    // 1. Instant Optimistic State Mutation (< 50ms)
+    const targetCol = columns.find(
+      (c) =>
+        (targetStatus && c.name.trim().toLowerCase() === targetStatus.trim().toLowerCase()) ||
+        c.category === targetCategory
+    );
+    const targetStatusId = targetCol?.status_ids?.[0] || targetCol?.id || `col-${targetCategory}`;
+    const targetTitle = targetStatus || targetCol?.name || CATEGORY_TITLES[targetCategory] || targetCategory;
+    const updatedIssues = issues.map((item) => {
+      if (item.key !== issueKey) return item;
+      return {
+        ...item,
+        status: {
+          id: targetStatusId,
+          category: targetCategory,
+          name: targetTitle,
+        },
+        updated_at: new Date().toISOString(),
+        _optimisticState: 'pending' as const,
+        _pendingTargetStatusId: targetCategory,
+      };
+    });
+
+    // 2. Schedule delayed backend sync
+    const timeoutId = setTimeout(async () => {
+      const current = get().pendingQuickDone;
+      if (current && current.issueKey === issueKey) {
+        set({ pendingQuickDone: null });
+        await syncTransitionToBackend(
+          issueKey,
+          originalIssue,
+          targetCategory,
+          targetStatus,
+          get,
+          set
+        );
+      }
+    }, delayMs);
+
+    set({
+      issues: updatedIssues,
+      rollbackQueue: { ...rollbackQueue, [issueKey]: originalIssue },
+      pendingQuickDone: {
+        issueKey,
+        originalIssue,
+        timeoutId,
+        targetCategory,
+        targetStatus,
+        startTime: Date.now(),
+        durationMs: delayMs,
+      },
+    });
+    persistCurrentBoardState(get);
+  },
+
+  undoQuickDone: () => {
+    const pending = get().pendingQuickDone;
+    if (!pending) return;
+    clearTimeout(pending.timeoutId);
+    const { issueKey, originalIssue } = pending;
+    set((state) => ({
+      issues: state.issues.map((item) => (item.key === issueKey ? originalIssue : item)),
+      pendingQuickDone: null,
+    }));
+    persistCurrentBoardState(get);
+  },
+
+  flushPendingQuickDone: async () => {
+    const pending = get().pendingQuickDone;
+    if (!pending) return;
+    clearTimeout(pending.timeoutId);
+    set({ pendingQuickDone: null });
+    await syncTransitionToBackend(
+      pending.issueKey,
+      pending.originalIssue,
+      pending.targetCategory,
+      pending.targetStatus,
+      get,
+      set
+    );
   },
 
   updateIssueOptimistic: async (issueKey: string, updates: IssueUpdatePayload) => {

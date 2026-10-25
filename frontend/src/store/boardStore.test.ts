@@ -1325,4 +1325,145 @@ describe('URL navigation', () => {
       expect(state.issues[0].summary).toBe('Fresh Backend Issue Summary');
     });
   });
+
+  describe('Delayed mark as done with Undo', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      useBoardStore.setState({
+        issues: [mockIssue],
+        columns: DEFAULT_COLUMNS,
+        offlineOutbox: [],
+        pendingSyncCount: 0,
+        syncStatus: 'synced',
+        pendingQuickDone: null,
+        errorMessage: null,
+        rollbackQueue: {},
+      });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...mockIssue,
+          status: { id: '3', name: 'Done', category: 'done' },
+        }),
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('immediately mutates UI to Done (< 50ms) without calling backend immediately and sets pendingQuickDone', () => {
+      const startTime = performance.now();
+      useBoardStore.getState().markIssueDoneWithUndo('PROJ-101', 'done', 'Done');
+      const elapsed = performance.now() - startTime;
+
+      expect(elapsed).toBeLessThan(50);
+      const issue = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+      expect(issue?.status.category).toBe('done');
+      expect(issue?._optimisticState).toBe('pending');
+
+      const pending = useBoardStore.getState().pendingQuickDone;
+      expect(pending).not.toBeNull();
+      expect(pending?.issueKey).toBe('PROJ-101');
+      expect(pending?.originalIssue.status.category).toBe('todo');
+
+      // fetch should NOT be called yet
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('dispatches backend transition after 5000ms delay and clears pendingQuickDone', async () => {
+      useBoardStore.getState().markIssueDoneWithUndo('PROJ-101', 'done', 'Done');
+
+      expect(global.fetch).not.toHaveBeenCalled();
+
+      // Fast-forward 5000ms
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/issues/PROJ-101/transition'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ target_category: 'done', target_status: 'Done' }),
+        })
+      );
+
+      expect(useBoardStore.getState().pendingQuickDone).toBeNull();
+    });
+
+    it('undoQuickDone reverts the issue back to original status immediately and prevents backend sync', async () => {
+      useBoardStore.getState().markIssueDoneWithUndo('PROJ-101', 'done', 'Done');
+
+      expect(useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101')?.status.category).toBe('done');
+      expect(useBoardStore.getState().pendingQuickDone).not.toBeNull();
+
+      // User clicks Undo after 2000ms
+      vi.advanceTimersByTime(2000);
+      useBoardStore.getState().undoQuickDone();
+
+      const reverted = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-101');
+      expect(reverted?.status.category).toBe('todo');
+      expect(useBoardStore.getState().pendingQuickDone).toBeNull();
+
+      // Fast-forward another 10 seconds: fetch should NEVER be called
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('subsequent markIssueDoneWithUndo immediately flushes the prior pending issue to backend', async () => {
+      const secondIssue: JiraIssue = {
+        id: '102',
+        key: 'PROJ-102',
+        summary: 'Second Issue',
+        priority: 'medium',
+        status: { id: '1', name: 'To Do', category: 'todo' },
+        updated_at: '2026-10-05T00:00:00Z',
+      };
+      useBoardStore.setState({
+        issues: [mockIssue, secondIssue],
+      });
+
+      // Mark first issue done
+      useBoardStore.getState().markIssueDoneWithUndo('PROJ-101', 'done', 'Done');
+      expect(global.fetch).not.toHaveBeenCalled();
+
+      // 2 seconds later, mark second issue done
+      vi.advanceTimersByTime(2000);
+      useBoardStore.getState().markIssueDoneWithUndo('PROJ-102', 'done', 'Done');
+
+      // First issue should have been flushed immediately
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/issues/PROJ-101/transition'),
+        expect.anything()
+      );
+
+      // Now pendingQuickDone should be PROJ-102
+      expect(useBoardStore.getState().pendingQuickDone?.issueKey).toBe('PROJ-102');
+
+      // Fast-forward 5000ms for second issue
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenLastCalledWith(
+        expect.stringContaining('/api/issues/PROJ-102/transition'),
+        expect.anything()
+      );
+      expect(useBoardStore.getState().pendingQuickDone).toBeNull();
+    });
+
+    it('enqueues to offlineOutbox if network fails when delayed timer fires', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch (offline)'));
+
+      useBoardStore.getState().markIssueDoneWithUndo('PROJ-101', 'done', 'Done');
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const state = useBoardStore.getState();
+      expect(state.pendingQuickDone).toBeNull();
+      expect(state.offlineOutbox.length).toBeGreaterThan(0);
+      expect(state.offlineOutbox[0].action).toBe('transition_issue');
+      expect(state.offlineOutbox[0].issueKey).toBe('PROJ-101');
+      expect(state.issues.find((i) => i.key === 'PROJ-101')?.status.category).toBe('done');
+    });
+  });
 });

@@ -11,6 +11,7 @@ import { LoginView } from './components/LoginView.tsx';
 import { MobileInstallBanner } from './components/MobileInstallBanner.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
 import { PeopleBoard } from './components/PeopleBoard.tsx';
+import { UndoSnackbar } from './components/UndoSnackbar.tsx';
 import { useBoardStore } from './store/boardStore.ts';
 import { getCurrentRoute } from './utils/navigation.ts';
 import { getWsUrl } from './utils/paths.ts';
@@ -241,6 +242,9 @@ export default function App() {
         isOpen={isConnectionModalOpen}
         onClose={() => setConnectionModalOpen(false)}
       />
+
+      {/* Delayed Mark Done Undo Snackbar */}
+      <UndoSnackbar />
     </div>
   );
 }

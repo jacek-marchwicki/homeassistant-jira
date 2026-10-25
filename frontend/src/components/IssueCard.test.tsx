@@ -142,11 +142,11 @@ describe('IssueCard component', () => {
     expect(statusSelect).toBeNull();
   });
 
-  it('calls transitionIssueOptimistic when quick Done button is clicked', async () => {
-    const transitionSpy = vi.fn();
+  it('calls markIssueDoneWithUndo when quick Done button is clicked', async () => {
+    const markDoneSpy = vi.fn();
     act(() => {
       useBoardStore.setState({
-        transitionIssueOptimistic: transitionSpy,
+        markIssueDoneWithUndo: markDoneSpy,
       });
     });
 
@@ -167,16 +167,16 @@ describe('IssueCard component', () => {
       doneBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(transitionSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
+    expect(markDoneSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
   });
 
   it('calls setEditingIssue when clicking anywhere on the card, but NOT when clicking Done button', async () => {
     const setEditingIssueSpy = vi.fn();
-    const transitionSpy = vi.fn();
+    const markDoneSpy = vi.fn();
     act(() => {
       useBoardStore.setState({
         setEditingIssue: setEditingIssueSpy,
-        transitionIssueOptimistic: transitionSpy,
+        markIssueDoneWithUndo: markDoneSpy,
       });
     });
 
@@ -219,7 +219,7 @@ describe('IssueCard component', () => {
     await act(async () => {
       doneBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(transitionSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
+    expect(markDoneSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
     expect(setEditingIssueSpy).not.toHaveBeenCalled();
   });
 

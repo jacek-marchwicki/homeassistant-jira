@@ -735,6 +735,91 @@ export function sortIssuesByRank(issues: JiraIssue[]): JiraIssue[] {
   });
 }
 
+function rankBefore(b: string): string {
+  const pipeIdx = b.indexOf('|');
+  let i = b.length - 1;
+  while (i > pipeIdx && (b[i] === ':' || b[i] === '0')) {
+    i--;
+  }
+  if (i <= pipeIdx) {
+    const colIdx = b.lastIndexOf(':');
+    if (colIdx !== -1) {
+      return b.slice(0, colIdx) + '0:' + b.slice(colIdx + 1);
+    }
+    return b + '0';
+  }
+
+  const c = b[i];
+  let decChar: string;
+  if (c >= '1' && c <= '9') {
+    decChar = String.fromCharCode(c.charCodeAt(0) - 1);
+  } else if (c === 'a') {
+    decChar = '9';
+  } else {
+    decChar = String.fromCharCode(c.charCodeAt(0) - 1);
+  }
+
+  const prefix = b.slice(0, i) + decChar;
+  const colIdx = b.indexOf(':', i);
+  if (colIdx !== -1) {
+    const trailingZerosCount = colIdx - (i + 1);
+    return prefix + 'z'.repeat(trailingZerosCount) + b.slice(colIdx);
+  } else {
+    const trailingZerosCount = b.length - (i + 1);
+    return prefix + 'z'.repeat(trailingZerosCount);
+  }
+}
+
+function rankAfter(a: string): string {
+  if (a.endsWith(':')) {
+    return a.slice(0, -1) + 'i:';
+  }
+  return a + 'i';
+}
+
+function betweenRanks(a: string, b: string): string {
+  if (a >= b) {
+    return rankAfter(a);
+  }
+  let k = 0;
+  while (k < a.length && k < b.length && a[k] === b[k]) k++;
+
+  if (k === a.length) {
+    let j = k;
+    while (j < b.length && (b[j] === '0' || b[j] === ':')) j++;
+    if (j < b.length) {
+      const codeB = b.charCodeAt(j);
+      const midCode = Math.floor((48 + codeB) / 2);
+      let midChar = String.fromCharCode(midCode);
+      if (!/[0-9a-z]/.test(midChar)) midChar = '8';
+      return b.slice(0, j) + midChar;
+    }
+    return a.endsWith(':') ? a.slice(0, -1) + '0i:' : a + '0i';
+  }
+
+  const cA = a.charCodeAt(k);
+  const cB = b.charCodeAt(k);
+
+  if (cB - cA > 1) {
+    let midChar = '';
+    for (let c = cA + 1; c < cB; c++) {
+      const ch = String.fromCharCode(c);
+      if (/[0-9a-z]/.test(ch)) {
+        midChar = ch;
+        break;
+      }
+    }
+    if (midChar) {
+      return a.slice(0, k) + midChar;
+    }
+  }
+
+  if (a.endsWith(':')) {
+    return a.slice(0, -1) + 'i:';
+  }
+  return a + 'i';
+}
+
 /**
  * Calculates a lexicographically intermediate rank between prevRank and nextRank.
  * If prevRank is missing, generates a rank strictly smaller than nextRank.
@@ -748,46 +833,22 @@ export function calculateRankBetween(
   if (!prevRank && !nextRank) {
     return '0|i00001:';
   }
-
   if (!prevRank && nextRank) {
-    const match = nextRank.match(/^(.*?)(\d+)(:*)$/);
-    if (match) {
-      const num = parseInt(match[2], 10);
-      if (num > 0) {
-        return match[1] + String(num - 1).padStart(match[2].length, '0') + match[3];
-      }
-    }
-    for (let i = nextRank.length - 1; i >= 0; i--) {
-      const code = nextRank.charCodeAt(i);
-      if (code > 33) {
-        return nextRank.slice(0, i) + String.fromCharCode(code - 1) + nextRank.slice(i + 1);
-      }
-    }
-    return '0|00000:';
+    return rankBefore(nextRank);
   }
-
   if (prevRank && !nextRank) {
-    const match = prevRank.match(/^(.*?)(\d+)(:*)$/);
-    if (match) {
-      const num = parseInt(match[2], 10);
-      return match[1] + String(num + 1).padStart(match[2].length, '0') + match[3];
-    }
-    return prevRank + 'z';
+    return rankAfter(prevRank);
   }
 
-  // Both exist: check if they have matching digit pattern
-  const matchA = prevRank!.match(/^(.*?)(\d+)(:*)$/);
-  const matchB = nextRank!.match(/^(.*?)(\d+)(:*)$/);
-  if (matchA && matchB && matchA[1] === matchB[1] && matchA[3] === matchB[3]) {
-    const numA = parseInt(matchA[2], 10);
-    const numB = parseInt(matchB[2], 10);
-    if (numB - numA > 1) {
-      const midNum = Math.floor((numA + numB) / 2);
-      return matchA[1] + String(midNum).padStart(matchA[2].length, '0') + matchA[3];
-    }
+  const res = betweenRanks(prevRank!, nextRank!);
+  if (!(prevRank! < res && res < nextRank!)) {
+    const fb = prevRank!.endsWith(':')
+      ? prevRank!.slice(0, -1) + '8:'
+      : prevRank! + '8';
+    if (prevRank! < fb && fb < nextRank!) return fb;
+    return prevRank! + 'i';
   }
-
-  return prevRank! + 'i';
+  return res;
 }
 
 export interface KanbanDragEndParams {
@@ -963,6 +1024,15 @@ export function handleBacklogDragEnd(
       const nextItem = params.boardIssues[targetIndex];
       const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
       params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+    } else {
+      const remainingBoard = params.boardIssues.filter((i) => i.key !== activeKey);
+      if (remainingBoard.length > 0) {
+        const firstItem = remainingBoard[0];
+        const targetRank = calculateRankBetween(null, firstItem.rank);
+        params.rankIssueOptimistic(activeKey, firstItem.key, undefined, targetRank);
+      } else {
+        params.rankIssueOptimistic(activeKey, undefined, undefined, '0|i00001:');
+      }
     }
   } else if (targetType === 'backlog' && !isCurrentlyBacklog) {
     params.moveToBacklog(activeKey);
@@ -972,6 +1042,15 @@ export function handleBacklogDragEnd(
       const nextItem = params.backlogIssues[targetIndex];
       const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
       params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+    } else {
+      const remainingBacklog = params.backlogIssues.filter((i) => i.key !== activeKey);
+      if (remainingBacklog.length > 0) {
+        const firstItem = remainingBacklog[0];
+        const targetRank = calculateRankBetween(null, firstItem.rank);
+        params.rankIssueOptimistic(activeKey, firstItem.key, undefined, targetRank);
+      } else {
+        params.rankIssueOptimistic(activeKey, undefined, undefined, '0|i00001:');
+      }
     }
   } else {
     // Intra-list reordering (same section)
@@ -985,6 +1064,14 @@ export function handleBacklogDragEnd(
         const nextItem = newIndex < reordered.length - 1 ? reordered[newIndex + 1] : null;
         const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
         params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+      }
+    } else if (!overItem) {
+      // Dropped onto section container/header -> move to top of the current section
+      const remaining = currentList.filter((i) => i.key !== activeKey);
+      if (remaining.length > 0) {
+        const firstItem = remaining[0];
+        const targetRank = calculateRankBetween(null, firstItem.rank);
+        params.rankIssueOptimistic(activeKey, firstItem.key, undefined, targetRank);
       }
     }
   }
@@ -1337,11 +1424,52 @@ export function handlePeopleDragEnd(
     }
   }
 
-  // Rank reordering if dropped over another issue card
-  const overItem = params.issues.find((i) => i.key === overKey);
-  if (overItem && overKey !== activeKey) {
-    const targetRank = calculateRankBetween(overItem.rank, null);
-    params.rankIssueOptimistic(activeKey, undefined, overItem.key, targetRank);
+  // Rank reordering within or across people columns
+  if (targetPerson) {
+    const targetColIssues = sortIssuesByRank(
+      params.issues.filter(
+        (i) =>
+          isAssignedToPersonOrUnassigned(i, targetPerson!.displayName, targetPerson!.accountId) &&
+          !isBacklogIssue(i)
+      )
+    );
+    const overItem = params.issues.find((i) => i.key === overKey);
+
+    if (overItem && overKey !== activeKey) {
+      const isAlreadyInCol = targetColIssues.some((i) => i.key === activeKey);
+      if (isAlreadyInCol) {
+        // Intra-column reorder
+        const oldIndex = targetColIssues.findIndex((i) => i.key === activeKey);
+        const newIndex = targetColIssues.findIndex((i) => i.key === overKey);
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reordered = arrayMove(targetColIssues, oldIndex, newIndex);
+          const prevItem = newIndex > 0 ? reordered[newIndex - 1] : null;
+          const nextItem = newIndex < reordered.length - 1 ? reordered[newIndex + 1] : null;
+          const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+          params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+        }
+      } else {
+        // Inter-column drop over a card
+        const targetIndex = targetColIssues.findIndex((i) => i.key === overKey);
+        if (targetIndex !== -1) {
+          const prevItem = targetIndex > 0 ? targetColIssues[targetIndex - 1] : null;
+          const nextItem = targetColIssues[targetIndex];
+          const targetRank = calculateRankBetween(prevItem?.rank, nextItem?.rank);
+          params.rankIssueOptimistic(activeKey, nextItem?.key, prevItem?.key, targetRank);
+        }
+      }
+    } else if (!overItem) {
+      // Dropped onto the column container / header -> rank at the TOP of the column
+      const remainingIssues = targetColIssues.filter((i) => i.key !== activeKey);
+      if (remainingIssues.length > 0) {
+        const firstItem = remainingIssues[0];
+        const targetRank = calculateRankBetween(null, firstItem.rank);
+        params.rankIssueOptimistic(activeKey, firstItem.key, undefined, targetRank);
+      } else {
+        const targetRank = calculateRankBetween(null, null);
+        params.rankIssueOptimistic(activeKey, undefined, undefined, targetRank);
+      }
+    }
   }
 }
 

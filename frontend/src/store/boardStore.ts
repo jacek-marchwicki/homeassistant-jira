@@ -1035,17 +1035,22 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       payload.status_id || targetCol?.status_ids?.[0] || targetCol?.id || `col-${targetCategory}`;
 
     // Calculate highest rank so new task appears at the top of the list
+    const realIssues = issues.filter(
+      (i) => !i.key.startsWith('TEMP-') && !i.key.includes('-TEMP-')
+    );
+    const topReal = realIssues.length > 0 ? realIssues[0] : null;
+    let topIssueKey: string | null = topReal?.key || null;
+
     const rankedIssues = issues.filter((i) => Boolean(i.rank));
     let topRank: string = '0|i00001:';
-    let topIssueKey: string | null = null;
     if (rankedIssues.length > 0) {
       const sortedRanks = [...rankedIssues].sort((a, b) => (a.rank! < b.rank! ? -1 : 1));
       topRank = calculateRankBetween(null, sortedRanks[0].rank);
-      const topReal = sortedRanks.find(
+      const topRankedReal = sortedRanks.find(
         (i) => !i.key.startsWith('TEMP-') && !i.key.includes('-TEMP-')
       );
-      if (topReal) {
-        topIssueKey = topReal.key;
+      if (topRankedReal) {
+        topIssueKey = topRankedReal.key;
       }
     }
 

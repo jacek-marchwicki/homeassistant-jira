@@ -158,3 +158,55 @@ def issue_sort_key(issue: JiraIssue) -> tuple[int, str, float, str]:
     # Negative epoch for descending updated_at order
     updated_epoch = -parse_iso_timestamp(issue.updated_at)
     return (has_rank, rank_str, updated_epoch, issue.key or "")
+
+
+def rank_before(b: str) -> str:
+    """Calculate a LexoRank strictly smaller than `b`."""
+    pipe_idx = b.find("|")
+    i = len(b) - 1
+    while i > pipe_idx and (b[i] == ":" or b[i] == "0"):
+        i -= 1
+    if i <= pipe_idx:
+        col_idx = b.rfind(":")
+        if col_idx != -1:
+            return b[:col_idx] + "0:" + b[col_idx + 1 :]
+        return b + "0"
+    c = b[i]
+    if "1" <= c <= "9":
+        dec_char = chr(ord(c) - 1)
+    elif c == "a":
+        dec_char = "9"
+    else:
+        dec_char = chr(ord(c) - 1)
+    prefix = b[:i] + dec_char
+    col_idx = b.find(":", i)
+    if col_idx != -1:
+        trailing_zeros_count = col_idx - (i + 1)
+        return prefix + ("z" * trailing_zeros_count) + b[col_idx:]
+    else:
+        trailing_zeros_count = len(b) - (i + 1)
+        return prefix + ("z" * trailing_zeros_count)
+
+
+def compute_top_rank_and_before_key(
+    existing_issues: list[JiraIssue],
+) -> tuple[str, str | None]:
+    """Calculate the next top rank strictly smaller than all existing issues,
+    and the top real issue key.
+    """
+    real_issues = [
+        i for i in existing_issues if not i.key.startswith("TEMP-") and "-TEMP-" not in i.key
+    ]
+    rank_before_key: str | None = None
+    if real_issues:
+        real_issues_sorted = sorted(real_issues, key=issue_sort_key)
+        rank_before_key = real_issues_sorted[0].key
+
+    ranked = [i.rank for i in existing_issues if i.rank]
+    if ranked:
+        ranked.sort()
+        new_rank = rank_before(ranked[0])
+    else:
+        new_rank = "0|i00001:"
+
+    return new_rank, rank_before_key

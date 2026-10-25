@@ -23,6 +23,7 @@ from jira_dashboard.domain import (
     JiraUser,
     Priority,
     StatusCategory,
+    compute_top_rank_and_before_key,
     issue_sort_key,
 )
 
@@ -418,10 +419,14 @@ class MCPServerHandler:
         jira_client: JiraClientProtocol,
         storage: SQLiteStorage,
         base_url: str = "",
+        broadcast_func: Any = None,
+        on_issue_created: Any = None,
     ) -> None:
         self.jira_client = jira_client
         self.storage = storage
         self.base_url = base_url
+        self.broadcast_func = broadcast_func
+        self.on_issue_created = on_issue_created
         self.sessions: dict[str, asyncio.Queue[str]] = {}
 
     def _create_queue(self) -> asyncio.Queue[str]:
@@ -750,6 +755,15 @@ class MCPServerHandler:
                 else:
                     assignee_name = str(assignee_arg).strip()
 
+            existing_issues = self.storage.get_issues()
+            if not existing_issues:
+                try:
+                    existing_issues = await self.jira_client.get_board_issues("1")
+                except Exception:
+                    existing_issues = []
+
+            top_rank, rank_before_key = compute_top_rank_and_before_key(existing_issues)
+
             created = await self.jira_client.create_issue(
                 summary=summary,
                 description=description,
@@ -761,8 +775,24 @@ class MCPServerHandler:
                 start_date=start_date,
                 due_date=due_date,
                 recreate_after=recreate_after,
+                rank=top_rank,
+                rank_before_key=rank_before_key,
             )
             self.storage.upsert_issue(created)
+
+            if self.on_issue_created:
+                res = self.on_issue_created(created)
+                if asyncio.iscoroutine(res):
+                    await res
+
+            if self.broadcast_func:
+                await self.broadcast_func(
+                    {
+                        "event": "issue_created",
+                        "issue": created.model_dump(),
+                    }
+                )
+
             return self.format_issue(created, effective_base)
 
         if normalized_name == "home_tasks_edit_task":

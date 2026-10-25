@@ -14,7 +14,6 @@ import hmac
 import json
 import logging
 import os
-import re
 import secrets
 import time
 import uuid
@@ -64,7 +63,9 @@ from jira_dashboard.domain import (
     JiraUser,
     Priority,
     StatusCategory,
+    compute_top_rank_and_before_key,
     issue_sort_key,
+    rank_before,
 )
 from jira_dashboard.presentation import auth as auth_module
 from jira_dashboard.presentation.auth import (
@@ -523,7 +524,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-mcp_handler = MCPServerHandler(jira_client=jira_client, storage=storage)
+
+async def _mcp_on_issue_created(created: JiraIssue) -> None:
+    global _cached_board_response
+    if _cached_board_response is not None:
+        _cached_board_response.issues = [created] + [
+            x for x in _cached_board_response.issues if x.key != created.key
+        ]
+        _cached_board_response.issues.sort(key=issue_sort_key)
+
+
+mcp_handler = MCPServerHandler(
+    jira_client=jira_client,
+    storage=storage,
+    broadcast_func=ws_hub.broadcast,
+    on_issue_created=_mcp_on_issue_created,
+)
 
 
 class GoogleLoginRequest(BaseModel):
@@ -1750,15 +1766,7 @@ async def rank_issue(key: str, request: RankIssueRequest) -> JiraIssue:
                 else None
             )
             base_r = before_issue.rank if before_issue and before_issue.rank else "0|i00002:"
-            match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
-            if match:
-                num = int(match.group(2))
-                if num > 0:
-                    new_rank = f"{match.group(1)}{num - 1:05d}{match.group(3)}"
-                else:
-                    new_rank = f"{base_r[:-1]}0:"
-            else:
-                new_rank = "0|00000:"
+            new_rank = rank_before(base_r)
         else:
             new_rank = f"0|i{int(time.time()) % 100000:05d}:"
 
@@ -1982,32 +1990,9 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     if not existing and isinstance(jira_client, FakeJiraClient):
         existing = list(jira_client._issues.values())
 
-    rank_before_key = request.rank_before_key
-    if not rank_before_key and existing:
-        real_issues = [
-            i for i in existing if not i.key.startswith("TEMP-") and "-TEMP-" not in i.key
-        ]
-        if real_issues:
-            real_issues.sort(key=issue_sort_key)
-            rank_before_key = real_issues[0].key
-
-    new_rank = request.rank or request.target_rank
-    if not new_rank:
-        ranked = [i.rank for i in existing if i.rank]
-        if ranked:
-            ranked.sort()
-            base_r = ranked[0]
-            match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
-            if match:
-                num = int(match.group(2))
-                if num > 0:
-                    new_rank = f"{match.group(1)}{num - 1:05d}{match.group(3)}"
-                else:
-                    new_rank = f"{base_r[:-1]}0:"
-            else:
-                new_rank = "0|00000:"
-        else:
-            new_rank = "0|i00001:"
+    calculated_top_rank, calculated_before_key = compute_top_rank_and_before_key(existing)
+    rank_before_key = request.rank_before_key or calculated_before_key
+    new_rank = request.rank or request.target_rank or calculated_top_rank
 
     jira_base_url = (settings.jira_url or "https://jira.example.com").strip().rstrip("/")
     created_issue = JiraIssue(

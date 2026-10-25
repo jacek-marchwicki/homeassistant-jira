@@ -348,6 +348,86 @@ describe('Zustand BoardStore', () => {
     expect(synced?._optimisticState).toBe('synced');
   });
 
+  it('createIssueOptimistic sets rank strictly smaller than top ranked issue and passes rank_before_key', async () => {
+    useBoardStore.setState({
+      issues: [
+        {
+          id: '1',
+          key: 'PROJ-1',
+          summary: 'Existing Top Issue',
+          priority: 'medium',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          rank: '0|i00001:',
+          updated_at: '2026-10-01T00:00:00Z',
+        },
+      ],
+    });
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: '202',
+        key: 'PROJ-202',
+        summary: 'Top Landing Issue',
+        priority: 'high',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        rank: '0|i00000:',
+        updated_at: '2026-10-05T00:00:00Z',
+      }),
+    });
+
+    await useBoardStore.getState().createIssueOptimistic({
+      summary: 'Top Landing Issue',
+      priority: 'high',
+    });
+
+    const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+    expect(callBody.rank_before_key).toBe('PROJ-1');
+    expect(callBody.rank < '0|i00001:').toBe(true);
+
+    const issues = useBoardStore.getState().issues;
+    expect(issues[0].summary).toBe('Top Landing Issue');
+  });
+
+  it('createIssueOptimistic sets rank_before_key to top issue when existing issues are UNRANKED', async () => {
+    useBoardStore.setState({
+      issues: [
+        {
+          id: '1',
+          key: 'PROJ-UNRANKED-1',
+          summary: 'Unranked Issue',
+          priority: 'medium',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          rank: undefined,
+          updated_at: '2026-10-01T00:00:00Z',
+        },
+      ],
+    });
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: '203',
+        key: 'PROJ-203',
+        summary: 'Unranked Top Landing',
+        priority: 'medium',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        rank: '0|i00001:',
+        updated_at: '2026-10-05T00:00:00Z',
+      }),
+    });
+
+    await useBoardStore.getState().createIssueOptimistic({
+      summary: 'Unranked Top Landing',
+    });
+
+    const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+    expect(callBody.rank_before_key).toBe('PROJ-UNRANKED-1');
+
+    const issues = useBoardStore.getState().issues;
+    expect(issues[0].summary).toBe('Unranked Top Landing');
+  });
+
   it('createIssueOptimistic rolls back on failure', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,

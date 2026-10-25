@@ -7,7 +7,6 @@ and local simulation.
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -20,6 +19,8 @@ from jira_dashboard.domain import (
     JiraUser,
     Priority,
     StatusCategory,
+    compute_top_rank_and_before_key,
+    issue_sort_key,
 )
 
 # Canonical status definitions
@@ -634,37 +635,8 @@ class FakeJiraClient:
 
         # Highest rank calculation
         rank_val = rank
-        if not rank_val and rank_before_key and rank_before_key in self._issues:
-            target_issue = self._issues[rank_before_key]
-            if target_issue.rank:
-                base_r = target_issue.rank
-                match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
-                if match:
-                    num = int(match.group(2))
-                    rank_val = (
-                        f"{match.group(1)}{num - 1:05d}{match.group(3)}"
-                        if num > 0
-                        else f"{base_r[:-1]}0:"
-                    )
-                else:
-                    rank_val = "0|00000:"
         if not rank_val:
-            ranked = [i.rank for i in self._issues.values() if i.rank]
-            if ranked:
-                ranked.sort()
-                base_r = ranked[0]
-                match = re.match(r"^(.*?)(\d+)(:*)$", base_r)
-                if match:
-                    num = int(match.group(2))
-                    rank_val = (
-                        f"{match.group(1)}{num - 1:05d}{match.group(3)}"
-                        if num > 0
-                        else f"{base_r[:-1]}0:"
-                    )
-                else:
-                    rank_val = "0|00000:"
-            else:
-                rank_val = "0|i00001:"
+            rank_val, _ = compute_top_rank_and_before_key(list(self._issues.values()))
 
         new_issue = JiraIssue(
             id=str(next_num),
@@ -685,6 +657,13 @@ class FakeJiraClient:
             updated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         )
         self._issues[new_key] = new_issue
+        self._issues = {
+            k: v
+            for k, v in sorted(
+                self._issues.items(),
+                key=lambda kv: issue_sort_key(kv[1]),
+            )
+        }
         return new_issue
 
     async def get_assignable_users(

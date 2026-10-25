@@ -19,7 +19,153 @@ from fastapi.testclient import TestClient
 from jira_dashboard.presentation.main import app
 
 
-def test_mcp_streamable_http_lifecycle() -> None:
+def test_mcp_create_issue_lands_on_top_with_existing_issues() -> None:
+    """Verify that creating an issue via MCP when existing issues exist places it at the top."""
+    client = TestClient(app)
+
+    # 1. Initialize MCP session
+    client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2024-11-05"},
+        },
+    )
+
+    # 2. Create first task
+    resp1 = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "jira_create_issue",
+                "arguments": {
+                    "summary": "First Task Created",
+                    "priority": "Medium",
+                },
+            },
+        },
+    )
+    assert resp1.status_code == 200
+    res1 = json.loads(resp1.json()["result"]["content"][0]["text"])
+    key1 = res1["key"]
+
+    # 3. Create second task (should land on TOP of first task)
+    resp2 = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "jira_create_issue",
+                "arguments": {
+                    "summary": "Second Task Created Should Land On Top",
+                    "priority": "High",
+                },
+            },
+        },
+    )
+    assert resp2.status_code == 200
+    res2 = json.loads(resp2.json()["result"]["content"][0]["text"])
+    key2 = res2["key"]
+
+    # Fetch board and verify key2 is at index 0 (top)
+    board_res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"name": "jira_get_board", "arguments": {}},
+        },
+    )
+    assert board_res.status_code == 200
+    board_data = json.loads(board_res.json()["result"]["content"][0]["text"])
+    issue_keys = [i["key"] for i in board_data["issues"]]
+    assert issue_keys[0] == key2
+    assert key1 in issue_keys
+    assert res2.get("rank") is not None
+    assert res1.get("rank") is not None
+    assert res2["rank"] < res1["rank"]
+
+
+def test_mcp_handler_create_issue_calls_jira_client_with_rank_and_broadcasts() -> None:
+    """Verify MCPServerHandler computes top rank, passes rank_before_key, and triggers broadcast."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from jira_dashboard.domain.models import (
+        IssueType,
+        JiraIssue,
+        JiraStatus,
+        Priority,
+        StatusCategory,
+    )
+    from jira_dashboard.presentation.mcp import MCPServerHandler
+
+    async def _test() -> None:
+        mock_client = MagicMock()
+        existing_issue = JiraIssue(
+            id="101",
+            key="PROJ-101",
+            summary="Existing Top Task",
+            priority=Priority.MEDIUM,
+            issue_type=IssueType.TASK,
+            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            rank="0|i00001:",
+            updated_at="2026-10-21T00:00:00Z",
+        )
+        mock_client.get_board_issues = AsyncMock(return_value=[existing_issue])
+
+        created_issue = JiraIssue(
+            id="102",
+            key="PROJ-102",
+            summary="New MCP Task",
+            priority=Priority.HIGH,
+            issue_type=IssueType.TASK,
+            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            rank="0|i00000:",
+            updated_at="2026-10-21T00:00:00Z",
+        )
+        mock_client.create_issue = AsyncMock(return_value=created_issue)
+
+        mock_storage = MagicMock()
+        mock_storage.get_issues = MagicMock(return_value=[existing_issue])
+
+        broadcast_mock = AsyncMock()
+
+        handler = MCPServerHandler(
+            jira_client=mock_client,
+            storage=mock_storage,
+            broadcast_func=broadcast_mock,
+        )
+
+        result = await handler.execute_tool(
+            "jira_create_issue",
+            {"summary": "New MCP Task", "priority": "High"},
+        )
+        assert result is not None
+
+        # Verify rank and rank_before_key were passed to jira_client.create_issue
+        mock_client.create_issue.assert_awaited_once()
+        _, kwargs = mock_client.create_issue.call_args
+        assert "rank" in kwargs and kwargs["rank"] is not None
+        assert kwargs["rank"] < "0|i00001:"
+        assert kwargs.get("rank_before_key") == "PROJ-101"
+
+        # Verify broadcast was called with issue_created event
+        broadcast_mock.assert_awaited_once()
+        event_data = broadcast_mock.call_args[0][0]
+        assert event_data["event"] == "issue_created"
+        assert event_data["issue"]["key"] == "PROJ-102"
+
+    asyncio.run(_test())
+
     """Verify standard MCP lifecycle via Streamable HTTP POST /mcp."""
     client = TestClient(app)
 
@@ -126,6 +272,25 @@ def test_mcp_streamable_http_lifecycle() -> None:
     create_res = json.loads(resp.json()["result"]["content"][0]["text"])
     assert "key" in create_res
     created_key = create_res["key"]
+
+    # Verify newly created issue appears by default at the TOP of the board
+    board_after = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 50,
+            "method": "tools/call",
+            "params": {"name": "home_tasks_get_board", "arguments": {}},
+        },
+    )
+    assert board_after.status_code == 200
+    board_after_data = json.loads(board_after.json()["result"]["content"][0]["text"])
+    assert board_after_data["issues"][0]["key"] == created_key
+    assert create_res.get("rank") is not None
+    if len(board_after_data["issues"]) > 1:
+        second_rank = board_after_data["issues"][1].get("rank")
+        if second_rank:
+            assert create_res["rank"] < second_rank
 
     # 5b. tools/call -> home_tasks_edit_task
     edit_payload = {

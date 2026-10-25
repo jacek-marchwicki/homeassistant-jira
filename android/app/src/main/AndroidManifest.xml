@@ -36,6 +36,7 @@
             android:showWhenLocked="true"
             android:launchMode="singleInstance"
             android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@style/Theme.TestAppIntegrator" />
 

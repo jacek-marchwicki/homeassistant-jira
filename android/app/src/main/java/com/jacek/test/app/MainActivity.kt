@@ -1,7 +1,6 @@
 package com.jacek.test.app
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,11 +12,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -36,6 +38,10 @@ class MainActivity : ComponentActivity() {
     private var hasNotificationPermission by mutableStateOf(false)
     private var isServiceRunning by mutableStateOf(false)
     private var currentUrl by mutableStateOf("")
+    private var pageZoom by mutableIntStateOf(100)
+    private var injectStatusBarPadding by mutableStateOf(true)
+    private var restrictUrls by mutableStateOf(false)
+    private var allowedDomains by mutableStateOf<Set<String>>(emptySet())
     private var keepScreenOn by mutableStateOf(false)
     private var showFloatingExit by mutableStateOf(true)
 
@@ -62,6 +68,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
+            val statusBarHeightDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().value.toInt()
+
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -71,6 +79,10 @@ class MainActivity : ComponentActivity() {
                         Screen.Config -> {
                             MainConfigScreen(
                                 currentUrl = currentUrl,
+                                pageZoom = pageZoom,
+                                injectStatusBarPadding = injectStatusBarPadding,
+                                restrictUrls = restrictUrls,
+                                allowedDomains = allowedDomains,
                                 hasOverlayPermission = hasOverlayPermission,
                                 hasNotificationPermission = hasNotificationPermission,
                                 isServiceRunning = isServiceRunning,
@@ -80,6 +92,28 @@ class MainActivity : ComponentActivity() {
                                     preferences.kioskUrl = newUrl
                                     currentUrl = preferences.kioskUrl
                                     Toast.makeText(this, "URL Saved", Toast.LENGTH_SHORT).show()
+                                },
+                                onChangeZoom = { newZoom ->
+                                    preferences.pageZoom = newZoom
+                                    pageZoom = newZoom
+                                },
+                                onToggleStatusBarPadding = { enabled ->
+                                    preferences.injectStatusBarPadding = enabled
+                                    injectStatusBarPadding = enabled
+                                },
+                                onToggleRestrictUrls = { enabled ->
+                                    preferences.restrictUrls = enabled
+                                    restrictUrls = enabled
+                                },
+                                onAddAllowedDomain = { domain ->
+                                    val updated = allowedDomains + domain
+                                    preferences.allowedDomains = updated
+                                    allowedDomains = updated
+                                },
+                                onRemoveAllowedDomain = { domain ->
+                                    val updated = allowedDomains - domain
+                                    preferences.allowedDomains = updated
+                                    allowedDomains = updated
                                 },
                                 onRequestOverlayPermission = { requestOverlayPermission() },
                                 onRequestNotificationPermission = { requestNotificationPermission() },
@@ -110,6 +144,10 @@ class MainActivity : ComponentActivity() {
                         Screen.Preview -> {
                             WebPreviewScreen(
                                 url = currentUrl,
+                                pageZoom = pageZoom,
+                                injectStatusBarPadding = injectStatusBarPadding,
+                                statusBarHeightDp = statusBarHeightDp,
+                                isUrlAllowed = { targetUrl -> preferences.isUrlAllowed(targetUrl) },
                                 onBack = { currentScreen = Screen.Config }
                             )
                         }
@@ -130,6 +168,10 @@ class MainActivity : ComponentActivity() {
 
     private fun loadPreferencesState() {
         currentUrl = preferences.kioskUrl
+        pageZoom = preferences.pageZoom
+        injectStatusBarPadding = preferences.injectStatusBarPadding
+        restrictUrls = preferences.restrictUrls
+        allowedDomains = preferences.allowedDomains
         keepScreenOn = preferences.keepScreenOn
         showFloatingExit = preferences.showFloatingExit
         isServiceRunning = preferences.isServiceEnabled

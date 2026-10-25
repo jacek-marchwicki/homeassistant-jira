@@ -3,8 +3,10 @@ package com.jacek.test.app.ui
 import android.content.Intent
 import android.net.Uri
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,6 +34,11 @@ import com.jacek.test.app.ui.components.ModernKioskWebView
 @Composable
 fun WebPreviewScreen(
     url: String,
+    pageZoom: Int = 100,
+    injectStatusBarPadding: Boolean = false,
+    statusBarHeightDp: Int = 0,
+    isUrlAllowed: (String) -> Boolean = { true },
+    onBlockedUrl: (String) -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -87,9 +94,18 @@ fun WebPreviewScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
         ) {
             ModernKioskWebView(
                 url = url,
+                pageZoom = pageZoom,
+                injectStatusBarPadding = injectStatusBarPadding,
+                statusBarHeightDp = statusBarHeightDp,
+                isUrlAllowed = isUrlAllowed,
+                onBlockedUrl = { blocked ->
+                    Toast.makeText(context, "Blocked navigation to: $blocked", Toast.LENGTH_SHORT).show()
+                    onBlockedUrl(blocked)
+                },
                 modifier = Modifier.fillMaxSize(),
                 onWebViewCreated = { webViewRef = it },
                 onPageTitleChanged = { pageTitle = it }

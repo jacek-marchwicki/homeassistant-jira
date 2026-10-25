@@ -35,4 +35,51 @@ class KioskPreferencesTest {
     fun normalizeUrl_trimsWhitespace() {
         assertEquals("https://example.org", KioskPreferences.normalizeUrl("  example.org  "))
     }
+
+    @Test
+    fun isUrlAllowed_whenRestrictionDisabled_allowsAll() {
+        val allowed = KioskPreferences.isUrlAllowed(
+            targetUrl = "https://malicious-site.com",
+            kioskUrl = "http://homeassistant.local:8123",
+            restrictUrls = false,
+            allowedDomains = emptySet()
+        )
+        assertEquals(true, allowed)
+    }
+
+    @Test
+    fun isUrlAllowed_whenRestrictionEnabled_allowsKioskHostAndSubdomains() {
+        val kiosk = "http://homeassistant.local:8123/lovelace"
+        assertEquals(
+            true,
+            KioskPreferences.isUrlAllowed("http://homeassistant.local:8123/settings", kiosk, true, emptySet())
+        )
+        assertEquals(
+            true,
+            KioskPreferences.isUrlAllowed("http://sub.homeassistant.local/api", kiosk, true, emptySet())
+        )
+        assertEquals(
+            false,
+            KioskPreferences.isUrlAllowed("https://google.com", kiosk, true, emptySet())
+        )
+    }
+
+    @Test
+    fun isUrlAllowed_allowsExplicitlyAllowedDomains() {
+        val kiosk = "http://homeassistant.local:8123"
+        val customAllowed = setOf("auth.company.com", "weather.com")
+
+        assertEquals(
+            true,
+            KioskPreferences.isUrlAllowed("https://auth.company.com/login", kiosk, true, customAllowed)
+        )
+        assertEquals(
+            true,
+            KioskPreferences.isUrlAllowed("https://api.weather.com/v1", kiosk, true, customAllowed)
+        )
+        assertEquals(
+            false,
+            KioskPreferences.isUrlAllowed("https://facebook.com", kiosk, true, customAllowed)
+        )
+    }
 }

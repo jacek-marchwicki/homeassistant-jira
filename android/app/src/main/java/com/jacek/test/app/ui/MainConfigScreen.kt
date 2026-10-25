@@ -9,19 +9,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Launch
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -30,15 +33,19 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,17 +54,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jacek.test.app.data.KioskPreferences
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainConfigScreen(
     currentUrl: String,
+    pageZoom: Int,
+    injectStatusBarPadding: Boolean,
+    restrictUrls: Boolean,
+    allowedDomains: Set<String>,
     hasOverlayPermission: Boolean,
     hasNotificationPermission: Boolean,
     isServiceRunning: Boolean,
     keepScreenOn: Boolean,
     showFloatingExit: Boolean,
     onSaveUrl: (String) -> Unit,
+    onChangeZoom: (Int) -> Unit,
+    onToggleStatusBarPadding: (Boolean) -> Unit,
+    onToggleRestrictUrls: (Boolean) -> Unit,
+    onAddAllowedDomain: (String) -> Unit,
+    onRemoveAllowedDomain: (String) -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onToggleService: (Boolean) -> Unit,
@@ -67,12 +84,18 @@ fun MainConfigScreen(
     onLaunchKioskDirectly: () -> Unit
 ) {
     var urlInput by remember(currentUrl) { mutableStateOf(currentUrl) }
+    var zoomSliderValue by remember(pageZoom) { mutableFloatStateOf(pageZoom.toFloat()) }
+    var newDomainInput by remember { mutableStateOf("") }
+
     val presets = listOf(
         "HA Local (http)" to "http://homeassistant.local:8123",
         "HA Demo (https)" to "https://demo.home-assistant.io",
         "Google" to "https://www.google.com",
         "Wikipedia" to "https://en.m.wikipedia.org"
     )
+
+    val zoomPresets = listOf(75, 100, 125, 150)
+    val kioskHost = KioskPreferences.extractHost(currentUrl)
 
     Scaffold(
         topBar = {
@@ -94,6 +117,7 @@ fun MainConfigScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -282,6 +306,164 @@ fun MainConfigScreen(
                 }
             }
 
+            // Custom Page Zoom Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.ZoomIn, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text(
+                                text = "Webpage Zoom Level",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Text(
+                            text = "${zoomSliderValue.roundToInt()}%",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Slider(
+                        value = zoomSliderValue,
+                        onValueChange = { zoomSliderValue = it },
+                        onValueChangeFinished = {
+                            val rounded = zoomSliderValue.roundToInt()
+                            onChangeZoom(rounded)
+                        },
+                        valueRange = 50f..200f,
+                        steps = 29
+                    )
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        zoomPresets.forEach { preset ->
+                            FilterChip(
+                                selected = (zoomSliderValue.roundToInt() == preset),
+                                onClick = {
+                                    zoomSliderValue = preset.toFloat()
+                                    onChangeZoom(preset)
+                                },
+                                label = { Text("$preset%") }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Allowed Webpages / Whitelist Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Security, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Column {
+                                Text(
+                                    text = "Limit Allowed Webpages",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (restrictUrls) "Only allowed domains can be opened" else "All webpages permitted",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = restrictUrls,
+                            onCheckedChange = onToggleRestrictUrls
+                        )
+                    }
+
+                    if (restrictUrls) {
+                        Text(
+                            text = "Default Kiosk host ($kioskHost) is always allowed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = newDomainInput,
+                                onValueChange = { newDomainInput = it },
+                                label = { Text("Add allowed domain (e.g. auth.local)") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            Button(
+                                onClick = {
+                                    if (newDomainInput.isNotBlank()) {
+                                        onAddAllowedDomain(newDomainInput.trim())
+                                        newDomainInput = ""
+                                    }
+                                },
+                                enabled = newDomainInput.isNotBlank()
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Text("Add")
+                            }
+                        }
+
+                        if (allowedDomains.isNotEmpty()) {
+                            Text(
+                                text = "Additional Allowed Domains:",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium
+                            )
+
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                allowedDomains.forEach { domain ->
+                                    InputChip(
+                                        selected = true,
+                                        onClick = { onRemoveAllowedDomain(domain) },
+                                        label = { Text(domain) },
+                                        trailingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Remove",
+                                                modifier = Modifier.height(16.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Behavior Settings Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -292,10 +474,28 @@ fun MainConfigScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Kiosk Behavior",
+                        text = "Kiosk Layout & Behavior",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Pass Status Bar Inset to Webpage", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Injects safe-area padding so content is not behind status bar",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = injectStatusBarPadding,
+                            onCheckedChange = onToggleStatusBarPadding
+                        )
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),

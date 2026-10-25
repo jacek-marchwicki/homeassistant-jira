@@ -2,7 +2,6 @@ package com.jacek.test.app.ui.components
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
-import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.view.ViewGroup
@@ -20,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebSettingsCompat
-import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 
 private const val TAG = "ModernKioskWebView"
@@ -43,6 +42,11 @@ private const val TAG = "ModernKioskWebView"
 fun ModernKioskWebView(
     url: String,
     modifier: Modifier = Modifier,
+    pageZoom: Int = 100,
+    injectStatusBarPadding: Boolean = true,
+    statusBarHeightDp: Int = 0,
+    isUrlAllowed: (String) -> Boolean = { true },
+    onBlockedUrl: (String) -> Unit = {},
     onWebViewCreated: (WebView) -> Unit = {},
     onPageTitleChanged: (String?) -> Unit = {},
     onError: (String) -> Unit = {}
@@ -51,7 +55,37 @@ fun ModernKioskWebView(
     var isLoading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    fun injectStatusBarInsets(view: WebView?) {
+        if (!injectStatusBarPadding || view == null || statusBarHeightDp <= 0) return
+        val js = """
+            (function() {
+                try {
+                    const top = $statusBarHeightDp;
+                    document.documentElement.style.setProperty('--safe-area-inset-top', top + 'px');
+                    document.documentElement.style.setProperty('--status-bar-height', top + 'px');
+                    let injectedStyle = document.getElementById('kiosk-safe-area-style');
+                    if (!injectedStyle) {
+                        injectedStyle = document.createElement('style');
+                        injectedStyle.id = 'kiosk-safe-area-style';
+                        document.head.appendChild(injectedStyle);
+                    }
+                    const hasViewportFitCover = !!document.querySelector('meta[name="viewport"][content*="viewport-fit=cover"]');
+                    if (!hasViewportFitCover) {
+                        injectedStyle.innerHTML = 'body { padding-top: ' + top + 'px !important; }';
+                    } else {
+                        injectedStyle.innerHTML = '';
+                    }
+                } catch(e) {}
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(js, null)
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .imePadding()
+    ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
@@ -75,7 +109,10 @@ fun ModernKioskWebView(
                         cacheMode = WebSettings.LOAD_DEFAULT
                         allowFileAccess = false
                         allowContentAccess = false
+                        textZoom = pageZoom
                     }
+
+                    setInitialScale(pageZoom)
 
                     // AndroidX WebKit modern feature support
                     if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) {
@@ -98,11 +135,17 @@ fun ModernKioskWebView(
                             request: WebResourceRequest?
                         ): Boolean {
                             val targetUri = request?.url ?: return false
+                            val targetUrl = targetUri.toString()
                             val scheme = targetUri.scheme?.lowercase()
                             return if (scheme == "http" || scheme == "https") {
-                                false // Open inside WebView
+                                if (!isUrlAllowed(targetUrl)) {
+                                    Log.w(TAG, "Navigation blocked: $targetUrl not in allowed list")
+                                    onBlockedUrl(targetUrl)
+                                    true
+                                } else {
+                                    false // Open inside WebView
+                                }
                             } else {
-                                // Ignore or handle custom schemes
                                 Log.i(TAG, "Custom URI requested: $targetUri")
                                 false
                             }
@@ -111,12 +154,14 @@ fun ModernKioskWebView(
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             super.onPageStarted(view, url, favicon)
                             isLoading = true
+                            injectStatusBarInsets(view)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             isLoading = false
                             onPageTitleChanged(view?.title)
+                            injectStatusBarInsets(view)
                         }
 
                         override fun onReceivedError(
@@ -147,6 +192,9 @@ fun ModernKioskWebView(
                             super.onProgressChanged(view, newProgress)
                             progress = newProgress
                             isLoading = newProgress < 100
+                            if (newProgress > 60) {
+                                injectStatusBarInsets(view)
+                            }
                         }
 
                         override fun onReceivedTitle(view: WebView?, title: String?) {
@@ -169,6 +217,11 @@ fun ModernKioskWebView(
                 if (webView.url != url && url.isNotBlank()) {
                     webView.loadUrl(url)
                 }
+                if (webView.settings.textZoom != pageZoom) {
+                    webView.settings.textZoom = pageZoom
+                    webView.setInitialScale(pageZoom)
+                }
+                injectStatusBarInsets(webView)
             }
         )
 

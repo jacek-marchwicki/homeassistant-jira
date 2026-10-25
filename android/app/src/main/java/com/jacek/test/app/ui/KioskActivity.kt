@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
@@ -17,10 +18,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LockOpen
@@ -33,13 +37,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.jacek.test.app.data.KioskPreferences
 import com.jacek.test.app.ui.components.ModernKioskWebView
@@ -78,6 +77,8 @@ class KioskActivity : ComponentActivity() {
         }
 
         setContent {
+            val statusBarHeightDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().value.toInt()
+
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -85,7 +86,18 @@ class KioskActivity : ComponentActivity() {
                 ) {
                     KioskScreen(
                         url = preferences.kioskUrl,
+                        pageZoom = preferences.pageZoom,
+                        injectStatusBarPadding = preferences.injectStatusBarPadding,
+                        statusBarHeightDp = statusBarHeightDp,
                         showFloatingExit = preferences.showFloatingExit,
+                        isUrlAllowed = { targetUrl -> preferences.isUrlAllowed(targetUrl) },
+                        onBlockedUrl = { blockedUrl ->
+                            Toast.makeText(
+                                this,
+                                "Navigation to $blockedUrl is blocked by kiosk policy",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
                         onWebViewCreated = { wv -> webView = wv },
                         onUnlockClicked = { unlockAndExit() },
                         onReloadClicked = { webView?.reload() }
@@ -131,7 +143,12 @@ class KioskActivity : ComponentActivity() {
 @Composable
 fun KioskScreen(
     url: String,
+    pageZoom: Int,
+    injectStatusBarPadding: Boolean,
+    statusBarHeightDp: Int,
     showFloatingExit: Boolean,
+    isUrlAllowed: (String) -> Boolean,
+    onBlockedUrl: (String) -> Unit,
     onWebViewCreated: (WebView) -> Unit,
     onUnlockClicked: () -> Unit,
     onReloadClicked: () -> Unit
@@ -139,6 +156,11 @@ fun KioskScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         ModernKioskWebView(
             url = url,
+            pageZoom = pageZoom,
+            injectStatusBarPadding = injectStatusBarPadding,
+            statusBarHeightDp = statusBarHeightDp,
+            isUrlAllowed = isUrlAllowed,
+            onBlockedUrl = onBlockedUrl,
             modifier = Modifier.fillMaxSize(),
             onWebViewCreated = onWebViewCreated
         )
@@ -150,6 +172,7 @@ fun KioskScreen(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
+                .imePadding()
                 .padding(16.dp)
         ) {
             Row(

@@ -85,3 +85,40 @@ def test_deploy_service_assembles_cloud_run_flags(tmp_path: Path) -> None:
         assert "--memory" in deploy_call
         assert deploy_call[deploy_call.index("--memory") + 1] == "512Mi"
         assert "--set-secrets" in deploy_call
+        assert not any("--add-volume" in arg for arg in deploy_call)
+        assert not any("--execution-environment" in arg for arg in deploy_call)
+        assert not any("LITESTREAM" in arg for arg in deploy_call)
+
+
+def test_build_deploy_command_clean_flags(tmp_path: Path) -> None:
+    """Verify build_deploy_command does not include Litestream or FUSE volume mounts."""
+    config = {
+        "GCP_PROJECT_ID": "my-project",
+        "GCP_REGION": "europe-west1",
+        "GCP_SERVICE_NAME": "my-service",
+        "ALLOWED_EMAILS": "test@example.com",
+    }
+    cmd = deploy_gcp.build_deploy_command(tmp_path, config)
+    cmd_str = " ".join(cmd)
+
+    assert "gcloud run deploy my-service" in cmd_str
+    assert "--project my-project" in cmd_str
+    assert "--region europe-west1" in cmd_str
+    assert "--set-env-vars AUTH_MODE=gcp_oauth" in cmd_str
+    assert "--execution-environment" not in cmd_str
+    assert "--add-volume" not in cmd_str
+    assert "--add-volume-mount" not in cmd_str
+    assert "LITESTREAM" not in cmd_str
+
+
+def test_dockerfile_clean_of_litestream_and_entrypoint() -> None:
+    """Validate Dockerfile does not include Litestream or docker-entrypoint.sh."""
+    project_root = SCRIPTS_DIR.parent
+    dockerfile_path = project_root / "Dockerfile"
+    assert dockerfile_path.is_file(), "Dockerfile must exist at repository root"
+    content = dockerfile_path.read_text(encoding="utf-8")
+
+    assert "litestream" not in content.lower()
+    assert "docker-entrypoint" not in content
+    assert "ENTRYPOINT" not in content
+    assert not (project_root / "docker-entrypoint.sh").exists()

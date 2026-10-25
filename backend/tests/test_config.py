@@ -85,7 +85,6 @@ def test_auth_config_env_vars(monkeypatch) -> None:
     monkeypatch.setenv("SESSION_SECRET_KEY", "custom-sign-key")
     monkeypatch.setenv("MCP_CLIENT_ID", "custom-mcp-client")
     monkeypatch.setenv("MCP_CLIENT_SECRET", "custom-mcp-secret")
-    monkeypatch.setenv("LITESTREAM_BUCKET", "my-gcs-backup-bucket")
 
     settings = JiraDashboardSettings.load()
     assert settings.auth_mode == "gcp_oauth"
@@ -95,4 +94,3 @@ def test_auth_config_env_vars(monkeypatch) -> None:
     assert settings.session_secret_key == "custom-sign-key"
     assert settings.mcp_client_id == "custom-mcp-client"
     assert settings.mcp_client_secret == "custom-mcp-secret"
-    assert settings.litestream_bucket == "my-gcs-backup-bucket"

@@ -321,7 +321,7 @@ This document details the architectural phases, delivered features, and evolutio
     - Full-stack Playwright E2E tests in [`frontend/tests/integration/fullstack_e2e.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/integration/fullstack_e2e.spec.ts) (17/17 passed).
     - Playwright visual regression snapshots in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) capturing clean and dirty modal states (43/43 passed).
 
-- [x] **Phase 5.24: Google Cloud Platform (Cloud Run) Deployment, Litestream Persistence & Model Context Protocol (MCP)**
+- [x] **Phase 5.24: Google Cloud Platform (Cloud Run) Deployment & Model Context Protocol (MCP)**
   - [x] **Remote Model Context Protocol (MCP) Server for Gemini Web & AI Assistants**:
     - Implemented JSON-RPC 2.0 Model Context Protocol server ("Home Tasks Manager", `home-tasks-manager`) supporting both modern **Streamable HTTP** (`POST /mcp`) and streaming **Server-Sent Events** (`GET /sse` and `POST /messages?session_id=...`).
     - Exposed eight specialized tools tailored for family task management:
@@ -341,9 +341,9 @@ This document details the architectural phases, delivered features, and evolutio
     - Verifies Google ID tokens using official `google-auth` library and issues secure, tamper-proof session tokens for web browsers.
     - Authenticated WebSocket endpoint protecting `/ws` in `GCP_OAUTH` mode (close code 1008).
     - Tested in [`backend/tests/test_auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_auth.py).
-  - [x] **Zero-Downtime State & SQLite Continuous Persistence (Option 2 Architecture)**:
-    - Integrated **Litestream** continuous streaming replication to Google Cloud Storage (`litestream_bucket`), automatically restoring database state on container cold starts and streaming WAL frames every second.
-    - Configured Cloud Storage Volume mount or bucket sync for generated AI background image cache (`/data/background_cache`), ensuring image assets survive deployments and scale-to-zero lifecycles without incurring expensive Cloud SQL managed database costs.
+  - [x] **Lightweight Stateless Architecture & Zero Cold-Start Overhead**:
+    - Eliminated Litestream continuous WAL streaming and Cloud Storage FUSE volume mounts for optimal performance and sub-second container cold-starts on Google Cloud Run.
+    - Container runs completely standalone and stateless with transient local SQLite cache synced directly from Jira Cloud API on demand.
   - [x] **Zero-to-Minimal Cost Guarantee (< $2 USD / month)**:
     - Designed strictly around GCP's **Always Free Tier**:
       - Scale to zero (`--min-instances 0`).

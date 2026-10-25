@@ -35,7 +35,6 @@ REQUIRED_APIS = [
     "secretmanager.googleapis.com",
     "cloudbuild.googleapis.com",
     "artifactregistry.googleapis.com",
-    "storage.googleapis.com",
 ]
 
 SECRET_KEYS = [
@@ -267,84 +266,11 @@ def sync_secrets(project_root: Path, env_path: str | None = None) -> None:
     )
 
 
-def get_storage_bucket_names(
-    config: dict[str, str], project_id: str
-) -> tuple[str, str]:
-    """Derive or read configured GCS bucket names for Litestream DB and Image Storage."""
-    litestream_bucket = config.get("LITESTREAM_BUCKET", f"{project_id}-db")
-    images_bucket = config.get("IMAGE_STORAGE_BUCKET", f"{project_id}-images")
-    return litestream_bucket, images_bucket
-
-
-def ensure_storage_bucket(
-    bucket_name: str,
-    project_id: str,
-    region: str,
-    compute_sa: str,
-) -> None:
-    """Ensure a GCS bucket exists and is accessible by the Cloud Run compute service account."""
-    desc = subprocess.run(
-        [
-            "gcloud",
-            "storage",
-            "buckets",
-            "describe",
-            f"gs://{bucket_name}",
-            "--project",
-            project_id,
-        ],
-        capture_output=True,
-        check=False,
-    )
-    if desc.returncode != 0:
-        print(f"  • Creating GCS bucket: gs://{bucket_name} in region '{region}'...")
-        run_cmd(
-            [
-                "gcloud",
-                "storage",
-                "buckets",
-                "create",
-                f"gs://{bucket_name}",
-                "--project",
-                project_id,
-                "--location",
-                region,
-                "--default-storage-class=STANDARD",
-                "--uniform-bucket-level-access",
-            ],
-            capture_output=True,
-        )
-        print_success(f"Created bucket gs://{bucket_name}")
-    else:
-        print_success(f"Bucket gs://{bucket_name} exists.")
-
-    # Grant storage.objectAdmin to Cloud Run runtime service account
-    run_cmd(
-        [
-            "gcloud",
-            "storage",
-            "buckets",
-            "add-iam-policy-binding",
-            f"gs://{bucket_name}",
-            f"--member=serviceAccount:{compute_sa}",
-            "--role=roles/storage.objectAdmin",
-            "--project",
-            project_id,
-        ],
-        capture_output=True,
-    )
-    print_success(
-        f"Granted roles/storage.objectAdmin to {compute_sa} on gs://{bucket_name}"
-    )
-
-
 def build_deploy_command(project_root: Path, config: dict[str, str]) -> list[str]:
-    """Construct full 'gcloud run deploy' command with persistence volumes and env vars."""
+    """Construct full 'gcloud run deploy' command with env vars."""
     project_id = config.get("GCP_PROJECT_ID", "")
     region = config.get("GCP_REGION", "europe-west1")
     service_name = config.get("GCP_SERVICE_NAME", "homeassistant-jira")
-
-    litestream_bucket, images_bucket = get_storage_bucket_names(config, project_id)
 
     secret_bindings: list[str] = []
     for key in SECRET_KEYS:
@@ -377,12 +303,8 @@ def build_deploy_command(project_root: Path, config: dict[str, str]) -> list[str
         "512Mi",
         "--concurrency",
         "80",
-        "--execution-environment",
-        "gen2",  # Required for GCS volume mounts
         "--set-env-vars",
-        f"AUTH_MODE=gcp_oauth,LITESTREAM_BUCKET={litestream_bucket}",
-        f"--add-volume=name=image-storage,type=cloud-storage,bucket={images_bucket},mount-options=uid=10001;gid=10001;implicit-dirs",
-        "--add-volume-mount=volume=image-storage,mount-path=/data/background_cache",
+        "AUTH_MODE=gcp_oauth",
     ]
 
     if secret_bindings:
@@ -416,14 +338,6 @@ def deploy_service(
             print_success("Pre-deployment CI passed with 100% success!")
         else:
             print_warning("Local CI runner not found, skipping baseline checks.")
-
-    project_number = get_project_number(project_id)
-    compute_sa = f"{project_number}-compute@developer.gserviceaccount.com"
-
-    print_step("Provisioning Cloud Storage persistence buckets & IAM permissions...")
-    litestream_bucket, images_bucket = get_storage_bucket_names(config, project_id)
-    ensure_storage_bucket(litestream_bucket, project_id, region, compute_sa)
-    ensure_storage_bucket(images_bucket, project_id, region, compute_sa)
 
     print_step(f"Deploying '{service_name}' to Cloud Run in region '{region}'...")
     deploy_cmd = build_deploy_command(project_root, config)

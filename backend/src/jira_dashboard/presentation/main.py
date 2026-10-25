@@ -531,6 +531,9 @@ app.add_middleware(
 
 async def _mcp_on_issue_created(created: JiraIssue) -> None:
     global _cached_board_response
+    _cached_issue_state[created.key] = (
+        f"{created.status.category.value}:{created.summary}:{created.updated_at}"
+    )
     if _cached_board_response is not None:
         _cached_board_response.issues = [created] + [
             x for x in _cached_board_response.issues if x.key != created.key
@@ -541,6 +544,7 @@ async def _mcp_on_issue_created(created: JiraIssue) -> None:
 mcp_handler = MCPServerHandler(
     jira_client=jira_client,
     storage=storage,
+    base_url=settings.dashboard_url or "",
     broadcast_func=ws_hub.broadcast,
     on_issue_created=_mcp_on_issue_created,
 )
@@ -1430,6 +1434,9 @@ async def mcp_endpoint(request: Request) -> Response:
         if client_proto:
             base_headers["Mcp-Protocol-Version"] = client_proto
 
+    current_settings = JiraDashboardSettings.load()
+    effective_base = current_settings.dashboard_url or base_url
+
     # Handle unauthenticated discovery and handshake methods:
     # initialize, ping, tools/list, notifications/initialized
     if method in ("initialize", "ping", "tools/list", "notifications/initialized"):
@@ -1437,20 +1444,18 @@ async def mcp_endpoint(request: Request) -> Response:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.lower().startswith("bearer "):
             try:
-                current_settings = JiraDashboardSettings.load()
                 provider = AuthProvider(current_settings)
                 provider.authenticate_request(request)
             except HTTPException:
                 pass
 
-        result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
+        result = await mcp_handler.handle_jsonrpc(request_data, base_url=effective_base)
         if result is None:
             # Per MCP Streamable HTTP specification, notifications return 202 Accepted
             return Response(status_code=202, headers=base_headers)
         return JSONResponse(content=result, headers=base_headers)
 
     # Protected execution: tools/call (and other methods)
-    current_settings = JiraDashboardSettings.load()
     provider = AuthProvider(current_settings)
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
@@ -1476,7 +1481,7 @@ async def mcp_endpoint(request: Request) -> Response:
             headers=resp_headers,
         )
 
-    result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
+    result = await mcp_handler.handle_jsonrpc(request_data, base_url=effective_base)
     if result is None:
         return Response(status_code=202, headers=base_headers)
     return JSONResponse(content=result, headers=base_headers)
@@ -1530,10 +1535,10 @@ async def mcp_messages_endpoint(
         )
 
     method = request_data.get("method") if isinstance(request_data, dict) else None
+    current_settings = JiraDashboardSettings.load()
 
     # Protect tools/call
     if method == "tools/call":
-        current_settings = JiraDashboardSettings.load()
         provider = AuthProvider(current_settings)
         scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
         host = request.headers.get(
@@ -1563,7 +1568,8 @@ async def mcp_messages_endpoint(
     host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
     root_path = request.scope.get("root_path", "").rstrip("/")
     base_url = f"{scheme}://{host}{root_path}"
-    result = await mcp_handler.handle_jsonrpc(request_data, base_url=base_url)
+    effective_base = current_settings.dashboard_url or base_url
+    result = await mcp_handler.handle_jsonrpc(request_data, base_url=effective_base)
     if result is not None:
         queue = mcp_handler.sessions.get(session_id)
         if queue is not None:

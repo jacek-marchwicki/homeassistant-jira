@@ -461,6 +461,44 @@ describe('Zustand BoardStore', () => {
     expect(issue?.summary).toBe('Created over WS');
   });
 
+  it('handles WebSocket issue_created event from MCP and updates availableUsers, cache and deep link route', () => {
+    // Set a pending route for /task/MCP-500
+    useBoardStore.setState({
+      routeTaskKey: 'MCP-500',
+      editingIssue: null,
+      availableUsers: [
+        { accountId: 'usr-1', displayName: 'Jacek' },
+      ],
+      issues: [],
+    });
+
+    useBoardStore.getState().handleWsMessage({
+      event: 'issue_created',
+      issue_key: 'MCP-500',
+      dashboard_url: 'http://localhost:8000/task/MCP-500',
+      issue: {
+        id: '500',
+        key: 'MCP-500',
+        summary: 'MCP Created Task',
+        issue_type: 'task',
+        priority: 'high',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        assignee: { account_id: 'usr-2', display_name: 'New Person' },
+      },
+    });
+
+    const state = useBoardStore.getState();
+    const issue = state.issues.find((i) => i.key === 'MCP-500');
+    expect(issue).toBeDefined();
+    expect(issue?.summary).toBe('MCP Created Task');
+
+    // Verify new assignee was added to availableUsers
+    expect(state.availableUsers.some((u) => u.accountId === 'usr-2' || u.account_id === 'usr-2')).toBe(true);
+
+    // Verify pending deep link /task/MCP-500 was resolved to editingIssue modal
+    expect(state.editingIssue?.key).toBe('MCP-500');
+  });
+
   it('keeps created issue at the top after WebSocket reconciliation even if Jira assigned bottom rank', () => {
     const existingTop: JiraIssue = {
       id: '101',

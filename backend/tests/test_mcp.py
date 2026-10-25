@@ -964,3 +964,96 @@ def test_mcp_edit_task_comprehensive() -> None:
     invalid_res = resp_invalid.json()["result"]
     assert invalid_res["isError"] is True
     assert "not found" in invalid_res["content"][0]["text"].lower()
+
+
+def test_mcp_create_task_broadcasts_websocket_and_returns_dashboard_url() -> None:
+    """Verify that creating a task via MCP broadcasts over WebSocket and returns dashboard URL."""
+    from fastapi.testclient import TestClient
+
+    from jira_dashboard.presentation.main import app
+
+    client = TestClient(app)
+
+    # 1. Establish WebSocket connection as an active dashboard client
+    with client.websocket_connect("/ws") as ws:
+        # Initial connect message
+        init_msg = ws.receive_json()
+        assert init_msg.get("event") == "connected"
+
+        # 2. Invoke MCP home_tasks_create_task
+        create_payload = {
+            "jsonrpc": "2.0",
+            "id": 100,
+            "method": "tools/call",
+            "params": {
+                "name": "home_tasks_create_task",
+                "arguments": {
+                    "summary": "Live WebSocket Update Task",
+                    "description": "Created via MCP with live broadcast",
+                    "priority": "High",
+                },
+            },
+        }
+        resp = client.post("/mcp", json=create_payload)
+        assert resp.status_code == 200
+        result_content = resp.json()["result"]["content"][0]["text"]
+        create_res = json.loads(result_content)
+
+        # 3. Verify returned data contains the dashboard task URL
+        assert "key" in create_res
+        created_key = create_res["key"]
+        expected_url = f"http://testserver/task/{created_key}"
+        assert create_res.get("url") == expected_url
+        assert create_res.get("task_url") == expected_url
+        assert create_res.get("dashboard_url") == expected_url
+
+        # 4. Verify connected WebSocket client receives issue_created event
+        ws_msg = ws.receive_json()
+        assert ws_msg.get("event") == "issue_created"
+        assert ws_msg.get("issue_key") == created_key
+        assert ws_msg.get("status_name") == "To Do"
+        assert ws_msg.get("status_category") == "todo"
+        assert ws_msg.get("dashboard_url") == expected_url
+        assert "issue" in ws_msg
+        assert ws_msg["issue"]["key"] == created_key
+        assert ws_msg["issue"]["summary"] == "Live WebSocket Update Task"
+
+
+def test_mcp_create_task_respects_configured_dashboard_url() -> None:
+    """Verify that MCPServerHandler respects DASHBOARD_URL when generating return URLs."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from jira_dashboard.domain import IssueType, JiraIssue, JiraStatus, Priority, StatusCategory
+    from jira_dashboard.presentation.mcp import MCPServerHandler
+
+    async def _test() -> None:
+        mock_client = AsyncMock()
+        created_issue = JiraIssue(
+            id="888",
+            key="HOME-888",
+            summary="Custom Base URL Task",
+            priority=Priority.MEDIUM,
+            issue_type=IssueType.TASK,
+            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            updated_at="2026-10-25T00:00:00Z",
+        )
+        mock_client.create_issue = AsyncMock(return_value=created_issue)
+        mock_storage = MagicMock()
+        mock_storage.get_issues = MagicMock(return_value=[])
+
+        handler = MCPServerHandler(
+            jira_client=mock_client,
+            storage=mock_storage,
+            base_url="https://dashboard.home.local",
+        )
+
+        res = await handler.execute_tool(
+            "home_tasks_create_task",
+            {"summary": "Custom Base URL Task"},
+        )
+        assert res["url"] == "https://dashboard.home.local/task/HOME-888"
+        assert res["task_url"] == "https://dashboard.home.local/task/HOME-888"
+        assert res["dashboard_url"] == "https://dashboard.home.local/task/HOME-888"
+
+    asyncio.run(_test())

@@ -76,6 +76,9 @@ class JiraDashboardSettings(BaseModel):
     """Application settings for Jira Dashboard."""
 
     jira_url: str | None = Field(default=None, description="Jira instance base URL")
+    dashboard_url: str | None = Field(
+        default=None, description="Public base URL for dashboard deep links and MCP task URLs"
+    )
     jira_email: str | None = Field(default=None, description="Jira account email for basic auth")
     jira_api_token: str | None = Field(
         default=None, description="Jira Cloud API token for basic auth"
@@ -236,6 +239,7 @@ class JiraDashboardSettings(BaseModel):
         # 2. Overlay / Fallback to Environment Variables
         env_mappings: dict[str, str] = {
             "jira_url": "JIRA_URL",
+            "dashboard_url": "DASHBOARD_URL",
             "jira_email": "JIRA_EMAIL",
             "jira_api_token": "JIRA_API_TOKEN",
             "jira_board_id": "JIRA_BOARD_ID",
@@ -279,5 +283,10 @@ class JiraDashboardSettings(BaseModel):
                         pass
                 else:
                     config_data[field_name] = val
+
+        if "dashboard_url" not in config_data:
+            fallback_dash = os.environ.get("DASHBOARD_BASE_URL") or os.environ.get("PUBLIC_URL")
+            if fallback_dash:
+                config_data["dashboard_url"] = fallback_dash
 
         return cls(**config_data)

@@ -1713,6 +1713,26 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           );
         }
 
+        // Add assignee to availableUsers if not present
+        let nextUsers = state.availableUsers;
+        if (incomingIssue.assignee) {
+          const accId = incomingIssue.assignee.accountId || incomingIssue.assignee.account_id;
+          const dispName = incomingIssue.assignee.displayName || incomingIssue.assignee.display_name;
+          const userExists = state.availableUsers.some((u) => {
+            const uId = u.accountId || u.account_id;
+            const uName = u.displayName || u.display_name;
+            return (accId && uId === accId) || (dispName && uName === dispName);
+          });
+          if (!userExists && (accId || dispName)) {
+            nextUsers = [...state.availableUsers, incomingIssue.assignee];
+          }
+        }
+
+        let newEditingIssue = state.editingIssue;
+        if (state.routeTaskKey && state.routeTaskKey === incomingIssue.key) {
+          newEditingIssue = incomingIssue;
+        }
+
         if (tempIndex !== -1) {
           const tempIssue = state.issues[tempIndex];
           let finalRank = incomingIssue.rank;
@@ -1728,7 +1748,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           const deduped = updatedList.filter(
             (item, idx) => idx === tempIndex || item.key !== incomingIssue.key
           );
-          return { issues: sortIssuesByRank(deduped) };
+          return {
+            issues: sortIssuesByRank(deduped),
+            availableUsers: nextUsers,
+            editingIssue: newEditingIssue,
+          };
         }
 
         const exists = state.issues.some((i) => i.key === incomingIssue.key);
@@ -1739,10 +1763,17 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
                 item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
               )
             ),
+            availableUsers: nextUsers,
+            editingIssue: newEditingIssue,
           };
         }
-        return { issues: sortIssuesByRank([incomingIssue, ...state.issues]) };
+        return {
+          issues: sortIssuesByRank([incomingIssue, ...state.issues]),
+          availableUsers: nextUsers,
+          editingIssue: newEditingIssue,
+        };
       });
+      persistCurrentBoardState(get);
     } else if (
       (msg.event === 'issue_transitioned' ||
         msg.event === 'issue_updated' ||
@@ -1763,8 +1794,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           ),
         };
       });
+      persistCurrentBoardState(get);
     } else if (msg.event === 'board_synced' && Array.isArray(msg.issues)) {
       set({ issues: sortIssuesByRank(msg.issues as JiraIssue[]) });
+      persistCurrentBoardState(get);
     }
   },
 }));

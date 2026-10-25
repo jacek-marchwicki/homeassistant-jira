@@ -114,7 +114,9 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         "name": "home_tasks_create_task",
         "description": (
             "Create a new task on the board with full GUI options and defaults. "
-            "Defaults: task_type='Task', priority='Medium', status='To Do'."
+            "Defaults: task_type='Task', priority='Medium', status='To Do'. "
+            "Returns the created task with direct dashboard task URLs "
+            "('url', 'dashboard_url', 'task_url')."
         ),
         "inputSchema": {
             "type": "object",
@@ -462,6 +464,9 @@ class MCPServerHandler:
             "summary": issue.summary,
             "description": issue.description or "",
             "url": dashboard_url,
+            "task_url": dashboard_url,
+            "dashboard_url": dashboard_url,
+            "dashboard_task_url": dashboard_url,
             "status": {
                 "name": issue.status.name,
                 "category": issue.status.category.value,
@@ -785,11 +790,25 @@ class MCPServerHandler:
                 if asyncio.iscoroutine(res):
                     await res
 
+            host = (effective_base or "http://localhost:8000").rstrip("/")
+            dashboard_url = f"{host}/task/{created.key}"
+
             if self.broadcast_func:
+                issue_dict = created.model_dump(mode="json")
+                issue_dict["dashboard_url"] = dashboard_url
+                issue_dict["task_url"] = dashboard_url
                 await self.broadcast_func(
                     {
                         "event": "issue_created",
-                        "issue": created.model_dump(),
+                        "issue_key": created.key,
+                        "status_category": (
+                            created.status.category.value
+                            if hasattr(created.status.category, "value")
+                            else str(created.status.category)
+                        ),
+                        "status_name": created.status.name,
+                        "dashboard_url": dashboard_url,
+                        "issue": issue_dict,
                     }
                 )
 
@@ -881,6 +900,19 @@ class MCPServerHandler:
                 recreate_after=recreate_after,
             )
             self.storage.upsert_issue(updated)
+            if self.broadcast_func:
+                issue_dict = updated.model_dump(mode="json")
+                host = (effective_base or "http://localhost:8000").rstrip("/")
+                issue_dict["dashboard_url"] = f"{host}/task/{updated.key}"
+                await self.broadcast_func(
+                    {
+                        "event": "issue_updated",
+                        "issue_key": updated.key,
+                        "status_category": updated.status.category.value,
+                        "status_name": updated.status.name,
+                        "issue": issue_dict,
+                    }
+                )
             return self.format_issue(updated, effective_base)
 
         if normalized_name == "home_tasks_assign_task":
@@ -927,6 +959,19 @@ class MCPServerHandler:
                 assignee_account_id=assignee_account_id,
             )
             self.storage.upsert_issue(updated)
+            if self.broadcast_func:
+                issue_dict = updated.model_dump(mode="json")
+                host = (effective_base or "http://localhost:8000").rstrip("/")
+                issue_dict["dashboard_url"] = f"{host}/task/{updated.key}"
+                await self.broadcast_func(
+                    {
+                        "event": "issue_updated",
+                        "issue_key": updated.key,
+                        "status_category": updated.status.category.value,
+                        "status_name": updated.status.name,
+                        "issue": issue_dict,
+                    }
+                )
             return self.format_issue(updated, effective_base)
 
         if normalized_name == "home_tasks_transition_task":
@@ -942,6 +987,19 @@ class MCPServerHandler:
             cat_enum = StatusCategory(target_category)
             transitioned = await self.jira_client.transition_issue(task_key, cat_enum)
             self.storage.upsert_issue(transitioned)
+            if self.broadcast_func:
+                issue_dict = transitioned.model_dump(mode="json")
+                host = (effective_base or "http://localhost:8000").rstrip("/")
+                issue_dict["dashboard_url"] = f"{host}/task/{transitioned.key}"
+                await self.broadcast_func(
+                    {
+                        "event": "issue_transitioned",
+                        "issue_key": transitioned.key,
+                        "status_category": transitioned.status.category.value,
+                        "status_name": transitioned.status.name,
+                        "issue": issue_dict,
+                    }
+                )
             return self.format_issue(transitioned, effective_base)
 
         if normalized_name == "home_tasks_add_comment":

@@ -450,3 +450,22 @@ This document details the architectural phases, delivered features, and evolutio
     - Automated Playwright visual regression tests in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) covering Desktop Dark and Mobile viewports (`settings-view-desktop-dark.png`, `settings-view-mobile.png`).
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
 
+- [x] **Phase 5.31: MCP Task Creation Live WebSocket Broadcast & Dashboard Task URLs**
+  - [x] **Real-Time WebSocket Delivery on MCP Task Creation**:
+    - Creating a task via Model Context Protocol (`home_tasks_create_task` tool via Streamable HTTP `POST /mcp` or SSE transport `/messages`) immediately dispatches an `issue_created` event over the WebSocket hub (`ws_hub.broadcast`) to all connected dashboard browsers.
+    - WebSocket delta payload delivers `event: "issue_created"`, `issue_key`, `status_name`, `status_category`, `dashboard_url`, and the complete JSON-serialized issue model.
+    - Also extended WebSocket broadcast to task edits (`home_tasks_edit_task`), assignments (`home_tasks_assign_task`), and status transitions (`home_tasks_transition_task`).
+  - [x] **Direct Dashboard Task URLs in MCP Tool Return**:
+    - The MCP tool response returns the direct deep link to the dashboard task (`/task/{key}`) under `url`, `task_url`, and `dashboard_url`.
+    - Tool schema description in `AVAILABLE_TOOLS` explicitly indicates that the created task details and direct dashboard task URL are returned.
+    - Supports configurable canonical base URL via `DASHBOARD_URL` (or `DASHBOARD_BASE_URL` / `PUBLIC_URL`) in application settings and environment, seamlessly falling back to incoming request proxy headers (`x-forwarded-proto`, `x-forwarded-host`, `root_path`).
+  - [x] **Frontend Real-Time State Reconciliation & Cache Persistence**:
+    - Incoming `issue_created` WebSocket events sort newly created tasks to the top according to top rank.
+    - Dynamically appends any new assignee to `availableUsers` so their column immediately displays on the People board without requiring a page refresh.
+    - Persists the newly arrived task into localStorage board cache (`ha_jira_board_cache_v1`).
+    - Automatically resolves any pending `/task/KEY` deep link route to open the task details modal immediately.
+  - [x] **Comprehensive Automated Test Coverage**:
+    - Integration tests in [`backend/tests/test_mcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_mcp.py) verifying WebSocket event broadcast, dashboard task URL construction, and `DASHBOARD_URL` configuration.
+    - Frontend store tests in [`frontend/src/store/boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts) verifying real-time WebSocket reconciliation, user listing expansion, and cache persistence.
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+

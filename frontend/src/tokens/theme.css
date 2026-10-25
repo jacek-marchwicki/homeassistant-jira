@@ -160,18 +160,18 @@
 
 /* Card transition group: smooth position/layout transitions for moving cards */
 ::view-transition-group(*) {
-  animation-duration: 280ms;
-  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* Old card exiting / hiding: fade out and subtle scale down */
 ::view-transition-old(*) {
-  animation: 200ms ease-out both vt-card-fade-out;
+  animation: 300ms cubic-bezier(0.4, 0, 1, 1) both vt-card-fade-out;
 }
 
 /* New card entering: smooth fade in */
 ::view-transition-new(*) {
-  animation: 220ms ease-out both vt-card-fade-in;
+  animation: 350ms cubic-bezier(0, 0, 0.2, 1) both vt-card-fade-in;
 }
 
 @keyframes vt-card-fade-out {

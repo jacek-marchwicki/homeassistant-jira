@@ -16,6 +16,7 @@ from jira_dashboard.adapters.jira_client import (
 )
 from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
 from jira_dashboard.adapters.storage import SQLiteStorage
+from jira_dashboard.adapters.storage_protocol import StorageProtocol
 from jira_dashboard.adapters.sync_worker import JiraSyncWorker
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "JiraSyncWorker",
     "MockGeminiImageClient",
     "SQLiteStorage",
+    "StorageProtocol",
     "compute_background_content_hash",
     "create_gemini_client",
     "create_jira_client",

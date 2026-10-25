@@ -59,19 +59,28 @@ fun ModernKioskWebView(
     fun applyPageZoom(view: WebView?, zoomPercent: Int) {
         if (view == null) return
         val zoomFactor = zoomPercent / 100.0
+        val inverse = if (zoomFactor > 0) 1.0 / zoomFactor else 1.0
+        val widthVw = inverse * 100.0
+        val heightVh = inverse * 100.0
         val js = """
             (function() {
                 try {
                     const zoomFactor = $zoomFactor;
+                    let target = document.head || document.documentElement;
+                    if (!target) return;
                     let zoomStyle = document.getElementById('kiosk-display-zoom-style');
                     if (!zoomStyle) {
                         zoomStyle = document.createElement('style');
                         zoomStyle.id = 'kiosk-display-zoom-style';
-                        document.head.appendChild(zoomStyle);
+                        target.appendChild(zoomStyle);
                     }
-                    zoomStyle.innerHTML = 'html, body { zoom: ' + zoomFactor + ' !important; }';
+                    if (Math.abs(zoomFactor - 1.0) < 0.01) {
+                        zoomStyle.innerHTML = '';
+                    } else {
+                        zoomStyle.innerHTML = 'html { zoom: ' + zoomFactor + ' !important; width: ${widthVw}vw !important; min-height: ${heightVh}vh !important; height: ${heightVh}vh !important; } body { zoom: normal !important; width: 100% !important; min-height: 100% !important; height: 100% !important; }';
+                    }
                     if (document.body) {
-                        document.body.style.zoom = zoomFactor;
+                        document.body.style.zoom = '';
                     }
                 } catch(e) {}
             })();
@@ -118,6 +127,8 @@ fun ModernKioskWebView(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
+
+                    WebView.setWebContentsDebuggingEnabled(true)
 
                     // Modern WebSettings configuration
                     settings.apply {

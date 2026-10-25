@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+- **Task Cloning**: Easily clone existing tasks directly from the task details/edit screen with pre-filled summary, description, assignee, and tags for rapid task creation.
+- **Sticky Modal Headers**: Keep task creation and edit dialog action buttons ("Save" / "Create" and "Close" / "Cancel") pinned and accessible at the top while scrolling long forms.
+- **Fluid Task Completion & Layout Transitions**: Smoothly animate task completion and card layout repositioning using CSS View Transitions for a polished and reactive user experience.
+- **Quick Done with Undo**: Mark tasks done immediately on the board with a transient undo notification bar, giving quick recovery before synchronizing with Jira.
+- **Top Placement & LexoRank Ranking**: Unified top placement when creating tasks from the UI or MCP tools, ensuring tasks added to the top are consistently ranked above existing items.
+- **Home Tasks Model Context Protocol (MCP)**: Native integration for AI agents (e.g., Gemini) with tools to list, create, edit tasks, list assignable people, and OAuth 2.0 authentication.
+- **Vibrant Celebrations**: Engaging celebratory confetti and star animations when children complete tasks.
+
 ## 0.6.0
 
 - **Details Screen & Modal Improvements**: Replaced bottom action buttons in Edit and Create issue dialogs with easily accessible top header actions: primary "Save" / "Create" button on the far right and a dynamic zero-shift "Close" / "Cancel" toggle on the far left. Reordered fields so Assignee immediately follows Description and Issue Type is cleanly positioned at the bottom of the form.

@@ -76,7 +76,7 @@ class FirestoreStorage:
                 "board_name": board_name,
                 "sprint_name": sprint_name,
                 "jira_url": jira_url,
-                "columns": [c.model_dump() for c in columns],
+                "columns": [c.model_dump(mode="json") for c in columns],
                 "updated_at": time.time(),
             }
         )
@@ -103,7 +103,7 @@ class FirestoreStorage:
     def save_issues(self, issues: list[JiraIssue]) -> None:
         col = self.client.collection("issues")
         for issue in issues:
-            col.document(issue.key).set(issue.model_dump())
+            col.document(issue.key).set(issue.model_dump(mode="json"))
 
     def get_issues(self) -> list[JiraIssue]:
         col = self.client.collection("issues")
@@ -122,7 +122,7 @@ class FirestoreStorage:
         return JiraIssue.model_validate(data) if data else None
 
     def upsert_issue(self, issue: JiraIssue) -> None:
-        self.client.collection("issues").document(issue.key).set(issue.model_dump())
+        self.client.collection("issues").document(issue.key).set(issue.model_dump(mode="json"))
 
     def delete_issue(self, key: str) -> None:
         self.client.collection("issues").document(key).delete()
@@ -133,7 +133,7 @@ class FirestoreStorage:
             for doc in col.stream():
                 col.document(doc.id).delete()
             for issue in issues:
-                col.document(issue.key).set(issue.model_dump())
+                col.document(issue.key).set(issue.model_dump(mode="json"))
 
     # -------------------------------------------------------------------------
     # Offline Outbox
@@ -172,11 +172,12 @@ class FirestoreStorage:
     def get_pending_outbox(self) -> list[dict[str, Any]]:
         col = self.client.collection("outbox")
         pending: list[dict[str, Any]] = []
-        for doc in col.where("status", "==", "pending").order_by("id").stream():
+        for doc in col.where("status", "==", "pending").stream():
             data = doc.to_dict()
             if data:
                 data["id"] = int(data.get("id", doc.id))
                 pending.append(data)
+        pending.sort(key=lambda x: x["id"])
         return pending
 
     def update_outbox_status(

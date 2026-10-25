@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, X, Save, AlertCircle, ExternalLink, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, X, Save, AlertCircle, ExternalLink, Calendar, Clock, Copy } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue, JiraIssueType, JiraPriority } from '../types/jira.ts';
 import { getAvailableStatuses, getJiraIssueUrl } from '../utils/boardUtils.ts';
@@ -37,7 +37,7 @@ interface EditIssueModalProps {
 }
 
 export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) {
-  const { columns, jiraUrl, updateIssueOptimistic } = useBoardStore();
+  const { columns, jiraUrl, updateIssueOptimistic, openCreateModal } = useBoardStore();
 
   const { backgroundUrl, hasBackground } = useTaskBackground(issue?.key);
   const modalBannerStyle = getCardBackgroundStyle(backgroundUrl);
@@ -121,6 +121,23 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
     });
 
     onClose();
+  };
+
+  const handleClone = () => {
+    openCreateModal({
+      summary: summary.trim(),
+      description: description.trim() || undefined,
+      issue_type: issueType,
+      priority,
+      status_name: statusName || issue.status?.name || 'To Do',
+      status_id: issue.status?.id,
+      status_category: issue.status?.category,
+      assignee_name: assigneeName.trim() ? assigneeName.trim() : undefined,
+      assignee_account_id: assigneeAccountId.trim() ? assigneeAccountId.trim() : undefined,
+      due_date: dueDate.trim() || null,
+      start_date: startDate.trim() || null,
+      recreate_after: recreateAfter.trim() || null,
+    });
   };
 
   const isDirty = Boolean(
@@ -396,6 +413,21 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               value={issueType}
               onChange={setIssueType}
             />
+          </div>
+
+          {/* Secondary Actions: Clone task */}
+          <div className="pt-2 flex items-center justify-start">
+            <button
+              type="button"
+              onClick={handleClone}
+              data-testid="clone-issue-button"
+              className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-[var(--jira-canvas)] hover:bg-[var(--jira-surface-hover)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] border border-[var(--jira-border)] transition-colors cursor-pointer min-h-[44px]"
+              title="Clone this task"
+              aria-label="Clone this task"
+            >
+              <Copy className="w-4 h-4 text-[var(--jira-text-muted)]" />
+              <span>Clone task</span>
+            </button>
           </div>
         </form>
 

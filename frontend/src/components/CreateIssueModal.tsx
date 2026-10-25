@@ -24,7 +24,7 @@ export function CreateIssueModal({
   defaultStatusName,
   defaultStatusCategory,
 }: CreateIssueModalProps) {
-  const { columns, createIssueOptimistic } = useBoardStore();
+  const { columns, createIssueOptimistic, createInitialValues } = useBoardStore();
 
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
@@ -42,29 +42,30 @@ export function CreateIssueModal({
 
   const initialStatus = useMemo(() => {
     return (
+      createInitialValues?.status_name ||
       defaultStatusName ||
       statusOptions.find((s) => s.name.toLowerCase() === 'to do')?.name ||
       statusOptions.find((s) => s.name.toLowerCase() !== 'backlog')?.name ||
       (statusOptions.length > 0 ? statusOptions[0].name : 'To Do')
     );
-  }, [defaultStatusName, statusOptions]);
+  }, [createInitialValues?.status_name, defaultStatusName, statusOptions]);
 
   // Initialize form when opened
   useEffect(() => {
     if (isOpen) {
-      setSummary('');
-      setDescription('');
-      setIssueType('task');
-      setPriority('medium');
-      setStatusName(initialStatus);
-      setAssigneeName('');
-      setAssigneeAccountId('');
-      setDueDate('');
-      setStartDate('');
-      setRecreateAfter('');
+      setSummary(createInitialValues?.summary ?? '');
+      setDescription(createInitialValues?.description ?? '');
+      setIssueType(createInitialValues?.issue_type ?? 'task');
+      setPriority(createInitialValues?.priority ?? 'medium');
+      setStatusName(createInitialValues?.status_name ?? initialStatus);
+      setAssigneeName(createInitialValues?.assignee_name ?? '');
+      setAssigneeAccountId(createInitialValues?.assignee_account_id ?? '');
+      setDueDate(createInitialValues?.due_date ?? '');
+      setStartDate(createInitialValues?.start_date ?? '');
+      setRecreateAfter(createInitialValues?.recreate_after ?? '');
       setValidationError(null);
     }
-  }, [isOpen, initialStatus]);
+  }, [isOpen, initialStatus, createInitialValues]);
 
   // Handle ESC key to dismiss modal
   useEffect(() => {
@@ -80,16 +81,16 @@ export function CreateIssueModal({
   if (!isOpen) return null;
 
   const isDirty = Boolean(
-    summary.trim() !== '' ||
-    description.trim() !== '' ||
-    issueType !== 'task' ||
-    priority !== 'medium' ||
-    statusName !== initialStatus ||
-    assigneeName.trim() !== '' ||
-    assigneeAccountId.trim() !== '' ||
-    dueDate.trim() !== '' ||
-    startDate.trim() !== '' ||
-    recreateAfter.trim() !== ''
+    summary.trim() !== (createInitialValues?.summary ?? '') ||
+    description.trim() !== (createInitialValues?.description ?? '') ||
+    issueType !== (createInitialValues?.issue_type ?? 'task') ||
+    priority !== (createInitialValues?.priority ?? 'medium') ||
+    statusName !== (createInitialValues?.status_name ?? initialStatus) ||
+    assigneeName.trim() !== (createInitialValues?.assignee_name ?? '') ||
+    assigneeAccountId.trim() !== (createInitialValues?.assignee_account_id ?? '') ||
+    dueDate.trim() !== (createInitialValues?.due_date ?? '') ||
+    startDate.trim() !== (createInitialValues?.start_date ?? '') ||
+    recreateAfter.trim() !== (createInitialValues?.recreate_after ?? '')
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -108,9 +109,9 @@ export function CreateIssueModal({
       description: description.trim() || undefined,
       issue_type: issueType,
       priority,
-      status_id: chosenStatus?.id,
+      status_id: chosenStatus?.id || createInitialValues?.status_id,
       status_name: statusName || chosenStatus?.name || 'To Do',
-      status_category: chosenStatus?.category || defaultStatusCategory || 'todo',
+      status_category: chosenStatus?.category || createInitialValues?.status_category || defaultStatusCategory || 'todo',
       assignee_name: assigneeName.trim() ? assigneeName.trim() : undefined,
       assignee_account_id: assigneeAccountId.trim() ? assigneeAccountId.trim() : undefined,
       due_date: dueDate.trim() || null,

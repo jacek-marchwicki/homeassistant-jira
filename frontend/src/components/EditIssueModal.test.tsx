@@ -473,4 +473,70 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     expect(header.style.backgroundImage).toContain('/api/issues/PROJ-101/background');
     expect(header.style.backgroundImage).toContain('linear-gradient');
   });
+
+  it('renders a Clone task button at the bottom of the form and triggers openCreateModal on click', async () => {
+    const openCreateModalSpy = vi.fn();
+    useBoardStore.setState({
+      openCreateModal: openCreateModalSpy,
+    });
+
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
+    });
+
+    const cloneBtn = container.querySelector('[data-testid="clone-issue-button"]') as HTMLButtonElement;
+    expect(cloneBtn).not.toBeNull();
+    expect(cloneBtn.textContent).toContain('Clone task');
+
+    // Click the clone button
+    await act(async () => {
+      cloneBtn.click();
+    });
+
+    expect(openCreateModalSpy).toHaveBeenCalledTimes(1);
+    expect(openCreateModalSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: 'Original Summary',
+        description: 'Original detailed description',
+        issue_type: 'task',
+        priority: 'medium',
+        status_name: 'To Do',
+        assignee_name: 'Jane Doe',
+        assignee_account_id: 'usr-1',
+        due_date: '2026-11-01',
+        start_date: '2026-10-01',
+        recreate_after: '14 days',
+      })
+    );
+  });
+
+  it('passes modified form values to openCreateModal when fields were edited before cloning', async () => {
+    const openCreateModalSpy = vi.fn();
+    useBoardStore.setState({
+      openCreateModal: openCreateModalSpy,
+    });
+
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
+    });
+
+    const summaryInput = container.querySelector('#edit-summary') as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(summaryInput, 'Modified Cloned Title');
+      summaryInput.dispatchEvent(new Event('input', { bubbles: true }));
+      summaryInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    const cloneBtn = container.querySelector('[data-testid="clone-issue-button"]') as HTMLButtonElement;
+    await act(async () => {
+      cloneBtn.click();
+    });
+
+    expect(openCreateModalSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: 'Modified Cloned Title',
+      })
+    );
+  });
 });

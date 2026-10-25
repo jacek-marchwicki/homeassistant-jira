@@ -1068,6 +1068,36 @@ describe('URL navigation', () => {
     expect(useBoardStore.getState().isCreateModalOpen).toBe(true);
   });
 
+  it('openCreateModal stores initial values, opens modal, and setCreateModalOpen(false) clears them', () => {
+    useBoardStore.setState({ editingIssue: issue, routeTaskKey: issue.key });
+    useBoardStore.getState().openCreateModal({
+      summary: 'Cloned task summary',
+      description: 'Cloned description',
+      issue_type: 'bug',
+      priority: 'high',
+      status_name: 'In Progress',
+      assignee_name: 'Jane Doe',
+      due_date: '2026-11-15',
+    });
+
+    expect(useBoardStore.getState().isCreateModalOpen).toBe(true);
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+    expect(useBoardStore.getState().createInitialValues).toEqual({
+      summary: 'Cloned task summary',
+      description: 'Cloned description',
+      issue_type: 'bug',
+      priority: 'high',
+      status_name: 'In Progress',
+      assignee_name: 'Jane Doe',
+      due_date: '2026-11-15',
+    });
+    expect(window.location.pathname).toBe('/create');
+
+    useBoardStore.getState().setCreateModalOpen(false);
+    expect(useBoardStore.getState().isCreateModalOpen).toBe(false);
+    expect(useBoardStore.getState().createInitialValues).toBeNull();
+  });
+
   it('connection modal uses /status and closes back to view', () => {
     useBoardStore.getState().setConnectionModalOpen(true);
     expect(window.location.pathname).toBe('/status');

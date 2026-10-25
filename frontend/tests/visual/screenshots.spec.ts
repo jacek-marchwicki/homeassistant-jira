@@ -409,6 +409,11 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(commentsSection).toBeVisible();
     await expect(commentsSection.getByText(/Comments/)).toBeVisible();
 
+    // 3b. Verify Clone task button is present at bottom of form
+    const cloneBtn = modal.getByTestId('clone-issue-button');
+    await expect(cloneBtn).toBeVisible();
+    await expect(cloneBtn).toContainText('Clone task');
+
     // 4. Capture full screen modal snapshot
     await expect(page).toHaveScreenshot('modal-edit-issue.png');
 

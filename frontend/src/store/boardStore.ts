@@ -261,6 +261,7 @@ export interface BoardStoreState {
   isBacklogExpandedOnBoard: boolean;
   editingIssue: JiraIssue | null;
   isCreateModalOpen: boolean;
+  createInitialValues: Partial<IssueCreatePayload> | null;
   isConnectionModalOpen: boolean;
   pendingQuickDone: PendingQuickDone | null;
   /** Task key requested by the URL (/task/KEY) that is not yet resolved to an issue. */
@@ -295,6 +296,7 @@ export interface BoardStoreState {
   toggleBacklogExpandedOnBoard: () => void;
   setEditingIssue: (issue: JiraIssue | null) => void;
   setCreateModalOpen: (open: boolean) => void;
+  openCreateModal: (initialValues?: Partial<IssueCreatePayload>) => void;
   setConnectionModalOpen: (open: boolean) => void;
   /** Applies a URL route to UI state without touching browser history. */
   applyRoute: (route: Route) => void;
@@ -435,6 +437,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   isBacklogExpandedOnBoard: false,
   editingIssue: null,
   isCreateModalOpen: initialRoute.kind === 'create',
+  createInitialValues: null,
   isConnectionModalOpen: initialRoute.kind === 'status',
   pendingQuickDone: null,
   routeTaskKey: initialRoute.kind === 'task' ? initialRoute.key : null,
@@ -576,18 +579,30 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 
+  openCreateModal: (initialValues?: Partial<IssueCreatePayload>) => {
+    pushRoute({ kind: 'create' });
+    set({
+      isCreateModalOpen: true,
+      createInitialValues: initialValues || null,
+      editingIssue: null,
+      routeTaskKey: null,
+      isConnectionModalOpen: false,
+    });
+  },
+
   setCreateModalOpen: (open: boolean) => {
     if (open) {
       pushRoute({ kind: 'create' });
       set({
         isCreateModalOpen: true,
+        createInitialValues: null,
         editingIssue: null,
         routeTaskKey: null,
         isConnectionModalOpen: false,
       });
     } else {
       const wasOpen = get().isCreateModalOpen;
-      set({ isCreateModalOpen: false });
+      set({ isCreateModalOpen: false, createInitialValues: null });
       if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
     }
   },
@@ -1262,6 +1277,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     set((state) => ({
       issues: sortIssuesByRank([tempIssue, ...state.issues]),
       isCreateModalOpen: false,
+      createInitialValues: null,
     }));
     if (wasCreating) closeOverlayRoute({ kind: 'view', view: get().currentView });
     persistCurrentBoardState(get);

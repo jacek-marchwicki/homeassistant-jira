@@ -362,4 +362,111 @@ describe('CreateIssueModal component', () => {
       Boolean(startDateInput!.compareDocumentPosition(dueDateInput!) & Node.DOCUMENT_POSITION_FOLLOWING)
     ).toBe(true);
   });
+
+  it('prefills all form fields when opened with clone data', async () => {
+    useBoardStore.setState({
+      createInitialValues: {
+        summary: 'Cloned Feature Task',
+        description: 'Cloned description with details',
+        issue_type: 'story',
+        priority: 'high',
+        status_name: 'In Progress',
+        assignee_name: 'Jane Doe',
+        assignee_account_id: 'usr-1',
+        due_date: '2026-12-31',
+        start_date: '2026-11-01',
+        recreate_after: '30d',
+      },
+    });
+
+    const handleClose = vi.fn();
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
+    });
+
+    const summaryInput = container.querySelector('#create-summary') as HTMLInputElement;
+    const descTextarea = container.querySelector('#create-description') as HTMLTextAreaElement;
+    const dueDateInput = container.querySelector('#create-due-date') as HTMLInputElement;
+    const startDateInput = container.querySelector('#create-start-date') as HTMLInputElement;
+    const recreateInput = container.querySelector('#create-recreate-after') as HTMLInputElement;
+
+    expect(summaryInput.value).toBe('Cloned Feature Task');
+    expect(descTextarea.value).toBe('Cloned description with details');
+    expect(dueDateInput.value).toBe('2026-12-31');
+    expect(startDateInput.value).toBe('2026-11-01');
+    expect(recreateInput.value).toBe('30d');
+  });
+
+  it('creates no task when prefilled task creation is discarded/cancelled', async () => {
+    const createOptimisticSpy = vi.fn();
+    useBoardStore.setState({
+      createIssueOptimistic: createOptimisticSpy,
+      createInitialValues: {
+        summary: 'To Be Discarded',
+        description: 'Should not be created',
+      },
+    });
+
+    const handleClose = vi.fn();
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
+    });
+
+    // Click close/cancel button in header
+    const closeBtn = container.querySelector('button[aria-label="Cancel changes"], button[aria-label="Close create dialog"]') as HTMLButtonElement;
+    expect(closeBtn).not.toBeNull();
+
+    await act(async () => {
+      closeBtn.click();
+    });
+
+    expect(handleClose).toHaveBeenCalledTimes(1);
+    expect(createOptimisticSpy).not.toHaveBeenCalled();
+  });
+
+  it('creates task with prefilled cloned fields when submitted', async () => {
+    const createOptimisticSpy = vi.fn();
+    useBoardStore.setState({
+      createIssueOptimistic: createOptimisticSpy,
+      createInitialValues: {
+        summary: 'Cloned Task To Save',
+        description: 'Detailed description',
+        issue_type: 'bug',
+        priority: 'highest',
+        status_name: 'In Progress',
+        assignee_name: 'Jane Doe',
+        assignee_account_id: 'usr-1',
+        due_date: '2026-11-20',
+        start_date: '2026-11-10',
+        recreate_after: '7d',
+      },
+    });
+
+    const handleClose = vi.fn();
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
+    });
+
+    const form = container.querySelector('#create-issue-form') as HTMLFormElement;
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    });
+
+    expect(createOptimisticSpy).toHaveBeenCalledTimes(1);
+    expect(createOptimisticSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: 'Cloned Task To Save',
+        description: 'Detailed description',
+        issue_type: 'bug',
+        priority: 'highest',
+        status_name: 'In Progress',
+        assignee_name: 'Jane Doe',
+        assignee_account_id: 'usr-1',
+        due_date: '2026-11-20',
+        start_date: '2026-11-10',
+        recreate_after: '7d',
+      })
+    );
+    expect(handleClose).toHaveBeenCalledTimes(1);
+  });
 });

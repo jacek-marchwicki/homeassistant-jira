@@ -402,3 +402,18 @@ This document details the architectural phases, delivered features, and evolutio
     - Store tests in [`frontend/src/store/boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts) covering immediate optimistic mutation, delayed sync, undo cancellation, rapid successive flushing, and offline outbox queuing.
     - Component unit tests in [`frontend/src/components/UndoSnackbar.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/UndoSnackbar.test.tsx), [`frontend/src/components/IssueCard.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/IssueCard.test.tsx), and [`frontend/src/App.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/App.test.tsx).
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+
+- [x] **Phase 5.28: Task Cloning Feature from Edit Task Screen**
+  - [x] **Discrete Clone Action in Edit Task Screen**:
+    - Added a "Clone task" button placed cleanly at the bottom of the form fields in [`EditIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.tsx) (below Issue Type, above the metadata/comments divider).
+    - Touch-friendly target ($\ge 44\text{px}$) with `Copy` icon and subtle secondary styling to avoid cluttering header actions.
+  - [x] **Prefilled Create Task Screen**:
+    - Clicking "Clone task" transitions to the [`CreateIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.tsx) with all fields prefilled from the task (summary, description, issue type, priority, status, assignee, start date, due date, recreate after interval).
+    - If user modified any field values prior to clicking Clone, those updated values are accurately carried over into the clone dialog.
+  - [x] **Clean Discard & Optimistic Creation Flow**:
+    - Discarding task creation (Cancel, Escape key, backdrop click) safely dismisses the dialog with zero side effects or tasks created.
+    - Submitting the form creates the task optimistically (<50ms) using `createIssueOptimistic`, assigning top rank and synchronizing to Jira in the background.
+  - [x] **Automated Test Coverage & Verification**:
+    - Unit tests in [`frontend/src/store/boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts), [`frontend/src/components/EditIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.test.tsx), and [`frontend/src/components/CreateIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.test.tsx).
+    - Visual regression test coverage in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts).
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.

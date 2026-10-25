@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type React from 'react';
 import { getApiUrl } from './paths.ts';
+import { useBoardStore } from '../store/boardStore.ts';
 
 // In-memory cache across component lifecycles to prevent repeated network probes
 const backgroundAvailabilityCache = new Map<string, boolean>();
@@ -14,17 +15,20 @@ export interface TaskBackgroundResult {
  * React hook that probes and resolves background illustration URLs for tasks.
  * If the image endpoint returns 204 No Content, 404, or network error,
  * hasBackground is false and backgroundUrl is null, guaranteeing graceful degradation.
+ * If hideImages is enabled in useBoardStore, background loading is suppressed.
  */
 export function useTaskBackground(issueKey?: string): TaskBackgroundResult {
+  const hideImages = useBoardStore((state) => state.hideImages);
+
   const [hasBackground, setHasBackground] = useState<boolean>(() => {
-    if (!issueKey) return false;
+    if (!issueKey || hideImages) return false;
     return backgroundAvailabilityCache.get(issueKey) ?? false;
   });
 
   const url = issueKey ? getApiUrl(`/api/issues/${issueKey}/background`) : null;
 
   useEffect(() => {
-    if (!issueKey || !url) {
+    if (!issueKey || !url || hideImages) {
       setHasBackground(false);
       return;
     }
@@ -49,11 +53,11 @@ export function useTaskBackground(issueKey?: string): TaskBackgroundResult {
     return () => {
       active = false;
     };
-  }, [issueKey, url]);
+  }, [issueKey, url, hideImages]);
 
   return {
-    backgroundUrl: hasBackground ? url : null,
-    hasBackground,
+    backgroundUrl: hasBackground && !hideImages ? url : null,
+    hasBackground: hasBackground && !hideImages,
   };
 }
 

@@ -42,6 +42,7 @@ export const LOCAL_STORAGE_OUTBOX_KEY = 'ha_jira_offline_outbox_v1';
 export const LOCAL_STORAGE_CURRENT_VIEW_KEY = 'ha_jira_current_view';
 export const LOCAL_STORAGE_CURRENT_USER_KEY = 'ha_jira_current_user';
 export const LOCAL_STORAGE_ACCOUNT_TYPES_KEY = 'ha_jira_account_types';
+export const LOCAL_STORAGE_HIDE_IMAGES_KEY = 'ha_jira_hide_images';
 
 export class ServerRejectionError extends Error {
   constructor(message: string) {
@@ -176,6 +177,24 @@ export function saveCachedUser(userName: string): void {
   }
 }
 
+export function loadCachedHideImages(): boolean {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+  try {
+    return window.localStorage.getItem(LOCAL_STORAGE_HIDE_IMAGES_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function saveCachedHideImages(hide: boolean): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_HIDE_IMAGES_KEY, String(hide));
+  } catch {
+    // Ignore error
+  }
+}
+
 export function loadCachedBoard(): CachedBoardData | null {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   try {
@@ -254,6 +273,7 @@ export interface BoardStoreState {
   currentUser: string;
   accountTypes: AccountTypes;
   showChildren: boolean;
+  hideImages: boolean;
   isSettingsOpen: boolean;
   errorMessage: string | null;
   rollbackQueue: Record<string, JiraIssue>;
@@ -291,6 +311,8 @@ export interface BoardStoreState {
   openSettings: () => void;
   closeSettings: () => void;
   toggleShowChildren: () => void;
+  toggleHideImages: () => void;
+  setHideImages: (hide: boolean) => void;
   setErrorMessage: (msg: string | null) => void;
   setCurrentView: (view: DashboardView) => void;
   toggleBacklogExpandedOnBoard: () => void;
@@ -430,6 +452,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   currentUser: loadCachedUser(),
   accountTypes: loadCachedAccountTypes(),
   showChildren: false,
+  hideImages: loadCachedHideImages(),
   isSettingsOpen: initialRoute.kind === 'settings',
   errorMessage: null,
   rollbackQueue: {},
@@ -561,6 +584,19 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
   toggleShowChildren: () => {
     set((state) => ({ showChildren: !state.showChildren }));
+  },
+
+  toggleHideImages: () => {
+    set((state) => {
+      const next = !state.hideImages;
+      saveCachedHideImages(next);
+      return { hideImages: next };
+    });
+  },
+
+  setHideImages: (hide: boolean) => {
+    saveCachedHideImages(hide);
+    set({ hideImages: hide });
   },
 
   setEditingIssue: (issue: JiraIssue | null) => {

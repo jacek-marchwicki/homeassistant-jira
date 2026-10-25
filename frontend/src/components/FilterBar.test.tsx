@@ -183,6 +183,56 @@ describe('FilterBar component', () => {
     });
   });
 
+  it('renders Hide Images toggle button, toggles hideImages on click, and retains state when All Issues is clicked', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({
+        currentUser: 'Jacek Marchwicki',
+        activeFilters: ['active'],
+        hideImages: false,
+      });
+      root.render(<FilterBar />);
+    });
+
+    const buttons = container.querySelectorAll('button');
+    const hideImagesBtn = Array.from(buttons).find((b) => b.textContent?.trim() === 'Hide Images');
+    const allBtn = Array.from(buttons).find((b) => b.textContent?.includes('All Issues'));
+
+    expect(hideImagesBtn).toBeDefined();
+    expect(hideImagesBtn?.getAttribute('title')).toBe('Toggle to hide AI background images');
+    expect(hideImagesBtn?.className).not.toContain('bg-[var(--jira-primary)]');
+
+    // Click to toggle on
+    await act(async () => {
+      hideImagesBtn?.click();
+    });
+    expect(useBoardStore.getState().hideImages).toBe(true);
+
+    // Re-render / state update reflects active style
+    expect(hideImagesBtn?.className).toContain('bg-[var(--jira-primary)]');
+
+    // Click "All Issues"
+    await act(async () => {
+      allBtn?.click();
+    });
+    // Active filters reset, but hideImages remains true!
+    expect(useBoardStore.getState().activeFilters).toEqual([]);
+    expect(useBoardStore.getState().hideImages).toBe(true);
+
+    // Click to toggle off
+    await act(async () => {
+      hideImagesBtn?.click();
+    });
+    expect(useBoardStore.getState().hideImages).toBe(false);
+    expect(hideImagesBtn?.className).not.toContain('bg-[var(--jira-primary)]');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('renders a mobile search button that expands to search input on click and collapses on close', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);

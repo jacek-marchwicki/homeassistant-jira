@@ -12,6 +12,9 @@ import {
   LOCAL_STORAGE_OUTBOX_KEY,
   saveCachedOutbox,
   loadCachedOutbox,
+  LOCAL_STORAGE_HIDE_IMAGES_KEY,
+  loadCachedHideImages,
+  saveCachedHideImages,
 } from './boardStore.ts';
 import type { OfflineOutboxItem } from './boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
@@ -127,6 +130,29 @@ describe('Zustand BoardStore', () => {
     useBoardStore.getState().setCurrentUser('Alex Lead');
     expect(useBoardStore.getState().currentUser).toBe('Alex Lead');
     expect(window.localStorage.getItem('ha_jira_current_user')).toBe('Alex Lead');
+  });
+
+  it('toggles hideImages and persists to localStorage', () => {
+    window.localStorage.clear();
+    useBoardStore.setState({ hideImages: false });
+    expect(useBoardStore.getState().hideImages).toBe(false);
+
+    useBoardStore.getState().toggleHideImages();
+    expect(useBoardStore.getState().hideImages).toBe(true);
+    expect(window.localStorage.getItem(LOCAL_STORAGE_HIDE_IMAGES_KEY)).toBe('true');
+    expect(loadCachedHideImages()).toBe(true);
+
+    useBoardStore.getState().toggleHideImages();
+    expect(useBoardStore.getState().hideImages).toBe(false);
+    expect(window.localStorage.getItem(LOCAL_STORAGE_HIDE_IMAGES_KEY)).toBe('false');
+    expect(loadCachedHideImages()).toBe(false);
+
+    useBoardStore.getState().setHideImages(true);
+    expect(useBoardStore.getState().hideImages).toBe(true);
+    expect(window.localStorage.getItem(LOCAL_STORAGE_HIDE_IMAGES_KEY)).toBe('true');
+
+    saveCachedHideImages(false);
+    expect(loadCachedHideImages()).toBe(false);
   });
 
   it('loads dynamic board columns from /api/board', async () => {

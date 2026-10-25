@@ -17,6 +17,8 @@ export function FilterBar() {
     setCurrentUser,
     showChildren,
     toggleShowChildren,
+    hideImages,
+    toggleHideImages,
   } = useBoardStore();
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -274,6 +276,21 @@ export function FilterBar() {
           title="Toggle filter to hide Epics"
         >
           Hide Epics
+        </button>
+
+        {/* 5. Hide Images */}
+        <button
+          type="button"
+          onClick={toggleHideImages}
+          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-full text-xs font-medium inline-flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+            hideImages
+              ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
+              : 'bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
+          }`}
+          title="Toggle to hide AI background images"
+          aria-pressed={hideImages}
+        >
+          Hide Images
         </button>
 
         <button

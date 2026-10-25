@@ -17,6 +17,7 @@ from jira_dashboard.adapters.jira_client import (
 from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
 from jira_dashboard.adapters.blob_storage import (
     BlobStorageProtocol,
+    GoogleCloudStorageBlobStorage,
     LocalDiskBlobStorage,
 )
 from jira_dashboard.adapters.firestore_storage import FirestoreStorage
@@ -30,6 +31,7 @@ __all__ = [
     "FakeJiraClient",
     "FirestoreStorage",
     "GeminiImageClient",
+    "GoogleCloudStorageBlobStorage",
     "GoogleGenAIImageClient",
     "JiraAPIError",
     "JiraClientProtocol",

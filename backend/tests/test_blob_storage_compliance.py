@@ -66,3 +66,23 @@ class TestLocalDiskBlobStorage(BaseBlobStorageComplianceTest, unittest.TestCase)
 
     def create_blob_storage(self) -> BlobStorageProtocol:
         return self.storage
+
+
+class TestGoogleCloudStorageBlobStorage(BaseBlobStorageComplianceTest, unittest.TestCase):
+    def setUp(self) -> None:
+        import sys
+        tests_dir = Path(__file__).resolve().parent
+        if str(tests_dir) not in sys.path:
+            sys.path.insert(0, str(tests_dir))
+
+        from jira_dashboard.adapters.blob_storage import GoogleCloudStorageBlobStorage
+        from mocks.fake_gcs import FakeGCSClient
+
+        self.client = FakeGCSClient()
+        self.storage = GoogleCloudStorageBlobStorage(
+            bucket_name="test-bucket",
+            client=self.client,
+        )
+
+    def create_blob_storage(self) -> BlobStorageProtocol:
+        return self.storage

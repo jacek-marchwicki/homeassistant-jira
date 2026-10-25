@@ -70,3 +70,73 @@ class LocalDiskBlobStorage:
         except OSError as exc:
             logger.warning("Failed to delete local blob %s: %s", file_path, exc)
             return False
+
+
+class GoogleCloudStorageBlobStorage:
+    """Stores binary image assets directly in Google Cloud Storage via client API (zero FUSE)."""
+
+    def __init__(
+        self,
+        bucket_name: str,
+        client: Any = None,
+        prefix: str = "background_cache",
+    ) -> None:
+        self.bucket_name = bucket_name
+        self._client = client
+        self.prefix = prefix.strip("/")
+
+    @property
+    def client(self) -> Any:
+        if self._client is None:
+            from google.cloud import storage
+
+            self._client = storage.Client()
+        return self._client
+
+    def _blob_path(self, key: str) -> str:
+        filename = f"{key}.webp" if not key.endswith(".webp") else key
+        return f"{self.prefix}/{filename}" if self.prefix else filename
+
+    def save(self, key: str, data: bytes, content_type: str = "image/webp") -> str:
+        blob_path = self._blob_path(key)
+        bucket = self.client.bucket(self.bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(data, content_type=content_type)
+        return f"gs://{self.bucket_name}/{blob_path}"
+
+    def get(self, key: str) -> bytes | None:
+        blob_path = self._blob_path(key)
+        bucket = self.client.bucket(self.bucket_name)
+        blob = bucket.blob(blob_path)
+        try:
+            return blob.download_as_bytes()
+        except Exception as exc:
+            # Matches google.cloud.exceptions.NotFound or test double NotFound
+            if "not found" in str(exc).lower() or exc.__class__.__name__ in ("NotFound", "FakeNotFound"):
+                return None
+            logger.warning("Error fetching GCS blob %s/%s: %s", self.bucket_name, blob_path, exc)
+            return None
+
+    def exists(self, key: str) -> bool:
+        blob_path = self._blob_path(key)
+        bucket = self.client.bucket(self.bucket_name)
+        blob = bucket.blob(blob_path)
+        try:
+            return bool(blob.exists())
+        except Exception as exc:
+            logger.debug("Error checking existence of GCS blob %s/%s: %s", self.bucket_name, blob_path, exc)
+            return False
+
+    def delete(self, key: str) -> bool:
+        blob_path = self._blob_path(key)
+        bucket = self.client.bucket(self.bucket_name)
+        blob = bucket.blob(blob_path)
+        try:
+            blob.delete()
+            return True
+        except Exception as exc:
+            if "not found" in str(exc).lower() or exc.__class__.__name__ in ("NotFound", "FakeNotFound"):
+                return False
+            logger.warning("Error deleting GCS blob %s/%s: %s", self.bucket_name, blob_path, exc)
+            return False
+

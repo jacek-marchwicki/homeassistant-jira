@@ -6,8 +6,8 @@ Sample "Hello World" Android application built with Kotlin and Jetpack Compose.
 
 - **Application Name**: TestApp Integrator
 - **Package Name (Application ID)**: `com.jacek.test.app`
-- **Version Name**: `0.0.6`
-- **Version Code**: `6`
+- **Version Name**: `0.0.7`
+- **Version Code**: `7`
 - **Min SDK**: API 26 (Android 8.0)
 - **Target SDK**: API 36 (Android 16)
 - **Compile SDK**: API 36

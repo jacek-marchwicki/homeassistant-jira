@@ -242,3 +242,24 @@ class TestSQLiteStorage(BaseStorageComplianceTest, unittest.TestCase):
 
     def create_storage(self) -> StorageProtocol:
         return self.storage
+
+
+class TestFirestoreStorage(BaseStorageComplianceTest, unittest.TestCase):
+    def setUp(self) -> None:
+        import sys
+        tests_dir = Path(__file__).resolve().parent
+        if str(tests_dir) not in sys.path:
+            sys.path.insert(0, str(tests_dir))
+
+        from jira_dashboard.adapters.firestore_storage import FirestoreStorage
+        from mocks.fake_firestore import FakeFirestoreClient
+
+        self.client = FakeFirestoreClient()
+        self.storage = FirestoreStorage(client=self.client)
+        self.storage.init_db()
+
+    def tearDown(self) -> None:
+        self.storage.close()
+
+    def create_storage(self) -> StorageProtocol:
+        return self.storage

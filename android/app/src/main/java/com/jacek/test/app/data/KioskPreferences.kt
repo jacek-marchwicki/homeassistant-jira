@@ -59,6 +59,12 @@ class KioskPreferences(context: Context) {
             prefs.edit().putStringSet(KEY_ALLOWED_DOMAINS, value).apply()
         }
 
+    var themeMode: ThemeMode
+        get() = ThemeMode.fromValue(prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.value))
+        set(value) {
+            prefs.edit().putString(KEY_THEME_MODE, value.value).apply()
+        }
+
     fun isUrlAllowed(targetUrl: String): Boolean {
         return isUrlAllowed(
             targetUrl = targetUrl,
@@ -78,6 +84,7 @@ class KioskPreferences(context: Context) {
         const val KEY_INJECT_STATUS_BAR_PADDING = "inject_status_bar_padding"
         const val KEY_RESTRICT_URLS = "restrict_urls"
         const val KEY_ALLOWED_DOMAINS = "allowed_domains"
+        const val KEY_THEME_MODE = "theme_mode"
 
         const val DEFAULT_URL = "https://www.google.com"
         const val DEFAULT_PAGE_ZOOM = 100
@@ -167,6 +174,24 @@ class KioskPreferences(context: Context) {
 
         private fun matchesDomain(targetHost: String, allowedDomain: String): Boolean {
             return targetHost == allowedDomain || targetHost.endsWith(".$allowedDomain")
+        }
+    }
+}
+
+enum class ThemeMode(val value: String) {
+    SYSTEM("system"),
+    LIGHT("light"),
+    DARK("dark");
+
+    fun isDark(systemDark: Boolean): Boolean = when (this) {
+        SYSTEM -> systemDark
+        LIGHT -> false
+        DARK -> true
+    }
+
+    companion object {
+        fun fromValue(value: String?): ThemeMode {
+            return entries.firstOrNull { it.value.equals(value, ignoreCase = true) } ?: SYSTEM
         }
     }
 }

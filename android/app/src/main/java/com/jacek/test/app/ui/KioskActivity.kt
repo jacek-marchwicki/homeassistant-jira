@@ -2,6 +2,7 @@ package com.jacek.test.app.ui
 
 import android.app.KeyguardManager
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
@@ -15,6 +16,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -37,11 +39,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.jacek.test.app.R
 import com.jacek.test.app.data.KioskPreferences
+import com.jacek.test.app.data.ThemeMode
 import com.jacek.test.app.ui.components.ModernKioskWebView
+import com.jacek.test.app.ui.theme.TestAppTheme
 
 private const val TAG = "KioskActivity"
 
@@ -49,10 +57,16 @@ class KioskActivity : ComponentActivity() {
 
     private lateinit var preferences: KioskPreferences
     private var webView: WebView? = null
+    private var currentThemeMode by mutableStateOf(ThemeMode.SYSTEM)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         preferences = KioskPreferences(this)
+        currentThemeMode = preferences.themeMode
+        val isSystemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val isDark = currentThemeMode.isDark(isSystemDark)
+        setTheme(if (isDark) R.style.Theme_TestAppIntegrator_Dark else R.style.Theme_TestAppIntegrator_Light)
+
+        super.onCreate(savedInstanceState)
 
         // Show when locked (Android 8.1+ / Android 16+)
         setShowWhenLocked(true)
@@ -78,8 +92,9 @@ class KioskActivity : ComponentActivity() {
 
         setContent {
             val statusBarHeightDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().value.toInt()
+            val isDark = currentThemeMode.isDark(isSystemInDarkTheme())
 
-            MaterialTheme {
+            TestAppTheme(themeMode = currentThemeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -89,6 +104,7 @@ class KioskActivity : ComponentActivity() {
                         pageZoom = preferences.pageZoom,
                         injectStatusBarPadding = preferences.injectStatusBarPadding,
                         statusBarHeightDp = statusBarHeightDp,
+                        isDark = isDark,
                         showFloatingExit = preferences.showFloatingExit,
                         isUrlAllowed = { targetUrl -> preferences.isUrlAllowed(targetUrl) },
                         onBlockedUrl = { blockedUrl ->
@@ -104,6 +120,17 @@ class KioskActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val newMode = preferences.themeMode
+        if (newMode != currentThemeMode) {
+            currentThemeMode = newMode
+            val isSystemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            val isDark = newMode.isDark(isSystemDark)
+            setTheme(if (isDark) R.style.Theme_TestAppIntegrator_Dark else R.style.Theme_TestAppIntegrator_Light)
         }
     }
 
@@ -146,6 +173,7 @@ fun KioskScreen(
     pageZoom: Int,
     injectStatusBarPadding: Boolean,
     statusBarHeightDp: Int,
+    isDark: Boolean = false,
     showFloatingExit: Boolean,
     isUrlAllowed: (String) -> Boolean,
     onBlockedUrl: (String) -> Unit,
@@ -159,6 +187,7 @@ fun KioskScreen(
             pageZoom = pageZoom,
             injectStatusBarPadding = injectStatusBarPadding,
             statusBarHeightDp = statusBarHeightDp,
+            isDark = isDark,
             isUrlAllowed = isUrlAllowed,
             onBlockedUrl = onBlockedUrl,
             modifier = Modifier.fillMaxSize(),

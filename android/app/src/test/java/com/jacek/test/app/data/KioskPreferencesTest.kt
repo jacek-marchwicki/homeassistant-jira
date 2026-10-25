@@ -82,4 +82,23 @@ class KioskPreferencesTest {
             KioskPreferences.isUrlAllowed("https://facebook.com", kiosk, true, customAllowed)
         )
     }
+
+    @Test
+    fun themeMode_fromValue_parsesCorrectly() {
+        assertEquals(ThemeMode.SYSTEM, ThemeMode.fromValue("system"))
+        assertEquals(ThemeMode.LIGHT, ThemeMode.fromValue("light"))
+        assertEquals(ThemeMode.DARK, ThemeMode.fromValue("dark"))
+        assertEquals(ThemeMode.SYSTEM, ThemeMode.fromValue("invalid"))
+        assertEquals(ThemeMode.SYSTEM, ThemeMode.fromValue(""))
+    }
+
+    @Test
+    fun themeMode_isDark_resolvesCorrectly() {
+        assertEquals(true, ThemeMode.DARK.isDark(systemDark = false))
+        assertEquals(true, ThemeMode.DARK.isDark(systemDark = true))
+        assertEquals(false, ThemeMode.LIGHT.isDark(systemDark = false))
+        assertEquals(false, ThemeMode.LIGHT.isDark(systemDark = true))
+        assertEquals(false, ThemeMode.SYSTEM.isDark(systemDark = false))
+        assertEquals(true, ThemeMode.SYSTEM.isDark(systemDark = true))
+    }
 }

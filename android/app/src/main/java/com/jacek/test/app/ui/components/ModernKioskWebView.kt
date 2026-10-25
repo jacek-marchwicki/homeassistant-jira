@@ -1,9 +1,11 @@
 package com.jacek.test.app.ui.components
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.Build
 import android.util.Log
+import android.view.ContextThemeWrapper
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.RenderProcessGoneDetail
@@ -25,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +48,7 @@ fun ModernKioskWebView(
     pageZoom: Int = 100,
     injectStatusBarPadding: Boolean = true,
     statusBarHeightDp: Int = 0,
+    isDark: Boolean = false,
     isUrlAllowed: (String) -> Boolean = { true },
     onBlockedUrl: (String) -> Unit = {},
     onWebViewCreated: (WebView) -> Unit = {},
@@ -55,6 +59,7 @@ fun ModernKioskWebView(
     var isLoading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var lastAppliedZoom by remember { mutableIntStateOf(-1) }
+    var lastAppliedDark by remember { mutableStateOf<Boolean?>(null) }
 
     fun applyPageZoom(view: WebView?, zoomPercent: Int) {
         if (view == null) return
@@ -114,15 +119,91 @@ fun ModernKioskWebView(
         view.evaluateJavascript(js, null)
     }
 
+    fun injectThemeSupport(view: WebView?, dark: Boolean) {
+        if (view == null) return
+        val scheme = if (dark) "dark" else "light"
+        val js = """
+            (function() {
+                try {
+                    let meta = document.querySelector('meta[name="color-scheme"]');
+                    if (!meta) {
+                        meta = document.createElement('meta');
+                        meta.name = 'color-scheme';
+                        let target = document.head || document.documentElement;
+                        if (target) target.appendChild(meta);
+                    }
+                    if (meta) {
+                        meta.content = '$scheme';
+                    }
+                    if (document.documentElement) {
+                        document.documentElement.style.colorScheme = '$scheme';
+                    }
+                } catch(e) {}
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(js, null)
+    }
+
+    @Suppress("DEPRECATION")
+    fun applyTheme(view: WebView?, dark: Boolean) {
+        if (view == null) return
+        val settings = view.settings
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)
+        ) {
+            try {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, dark)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Algorithmic darkening not supported on this device: ${t.message}")
+            }
+        }
+
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+            try {
+                val forceDarkValue = if (dark) {
+                    WebSettingsCompat.FORCE_DARK_ON
+                } else {
+                    WebSettingsCompat.FORCE_DARK_OFF
+                }
+                WebSettingsCompat.setForceDark(settings, forceDarkValue)
+
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
+                    WebSettingsCompat.setForceDarkStrategy(
+                        settings,
+                        WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
+                    )
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Force dark not supported: ${t.message}")
+            }
+        }
+
+        injectThemeSupport(view, dark)
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .imePadding()
     ) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                WebView(context).apply {
+        key(isDark) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    val nightModeFlag = if (isDark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+                    val themedConfig = Configuration(context.resources.configuration).apply {
+                        uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightModeFlag
+                    }
+                    val configContext = context.createConfigurationContext(themedConfig)
+                    val themeResId = if (isDark) {
+                        com.jacek.test.app.R.style.Theme_TestAppIntegrator_Dark
+                    } else {
+                        com.jacek.test.app.R.style.Theme_TestAppIntegrator_Light
+                    }
+                    val themedContext = ContextThemeWrapper(configContext, themeResId)
+
+                    WebView(themedContext).apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -156,15 +237,8 @@ fun ModernKioskWebView(
                         WebSettingsCompat.setSafeBrowsingEnabled(settings, true)
                     }
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                        WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)
-                    ) {
-                        try {
-                            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
-                        } catch (t: Throwable) {
-                            Log.w(TAG, "Algorithmic darkening not supported on this device: ${t.message}")
-                        }
-                    }
+                    applyTheme(this, isDark)
+                    lastAppliedDark = isDark
 
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
@@ -193,6 +267,7 @@ fun ModernKioskWebView(
                             isLoading = true
                             injectStatusBarInsets(view)
                             applyPageZoom(view, pageZoom)
+                            injectThemeSupport(view, isDark)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
@@ -201,6 +276,7 @@ fun ModernKioskWebView(
                             onPageTitleChanged(view?.title)
                             injectStatusBarInsets(view)
                             applyPageZoom(view, pageZoom)
+                            injectThemeSupport(view, isDark)
                         }
 
                         override fun onReceivedError(
@@ -234,6 +310,7 @@ fun ModernKioskWebView(
                             if (newProgress > 50) {
                                 injectStatusBarInsets(view)
                                 applyPageZoom(view, pageZoom)
+                                injectThemeSupport(view, isDark)
                             }
                         }
 
@@ -262,9 +339,14 @@ fun ModernKioskWebView(
                     webView.setInitialScale(pageZoom)
                     applyPageZoom(webView, pageZoom)
                 }
+                if (lastAppliedDark != isDark) {
+                    lastAppliedDark = isDark
+                    applyTheme(webView, isDark)
+                }
                 injectStatusBarInsets(webView)
             }
         )
+    }
 
         AnimatedVisibility(
             visible = isLoading,

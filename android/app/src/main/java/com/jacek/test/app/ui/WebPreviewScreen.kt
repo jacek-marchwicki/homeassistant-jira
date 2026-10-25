@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.webkit.WebView
 import android.widget.Toast
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import com.jacek.test.app.data.ThemeMode
 import com.jacek.test.app.ui.components.ModernKioskWebView
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,11 +39,13 @@ fun WebPreviewScreen(
     pageZoom: Int = 100,
     injectStatusBarPadding: Boolean = false,
     statusBarHeightDp: Int = 0,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     isUrlAllowed: (String) -> Boolean = { true },
     onBlockedUrl: (String) -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val isDark = themeMode.isDark(isSystemInDarkTheme())
     var pageTitle by remember { mutableStateOf<String?>("Preview") }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
@@ -101,6 +105,7 @@ fun WebPreviewScreen(
                 pageZoom = pageZoom,
                 injectStatusBarPadding = injectStatusBarPadding,
                 statusBarHeightDp = statusBarHeightDp,
+                isDark = isDark,
                 isUrlAllowed = isUrlAllowed,
                 onBlockedUrl = { blocked ->
                     Toast.makeText(context, "Blocked navigation to: $blocked", Toast.LENGTH_SHORT).show()

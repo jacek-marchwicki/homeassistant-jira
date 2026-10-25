@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
@@ -42,6 +43,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -58,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jacek.test.app.data.KioskPreferences
+import com.jacek.test.app.data.ThemeMode
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -68,6 +73,7 @@ fun MainConfigScreen(
     injectStatusBarPadding: Boolean,
     restrictUrls: Boolean,
     allowedDomains: Set<String>,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     hasOverlayPermission: Boolean,
     hasNotificationPermission: Boolean,
     isServiceRunning: Boolean,
@@ -75,6 +81,7 @@ fun MainConfigScreen(
     showFloatingExit: Boolean,
     onSaveUrl: (String) -> Unit,
     onChangeZoom: (Int) -> Unit,
+    onChangeThemeMode: (ThemeMode) -> Unit = {},
     onToggleStatusBarPadding: (Boolean) -> Unit,
     onToggleRestrictUrls: (Boolean) -> Unit,
     onAddAllowedDomain: (String) -> Unit,
@@ -466,6 +473,69 @@ fun MainConfigScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // Theme Selection Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.DarkMode, contentDescription = null)
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                        Column {
+                            Text(
+                                text = "App Theme",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = when (themeMode) {
+                                    ThemeMode.SYSTEM -> "System default (auto matches device setting)"
+                                    ThemeMode.LIGHT -> "Force Light theme"
+                                    ThemeMode.DARK -> "Force Dark theme"
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        SegmentedButton(
+                            selected = themeMode == ThemeMode.SYSTEM,
+                            onClick = { onChangeThemeMode(ThemeMode.SYSTEM) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                            icon = { SegmentedButtonDefaults.Icon(active = themeMode == ThemeMode.SYSTEM) }
+                        ) {
+                            Text("System")
+                        }
+                        SegmentedButton(
+                            selected = themeMode == ThemeMode.LIGHT,
+                            onClick = { onChangeThemeMode(ThemeMode.LIGHT) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                            icon = { SegmentedButtonDefaults.Icon(active = themeMode == ThemeMode.LIGHT) }
+                        ) {
+                            Text("Light")
+                        }
+                        SegmentedButton(
+                            selected = themeMode == ThemeMode.DARK,
+                            onClick = { onChangeThemeMode(ThemeMode.DARK) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                            icon = { SegmentedButtonDefaults.Icon(active = themeMode == ThemeMode.DARK) }
+                        ) {
+                            Text("Dark")
                         }
                     }
                 }

@@ -3,6 +3,7 @@ package com.jacek.test.app
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -25,11 +26,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.jacek.test.app.data.KioskPreferences
+import com.jacek.test.app.data.ThemeMode
 import com.jacek.test.app.data.WebDataManager
 import com.jacek.test.app.service.ScreenStateService
 import com.jacek.test.app.ui.KioskActivity
 import com.jacek.test.app.ui.MainConfigScreen
 import com.jacek.test.app.ui.WebPreviewScreen
+import com.jacek.test.app.ui.theme.TestAppTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -45,6 +48,7 @@ class MainActivity : ComponentActivity() {
     private var allowedDomains by mutableStateOf<Set<String>>(emptySet())
     private var keepScreenOn by mutableStateOf(false)
     private var showFloatingExit by mutableStateOf(true)
+    private var currentThemeMode by mutableStateOf(ThemeMode.SYSTEM)
 
     private var currentScreen by mutableStateOf<Screen>(Screen.Config)
 
@@ -62,8 +66,12 @@ class MainActivity : ComponentActivity() {
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         preferences = KioskPreferences(this)
+        val isSystemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val isDark = preferences.themeMode.isDark(isSystemDark)
+        setTheme(if (isDark) R.style.Theme_TestAppIntegrator_Dark else R.style.Theme_TestAppIntegrator_Light)
+
+        super.onCreate(savedInstanceState)
         loadPreferencesState()
 
         enableEdgeToEdge()
@@ -71,7 +79,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val statusBarHeightDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().value.toInt()
 
-            MaterialTheme {
+            TestAppTheme(themeMode = currentThemeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -84,6 +92,7 @@ class MainActivity : ComponentActivity() {
                                 injectStatusBarPadding = injectStatusBarPadding,
                                 restrictUrls = restrictUrls,
                                 allowedDomains = allowedDomains,
+                                themeMode = currentThemeMode,
                                 hasOverlayPermission = hasOverlayPermission,
                                 hasNotificationPermission = hasNotificationPermission,
                                 isServiceRunning = isServiceRunning,
@@ -97,6 +106,11 @@ class MainActivity : ComponentActivity() {
                                 onChangeZoom = { newZoom ->
                                     preferences.pageZoom = newZoom
                                     pageZoom = newZoom
+                                },
+                                onChangeThemeMode = { newMode ->
+                                    preferences.themeMode = newMode
+                                    currentThemeMode = newMode
+                                    recreate()
                                 },
                                 onToggleStatusBarPadding = { enabled ->
                                     preferences.injectStatusBarPadding = enabled
@@ -158,6 +172,7 @@ class MainActivity : ComponentActivity() {
                                 pageZoom = pageZoom,
                                 injectStatusBarPadding = injectStatusBarPadding,
                                 statusBarHeightDp = statusBarHeightDp,
+                                themeMode = currentThemeMode,
                                 isUrlAllowed = { targetUrl -> preferences.isUrlAllowed(targetUrl) },
                                 onBack = { currentScreen = Screen.Config }
                             )
@@ -185,6 +200,7 @@ class MainActivity : ComponentActivity() {
         allowedDomains = preferences.allowedDomains
         keepScreenOn = preferences.keepScreenOn
         showFloatingExit = preferences.showFloatingExit
+        currentThemeMode = preferences.themeMode
         isServiceRunning = preferences.isServiceEnabled
     }
 

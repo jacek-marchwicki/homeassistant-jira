@@ -18,9 +18,16 @@ export function getViewTransitionName(issueKey: string, isDone = false): string 
   return isDone ? `issue-done-${sanitized}` : `issue-${sanitized}`;
 }
 
+import { flushSync } from 'react-dom';
+
 /**
  * Executes a state-mutating callback within a document view transition if supported,
  * or immediately as a zero-latency fallback.
+ *
+ * In React 18/19, state mutations must be wrapped in `flushSync` so that React
+ * synchronously commits the DOM changes before the browser captures the "after" snapshot.
+ * Without `flushSync`, React batches updates asynchronously and the browser takes a snapshot
+ * of unchanged DOM, resulting in zero animation.
  */
 export function runWithViewTransition(callback: () => void): void {
   if (
@@ -28,7 +35,15 @@ export function runWithViewTransition(callback: () => void): void {
     'startViewTransition' in document &&
     typeof (document as Document & { startViewTransition?: unknown }).startViewTransition === 'function'
   ) {
-    (document as Document & { startViewTransition: (cb: () => void) => unknown }).startViewTransition(callback);
+    (document as Document & { startViewTransition: (cb: () => void) => unknown }).startViewTransition(() => {
+      try {
+        flushSync(() => {
+          callback();
+        });
+      } catch {
+        callback();
+      }
+    });
   } else {
     callback();
   }

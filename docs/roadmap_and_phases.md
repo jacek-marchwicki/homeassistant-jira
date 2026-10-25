@@ -402,3 +402,16 @@ This document details the architectural phases, delivered features, and evolutio
     - Store tests in [`frontend/src/store/boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts) covering immediate optimistic mutation, delayed sync, undo cancellation, rapid successive flushing, and offline outbox queuing.
     - Component unit tests in [`frontend/src/components/UndoSnackbar.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/UndoSnackbar.test.tsx), [`frontend/src/components/IssueCard.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/IssueCard.test.tsx), and [`frontend/src/App.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/App.test.tsx).
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+
+- [x] **Phase 5.28: Sticky Modal Headers for Task Creation and Task Edition**
+  - [x] **Always-Visible Top Header during Content Scrolling**:
+    - Upgraded both [`CreateIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.tsx) and [`EditIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.tsx) to use structured flexbox containers (`flex flex-col overflow-hidden`).
+    - Modal headers (`shrink-0 sticky top-0 z-10 bg-[var(--jira-surface)] border-b border-[var(--jira-border)]`) stay firmly pinned at the top whenever users scroll through long descriptions, comments, or form fields.
+    - Title (with task issue key link in Edit modal) and action buttons (Close/Cancel on the left, Create/Save on the right) remain continuously visible and clickable at all scroll positions.
+    - Form content and metadata sections are contained in dedicated scrollable content bodies (`flex-1 min-h-0 overflow-y-auto overscroll-contain`).
+  - [x] **Preserved Theme & AI Background Banner Compatibility**:
+    - Seamlessly supports task background banners in [`EditIssueModal.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.tsx) with rounded corner clipping on desktop and edge-to-edge coverage.
+  - [x] **Comprehensive Automated Test Coverage**:
+    - Unit tests in [`frontend/src/components/CreateIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.test.tsx) and [`frontend/src/components/EditIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.test.tsx) verifying sticky header behavior and scrollable content separation (39 test files, 376 tests passing).
+    - Playwright mobile modal scrolling tests in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) verifying that header bounding boxes and action buttons remain visible at scroll position.
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.

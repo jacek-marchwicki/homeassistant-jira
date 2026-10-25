@@ -367,6 +367,22 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     }
 
     await expect(page).toHaveScreenshot('modal-create-issue-mobile.png');
+
+    // Verify sticky header stays on top when content scrolls
+    const header = modal.getByTestId('create-issue-modal-header');
+    const headerBoxBefore = await header.boundingBox();
+    expect(headerBoxBefore).not.toBeNull();
+
+    const content = modal.getByTestId('create-issue-modal-content');
+    await content.evaluate((el) => { el.scrollTop = 300; });
+    await page.waitForTimeout(100);
+
+    const headerBoxAfter = await header.boundingBox();
+    expect(headerBoxAfter).not.toBeNull();
+    expect(headerBoxAfter?.y).toBe(headerBoxBefore?.y);
+    await expect(page.locator('#create-issue-title')).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Close create dialog' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Create', exact: true })).toBeVisible();
   });
 
   test('Capture Edit Issue Modal Snapshot', async ({ page }) => {
@@ -447,6 +463,22 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     }
 
     await expect(page).toHaveScreenshot('modal-edit-issue-mobile.png');
+
+    // Verify sticky header stays on top when content scrolls
+    const header = modal.getByTestId('edit-issue-modal-header');
+    const headerBoxBefore = await header.boundingBox();
+    expect(headerBoxBefore).not.toBeNull();
+
+    const content = modal.getByTestId('edit-issue-modal-content');
+    await content.evaluate((el) => { el.scrollTop = 300; });
+    await page.waitForTimeout(100);
+
+    const headerBoxAfter = await header.boundingBox();
+    expect(headerBoxAfter).not.toBeNull();
+    expect(headerBoxAfter?.y).toBe(headerBoxBefore?.y);
+    await expect(page.locator('#edit-issue-title')).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Close edit dialog' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Save' })).toBeVisible();
   });
 
   test('Capture Create Issue Modal with Assignee Picker Open Snapshot', async ({ page }) => {

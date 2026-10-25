@@ -341,8 +341,45 @@ describe('CreateIssueModal component', () => {
     expect(dialogBox.className).toContain('sm:border');
     expect(dialogBox.className).toContain('shadow-none');
     expect(dialogBox.className).toContain('sm:shadow-2xl');
-    expect(dialogBox.className).toContain('p-4');
-    expect(dialogBox.className).toContain('sm:p-6');
+    expect(dialogBox.className).toContain('flex');
+    expect(dialogBox.className).toContain('flex-col');
+    expect(dialogBox.className).toContain('overflow-hidden');
+  });
+
+  it('keeps header fixed/sticky at the top with title and top buttons when modal content scrolls', async () => {
+    const handleClose = vi.fn();
+
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={handleClose} />);
+    });
+
+    const modalDialog = container.querySelector('div[role="dialog"]') as HTMLDivElement;
+    const dialogBox = modalDialog.querySelector(':scope > div') as HTMLDivElement;
+    expect(dialogBox).not.toBeNull();
+    expect(dialogBox.className).toContain('flex');
+    expect(dialogBox.className).toContain('flex-col');
+    expect(dialogBox.className).toContain('overflow-hidden');
+
+    const header = container.querySelector('[data-testid="create-issue-modal-header"]') as HTMLElement;
+    expect(header).not.toBeNull();
+    expect(header.className).toContain('shrink-0');
+    expect(header.className).toContain('sticky');
+    expect(header.className).toContain('top-0');
+    expect(header.className).toContain('z-10');
+    expect(header.className).toContain('bg-[var(--jira-surface)]');
+
+    const title = header.querySelector('#create-issue-title');
+    const closeBtn = header.querySelector('button[aria-label="Close create dialog"]');
+    const createBtn = header.querySelector('button[form="create-issue-form"]');
+    expect(title).not.toBeNull();
+    expect(closeBtn).not.toBeNull();
+    expect(createBtn).not.toBeNull();
+
+    const content = container.querySelector('[data-testid="create-issue-modal-content"]') as HTMLElement;
+    expect(content).not.toBeNull();
+    expect(content.className).toContain('flex-1');
+    expect(content.className).toContain('overflow-y-auto');
+    expect(content.contains(header)).toBe(false);
   });
 
   it('displays Start Date before Due Date matching EditIssueModal order', async () => {

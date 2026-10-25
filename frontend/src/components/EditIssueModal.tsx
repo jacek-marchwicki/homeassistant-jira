@@ -147,15 +147,15 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
       aria-label={`Edit Issue ${issue.key}`}
     >
       <div
-        className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-[var(--jira-surface)] border-0 sm:border border-[var(--jira-border)] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl p-4 sm:p-6 pb-8 sm:pb-6 relative overflow-y-auto overscroll-contain"
+        className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-[var(--jira-surface)] border-0 sm:border border-[var(--jira-border)] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl relative flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header / Banner */}
         <div
           data-testid="edit-issue-modal-header"
           style={modalBannerStyle}
-          className={`flex items-center justify-between pb-4 border-b border-[var(--jira-border)] transition-all ${
-            hasBackground ? 'p-3 -m-4 sm:-m-6 mb-4 sm:mb-6 rounded-t-none sm:rounded-t-xl shadow-inner' : ''
+          className={`shrink-0 sticky top-0 z-10 flex items-center justify-between p-4 sm:p-6 pb-4 sm:pb-4 border-b border-[var(--jira-border)] bg-[var(--jira-surface)] transition-all ${
+            hasBackground ? 'shadow-inner' : ''
           }`}
         >
           {/* Far-left: Close (back arrow) / Cancel (X) button + Title */}
@@ -215,16 +215,21 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
           </div>
         </div>
 
-        {/* Validation Error Banner */}
-        {validationError && (
-          <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{validationError}</span>
-          </div>
-        )}
+        {/* Modal Scrollable Content */}
+        <div
+          data-testid="edit-issue-modal-content"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 pt-4 pb-8 sm:pb-6"
+        >
+          {/* Validation Error Banner */}
+          {validationError && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{validationError}</span>
+            </div>
+          )}
 
-        {/* Edit Form */}
-        <form id="edit-issue-form" onSubmit={handleSubmit} className="mt-4 space-y-4">
+          {/* Edit Form */}
+          <form id="edit-issue-form" onSubmit={handleSubmit} className="space-y-4">
           {/* Summary Input */}
           <div>
             <label
@@ -423,6 +428,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
           {/* Discussion / Comments Section */}
           <CommentsSection issueKey={issue.key} hideBorderTop={true} />
+        </div>
         </div>
       </div>
     </div>

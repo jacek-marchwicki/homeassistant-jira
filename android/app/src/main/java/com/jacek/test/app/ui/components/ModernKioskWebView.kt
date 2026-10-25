@@ -128,7 +128,9 @@ fun ModernKioskWebView(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
 
-                    WebView.setWebContentsDebuggingEnabled(true)
+                    if (com.jacek.test.app.BuildConfig.DEBUG) {
+                        WebView.setWebContentsDebuggingEnabled(true)
+                    }
 
                     // Modern WebSettings configuration
                     settings.apply {

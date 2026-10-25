@@ -98,7 +98,8 @@ class KioskActivity : ComponentActivity() {
     private fun unlockAndExit() {
         Log.d(TAG, "Requesting keyguard dismissal (bouncer)")
         val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-        if (keyguardManager == null) {
+        if (keyguardManager == null || !keyguardManager.isKeyguardLocked) {
+            Log.i(TAG, "Keyguard is not locked or manager unavailable. Finishing KioskActivity.")
             finish()
             return
         }
@@ -119,7 +120,8 @@ class KioskActivity : ComponentActivity() {
 
                 override fun onDismissError() {
                     super.onDismissError()
-                    Log.e(TAG, "Keyguard dismiss encountered an error.")
+                    Log.e(TAG, "Keyguard dismiss encountered an error. Finishing.")
+                    finish()
                 }
             }
         )

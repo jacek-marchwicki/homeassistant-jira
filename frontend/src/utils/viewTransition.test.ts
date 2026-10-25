@@ -16,6 +16,12 @@ describe('viewTransition utility', () => {
     it('sanitizes special characters into safe css identifier characters', () => {
       expect(getViewTransitionName('PROJ.101:sub', false)).toBe('issue-proj-101-sub');
     });
+
+    it('scopes transition names to column id to prevent duplicate identifiers across people columns', () => {
+      expect(getViewTransitionName('PROJ-101', false, 'col-jacek')).toBe('issue-col-jacek-proj-101');
+      expect(getViewTransitionName('PROJ-101', true, 'col-jacek')).toBe('issue-done-col-jacek-proj-101');
+      expect(getViewTransitionName('PROJ-101', false, 'col-magda')).toBe('issue-col-magda-proj-101');
+    });
   });
 
   describe('runWithViewTransition', () => {

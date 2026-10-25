@@ -153,6 +153,11 @@
    CSS View Transitions: Smooth animations for task completion & repositioning
    ========================================================================== */
 
+/* Prevent full viewport flashing during card transitions */
+:root {
+  view-transition-name: none;
+}
+
 /* Card transition group: smooth position/layout transitions for moving cards */
 ::view-transition-group(*) {
   animation-duration: 280ms;

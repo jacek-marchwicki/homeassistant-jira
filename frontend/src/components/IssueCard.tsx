@@ -62,7 +62,7 @@ export function IssueCard({
 
   const { backgroundUrl, hasBackground } = useTaskBackground(issue.key);
   const cardBackgroundStyle = getCardBackgroundStyle(backgroundUrl);
-  const viewTransitionName = isDragOverlay ? undefined : getViewTransitionName(issue.key, isDone);
+  const viewTransitionName = isDragOverlay ? undefined : getViewTransitionName(issue.key, isDone, sourceColumnId);
 
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),

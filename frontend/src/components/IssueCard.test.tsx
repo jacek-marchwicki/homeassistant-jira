@@ -210,6 +210,20 @@ describe('IssueCard component', () => {
     const overlayArticle = container.querySelector('article[data-testid="issue-card-PROJ-101"]') as HTMLElement | null;
     expect(overlayArticle).not.toBeNull();
     expect(overlayArticle?.style.viewTransitionName).toBeFalsy();
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockIssueTodo.key]}>
+            <IssueCard issue={mockIssueTodo} sourceColumnId="user-123" />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const scopedArticle = container.querySelector('article[data-testid="issue-card-PROJ-101"]') as HTMLElement | null;
+    expect(scopedArticle).not.toBeNull();
+    expect(scopedArticle?.style.viewTransitionName).toBe('issue-user-123-proj-101');
   });
 
   it('invokes document.startViewTransition when available on quick Done action', async () => {

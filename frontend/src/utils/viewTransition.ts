@@ -8,13 +8,20 @@
 /**
  * Return a valid, sanitized CSS `<custom-ident>` for an issue's view-transition-name.
  *
- * Active issues get `issue-<sanitized-key>`, while completed issues get
- * `issue-done-<sanitized-key>`. Having distinct transition names allows the
- * active card to animate its exit/fade-out in place while siblings smoothly slide
- * up into the vacated slot.
+ * Scopes the transition name to the issue key and optional column/container id so that
+ * issues appearing in multiple people columns (e.g. unassigned or shared tasks)
+ * do not produce duplicate view-transition-name identifiers, which causes the browser
+ * to abort the ViewTransition with an InvalidStateError.
  */
-export function getViewTransitionName(issueKey: string, isDone = false): string {
-  const sanitized = issueKey.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+export function getViewTransitionName(
+  issueKey: string,
+  isDone = false,
+  columnId?: string
+): string {
+  const scopePrefix = columnId ? `${columnId}-` : '';
+  const sanitized = `${scopePrefix}${issueKey}`
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-');
   return isDone ? `issue-done-${sanitized}` : `issue-${sanitized}`;
 }
 

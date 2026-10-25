@@ -158,13 +158,13 @@ def run_native_pipeline(
         ),
         (
             "Step 4: Running Frontend unit tests (Vitest)...",
-            ["npx", "pnpm", "--dir", "frontend", "test"],
+            ["npx", "--yes", "pnpm", "--dir", "frontend", "test"],
             project_root,
             None,
         ),
         (
             "Step 5: Running Frontend typecheck & production build (tsc -b && vite build)...",
-            ["npx", "pnpm", "--dir", "frontend", "build"],
+            ["npx", "--yes", "pnpm", "--dir", "frontend", "build"],
             project_root,
             None,
         ),
@@ -174,7 +174,7 @@ def run_native_pipeline(
         steps.append(
             (
                 "Step 6: Running Full-Stack E2E Integration tests (Playwright)...",
-                ["npx", "pnpm", "--dir", "frontend", "test:e2e"],
+                ["npx", "--yes", "pnpm", "--dir", "frontend", "test:e2e"],
                 project_root,
                 {"JIRA_USE_FAKE": "1", "PLAYWRIGHT_PORT": "8001"},
             )
@@ -184,7 +184,7 @@ def run_native_pipeline(
         steps.append(
             (
                 "Step 7: Running Visual Screenshot tests across viewports & themes (Playwright)...",
-                ["npx", "pnpm", "--dir", "frontend", "test:visual"],
+                ["npx", "--yes", "pnpm", "--dir", "frontend", "test:visual"],
                 project_root,
                 {"JIRA_USE_FAKE": "1", "PLAYWRIGHT_PORT": "8002"},
             )

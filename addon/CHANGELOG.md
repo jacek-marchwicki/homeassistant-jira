@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0
+
+- **Serverless Persistence (Firestore & Google Cloud Storage)**: Native Google Cloud Firestore adapter for transactional multi-instance storage (board cache, outbox mutations, account types, and Gemini AI image metadata) and Google Cloud Storage (GCS) adapter for chore/task background image blobs, removing single-instance SQLite and Cloud Storage FUSE dependencies on GCP Cloud Run.
+- **PWA Auto-Refresh & Instant Cache Invalidation**: Configured service worker network-first HTML revalidation with `updateViaCache: 'none'` and periodic 60-second update polling, coupled with granular server-side `Cache-Control` headers (immutable hashed assets, `no-cache` for HTML/service-worker/manifest) so client browsers and installed PWAs refresh immediately upon updates.
+- **Application Version Display**: Added an "About" section in the full-screen Settings screen displaying the installed frontend application version and backend API build version badges.
+- **Toggle AI Background Images**: Added a user setting toggle to show or hide AI-generated task background images on cards, conditionally visible only when Gemini AI is enabled.
+- **Enhanced Home Tasks MCP**: Tasks created via MCP (e.g., from Gemini or other AI assistants) now automatically broadcast via WebSockets to all connected dashboard displays and return clickable dashboard URLs directly in the response.
+- **Automated Cloud Run Provisioning**: Enhanced `scripts/deploy_gcp.py` with automated Firestore database creation, image storage bucket provisioning, IAM permissions, and volume cleanup.
+
 ## 0.7.0
 
 - **Task Cloning**: Easily clone existing tasks directly from the task details/edit screen with pre-filled summary, description, assignee, and tags for rapid task creation.

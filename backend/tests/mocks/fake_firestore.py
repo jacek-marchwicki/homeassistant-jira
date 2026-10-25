@@ -35,7 +35,11 @@ class FakeDocumentSnapshot:
 class FakeQuery:
     """Emulates Firestore collection queries (where filters, ordering)."""
 
-    def __init__(self, collection: FakeCollectionReference, filters: list[tuple[str, str, Any]] | None = None) -> None:
+    def __init__(
+        self,
+        collection: FakeCollectionReference,
+        filters: list[tuple[str, str, Any]] | None = None,
+    ) -> None:
         self._collection = collection
         self._filters: list[tuple[str, str, Any]] = list(filters or [])
         self._order_by_field: str | None = None
@@ -127,6 +131,7 @@ class FakeCollectionReference:
     def document(self, document_id: str | None = None) -> FakeDocumentReference:
         if not document_id:
             import uuid
+
             document_id = str(uuid.uuid4())
         return FakeDocumentReference(document_id, self)
 

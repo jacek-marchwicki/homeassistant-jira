@@ -54,9 +54,8 @@ def create_storage(settings: JiraDashboardSettings | None = None) -> StorageProt
     if settings is None:
         settings = JiraDashboardSettings.load()
 
-    use_firestore = (
-        settings.storage_backend == "firestore"
-        or (settings.storage_backend is None and settings.auth_mode == "gcp_oauth")
+    use_firestore = settings.storage_backend == "firestore" or (
+        settings.storage_backend is None and settings.auth_mode == "gcp_oauth"
     )
 
     if use_firestore:
@@ -87,17 +86,15 @@ def create_blob_storage(settings: JiraDashboardSettings | None = None) -> BlobSt
     if settings is None:
         settings = JiraDashboardSettings.load()
 
-    use_gcs = (
-        settings.image_storage_backend == "gcs"
-        or (settings.image_storage_backend is None and settings.auth_mode == "gcp_oauth")
+    use_gcs = settings.image_storage_backend == "gcs" or (
+        settings.image_storage_backend is None and settings.auth_mode == "gcp_oauth"
     )
 
     if use_gcs:
         from jira_dashboard.adapters.blob_storage import GoogleCloudStorageBlobStorage
 
         bucket_name = (
-            settings.image_storage_bucket
-            or f"{settings.gcp_project_id or 'default'}-images"
+            settings.image_storage_bucket or f"{settings.gcp_project_id or 'default'}-images"
         )
         logger.info("Configuring GoogleCloudStorageBlobStorage (bucket=%s)", bucket_name)
         return GoogleCloudStorageBlobStorage(bucket_name=bucket_name)

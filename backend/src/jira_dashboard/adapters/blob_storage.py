@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,11 @@ class GoogleCloudStorageBlobStorage:
             return blob.download_as_bytes()
         except Exception as exc:
             # Matches google.cloud.exceptions.NotFound or test double NotFound
-            if "not found" in str(exc).lower() or exc.__class__.__name__ in ("NotFound", "FakeNotFound"):
+            is_not_found = "not found" in str(exc).lower() or exc.__class__.__name__ in (
+                "NotFound",
+                "FakeNotFound",
+            )
+            if is_not_found:
                 return None
             logger.warning("Error fetching GCS blob %s/%s: %s", self.bucket_name, blob_path, exc)
             return None
@@ -124,7 +128,12 @@ class GoogleCloudStorageBlobStorage:
         try:
             return bool(blob.exists())
         except Exception as exc:
-            logger.debug("Error checking existence of GCS blob %s/%s: %s", self.bucket_name, blob_path, exc)
+            logger.debug(
+                "Error checking existence of GCS blob %s/%s: %s",
+                self.bucket_name,
+                blob_path,
+                exc,
+            )
             return False
 
     def delete(self, key: str) -> bool:
@@ -135,8 +144,11 @@ class GoogleCloudStorageBlobStorage:
             blob.delete()
             return True
         except Exception as exc:
-            if "not found" in str(exc).lower() or exc.__class__.__name__ in ("NotFound", "FakeNotFound"):
+            is_not_found = "not found" in str(exc).lower() or exc.__class__.__name__ in (
+                "NotFound",
+                "FakeNotFound",
+            )
+            if is_not_found:
                 return False
             logger.warning("Error deleting GCS blob %s/%s: %s", self.bucket_name, blob_path, exc)
             return False
-

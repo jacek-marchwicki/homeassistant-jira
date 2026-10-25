@@ -8,7 +8,14 @@ from tempfile import TemporaryDirectory
 
 from jira_dashboard.adapters.storage import SQLiteStorage
 from jira_dashboard.adapters.storage_protocol import StorageProtocol
-from jira_dashboard.domain.models import BoardColumn, IssueType, JiraIssue, JiraStatus, JiraUser, Priority
+from jira_dashboard.domain.models import (
+    BoardColumn,
+    IssueType,
+    JiraIssue,
+    JiraStatus,
+    JiraUser,
+    Priority,
+)
 
 
 class BaseStorageComplianceTest:
@@ -119,7 +126,9 @@ class BaseStorageComplianceTest:
         assert len(pending_after) == 1
         assert pending_after[0]["id"] == id2
 
-        storage.update_outbox_status(id2, "failed", error_message="Network error", increment_retry=True)
+        storage.update_outbox_status(
+            id2, "failed", error_message="Network error", increment_retry=True
+        )
         item2 = storage.get_outbox_item(id2)
         assert item2 is not None
         assert item2["status"] == "failed"
@@ -247,12 +256,14 @@ class TestSQLiteStorage(BaseStorageComplianceTest, unittest.TestCase):
 class TestFirestoreStorage(BaseStorageComplianceTest, unittest.TestCase):
     def setUp(self) -> None:
         import sys
+
         tests_dir = Path(__file__).resolve().parent
         if str(tests_dir) not in sys.path:
             sys.path.insert(0, str(tests_dir))
 
-        from jira_dashboard.adapters.firestore_storage import FirestoreStorage
         from mocks.fake_firestore import FakeFirestoreClient
+
+        from jira_dashboard.adapters.firestore_storage import FirestoreStorage
 
         self.client = FakeFirestoreClient()
         self.storage = FirestoreStorage(client=self.client)

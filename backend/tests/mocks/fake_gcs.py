@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 
 class FakeNotFound(Exception):
     """Emulates google.cloud.exceptions.NotFound."""
+
     pass
 
 

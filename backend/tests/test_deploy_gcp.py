@@ -90,8 +90,14 @@ def test_deploy_service_assembles_cloud_run_flags(tmp_path: Path) -> None:
         assert not any("LITESTREAM" in arg for arg in deploy_call)
 
 
+def test_required_apis_include_firestore_and_storage() -> None:
+    """Verify REQUIRED_APIS includes firestore and storage for serverless persistence."""
+    assert "firestore.googleapis.com" in deploy_gcp.REQUIRED_APIS
+    assert "storage.googleapis.com" in deploy_gcp.REQUIRED_APIS
+
+
 def test_build_deploy_command_clean_flags(tmp_path: Path) -> None:
-    """Verify build_deploy_command does not include Litestream or FUSE volume mounts."""
+    """Verify build_deploy_command configures persistence and does not include Litestream/FUSE."""
     config = {
         "GCP_PROJECT_ID": "my-project",
         "GCP_REGION": "europe-west1",
@@ -104,11 +110,58 @@ def test_build_deploy_command_clean_flags(tmp_path: Path) -> None:
     assert "gcloud run deploy my-service" in cmd_str
     assert "--project my-project" in cmd_str
     assert "--region europe-west1" in cmd_str
-    assert "--set-env-vars AUTH_MODE=gcp_oauth" in cmd_str
+    assert "AUTH_MODE=gcp_oauth" in cmd_str
+    assert "STORAGE_BACKEND=firestore" in cmd_str
+    assert "IMAGE_STORAGE_BACKEND=gcs" in cmd_str
+    assert "IMAGE_STORAGE_BUCKET=my-project-images" in cmd_str
+    assert "GCP_PROJECT_ID=my-project" in cmd_str
     assert "--execution-environment" not in cmd_str
     assert "--add-volume" not in cmd_str
     assert "--add-volume-mount" not in cmd_str
     assert "LITESTREAM" not in cmd_str
+
+
+def test_ensure_storage_bucket_creates_and_binds_iam() -> None:
+    """Verify ensure_storage_bucket creates bucket when missing and binds objectAdmin role."""
+    with patch("subprocess.run") as mock_subrun, patch("deploy_gcp.run_cmd") as mock_run_cmd:
+        # Simulate bucket doesn't exist
+        mock_subrun.return_value = MagicMock(returncode=1)
+
+        deploy_gcp.ensure_storage_bucket(
+            project_id="test-proj",
+            bucket_name="test-bucket",
+            region="europe-west1",
+            compute_sa="test-sa@developer.gserviceaccount.com",
+        )
+
+        # Verify bucket creation
+        mock_run_cmd.assert_any_call(
+            [
+                "gcloud",
+                "storage",
+                "buckets",
+                "create",
+                "gs://test-bucket",
+                "--project=test-proj",
+                "--location=europe-west1",
+                "--uniform-bucket-level-access",
+            ],
+            capture_output=True,
+        )
+
+        # Verify IAM policy binding
+        mock_run_cmd.assert_any_call(
+            [
+                "gcloud",
+                "storage",
+                "buckets",
+                "add-iam-policy-binding",
+                "gs://test-bucket",
+                "--member=serviceAccount:test-sa@developer.gserviceaccount.com",
+                "--role=roles/storage.objectAdmin",
+            ],
+            capture_output=True,
+        )
 
 
 def test_dockerfile_clean_of_litestream_and_entrypoint() -> None:

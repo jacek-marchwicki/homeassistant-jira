@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 from jira_dashboard.adapters.blob_storage import GoogleCloudStorageBlobStorage, LocalDiskBlobStorage
 from jira_dashboard.adapters.factory import create_blob_storage, create_storage

@@ -341,9 +341,12 @@ This document details the architectural phases, delivered features, and evolutio
     - Verifies Google ID tokens using official `google-auth` library and issues secure, tamper-proof session tokens for web browsers.
     - Authenticated WebSocket endpoint protecting `/ws` in `GCP_OAUTH` mode (close code 1008).
     - Tested in [`backend/tests/test_auth.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_auth.py).
-  - [x] **Lightweight Stateless Architecture & Zero Cold-Start Overhead**:
-    - Eliminated Litestream continuous WAL streaming and Cloud Storage FUSE volume mounts for optimal performance and sub-second container cold-starts on Google Cloud Run.
-    - Container runs completely standalone and stateless with transient local SQLite cache synced directly from Jira Cloud API on demand.
+  - [x] **Budget-Friendly Serverless Persistence (Firestore & Google Cloud Storage)**:
+    - Replaced heavy Litestream continuous WAL daemon and Cloud Storage FUSE mounts with lightweight, native serverless adapters:
+      - **Cloud Firestore Adapter** ([`FirestoreStorage`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/firestore_storage.py)): Full implementation of [`StorageProtocol`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/storage_protocol.py) using the official `google-cloud-firestore` SDK. Fits comfortably within Firestore's Always Free tier (50,000 reads, 20,000 writes/day).
+      - **Cloud Storage API Adapter** ([`GoogleCloudStorageBlobStorage`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/blob_storage.py)): Direct API upload/fetch of generated task background images using `google-cloud-storage` SDK, avoiding FUSE mounts and file locks completely.
+    - Strictly environment-driven factory switching ([`adapters/factory.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/factory.py)): Automatically activates Firestore + GCS when `AUTH_MODE=gcp_oauth` or explicit env flags, while preserving purely local SQLite and filesystem disk storage on Home Assistant and local development.
+    - Contract compliance tested with a shared test suite ([`backend/tests/test_storage_compliance.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_storage_compliance.py) and [`backend/tests/test_blob_storage_compliance.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_blob_storage_compliance.py)).
   - [x] **Zero-to-Minimal Cost Guarantee (< $2 USD / month)**:
     - Designed strictly around GCP's **Always Free Tier**:
       - Scale to zero (`--min-instances 0`).

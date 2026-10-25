@@ -29,6 +29,8 @@ To guarantee you never pay more than **$2 USD/month** (and typically **$0.00**),
 | Service | GCP Free Tier Allowance | How We Keep It Free |
 | :--- | :--- | :--- |
 | **Cloud Run** | • 2,000,000 requests / month<br/>• 360,000 vCPU-seconds / month<br/>• 180,000 GiB-seconds / month | • **Scale to Zero**: `--min-instances 0` (zero compute when idle).<br/>• **CPU Throttling**: CPU is only allocated and billed during active request processing.<br/>• **Instance Cap**: `--max-instances 2` to prevent runaway traffic spikes. |
+| **Cloud Firestore** | • 50,000 document reads / day<br/>• 20,000 document writes / day<br/>• 1 GiB stored data free | Serverless NoSQL document database storing board metadata, offline mutations, OAuth sessions, and image metadata. Zero provisioned instances or idle fees. |
+| **Cloud Storage** | • 5 GiB standard storage / month<br/>• 5,000 Class A operations / month<br/>• 50,000 Class B operations / month | Direct SDK blob storage for AI-generated task background WebP images, completely avoiding FUSE mounts and file locks. |
 | **Secret Manager** | • 6 active secret versions free / month<br/>• 10,000 access operations free / month | We use ~5 secrets, well within the free tier. |
 | **Cloud Build** | • 120 build-minutes free / day | Container builds take ~1 to 2 minutes. |
 | **Networking** | Direct Cloud Run HTTPS | **We DO NOT use an external HTTP(S) Load Balancer** (which costs ~$18/month). Cloud Run provides free, fully-managed TLS certificates automatically. |
@@ -121,12 +123,14 @@ JIRA_BOARD_ID=engineering-1
 
 All deployment steps are automated using the type-safe Python deployment utility [`scripts/deploy_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/deploy_gcp.py):
 
-### 1. Sync Secrets to GCP Secret Manager (First time or when credentials change)
+### 1. Sync Secrets & Infrastructure (First time or when credentials change)
 ```bash
 python3 scripts/deploy_gcp.py sync-secrets
 ```
 This command:
-- Enables Cloud Run, Secret Manager, Cloud Build, and Artifact Registry APIs.
+- Enables Cloud Run, Secret Manager, Cloud Build, Artifact Registry, Cloud Firestore, and Cloud Storage APIs.
+- Provisions the Google Cloud Storage bucket for AI image backgrounds with uniform bucket-level access.
+- Grants Firestore (`roles/datastore.user`) and Cloud Storage (`roles/storage.objectAdmin`) permissions to Cloud Run's default service account.
 - Uploads and encrypts all credentials in GCP Secret Manager.
 - Grants read access to Cloud Run's default service account.
 

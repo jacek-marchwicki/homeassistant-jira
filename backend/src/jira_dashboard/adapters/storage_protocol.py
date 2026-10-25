@@ -100,7 +100,7 @@ class StorageProtocol(Protocol):
         error_message: str | None = None,
         increment_retry: bool = False,
     ) -> None:
-        """Update transaction status (e.g. 'sent', 'failed') and optionally increment retry_count."""
+        """Update transaction status and optionally increment retry_count."""
         ...
 
     def get_outbox_item(self, outbox_id: int) -> dict[str, Any] | None:

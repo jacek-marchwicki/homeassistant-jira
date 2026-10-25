@@ -87,10 +87,7 @@ class FirestoreStorage:
             return None
         data = doc.to_dict() or {}
         raw_cols = data.get("columns", [])
-        columns = [
-            BoardColumn.model_validate(c) if isinstance(c, dict) else c
-            for c in raw_cols
-        ]
+        columns = [BoardColumn.model_validate(c) if isinstance(c, dict) else c for c in raw_cols]
         return {
             "board_id": data.get("board_id", board_id),
             "board_name": data.get("board_name", ""),

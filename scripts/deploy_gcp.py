@@ -35,6 +35,8 @@ REQUIRED_APIS = [
     "secretmanager.googleapis.com",
     "cloudbuild.googleapis.com",
     "artifactregistry.googleapis.com",
+    "firestore.googleapis.com",
+    "storage.googleapis.com",
 ]
 
 SECRET_KEYS = [
@@ -169,6 +171,49 @@ def get_project_number(project_id: str) -> str:
     return res.stdout.strip()
 
 
+def ensure_storage_bucket(
+    project_id: str,
+    bucket_name: str,
+    region: str,
+    compute_sa: str,
+) -> None:
+    """Ensure Google Cloud Storage bucket exists for image blobs and SA has objectAdmin permissions."""
+    print(f"  • Checking Cloud Storage bucket: gs://{bucket_name}")
+    describe_check = subprocess.run(
+        ["gcloud", "storage", "buckets", "describe", f"gs://{bucket_name}"],
+        capture_output=True,
+        check=False,
+    )
+    if describe_check.returncode != 0:
+        print(f"  • Creating bucket gs://{bucket_name} in {region}...")
+        run_cmd(
+            [
+                "gcloud",
+                "storage",
+                "buckets",
+                "create",
+                f"gs://{bucket_name}",
+                f"--project={project_id}",
+                f"--location={region}",
+                "--uniform-bucket-level-access",
+            ],
+            capture_output=True,
+        )
+    run_cmd(
+        [
+            "gcloud",
+            "storage",
+            "buckets",
+            "add-iam-policy-binding",
+            f"gs://{bucket_name}",
+            f"--member=serviceAccount:{compute_sa}",
+            "--role=roles/storage.objectAdmin",
+        ],
+        capture_output=True,
+    )
+    print_success(f"Configured GCS bucket gs://{bucket_name}")
+
+
 def sync_secrets(project_root: Path, env_path: str | None = None) -> None:
     """Synchronize credentials from .env.gcp into Google Cloud Secret Manager."""
     print_step("Checking prerequisites and loading configuration...")
@@ -192,6 +237,27 @@ def sync_secrets(project_root: Path, env_path: str | None = None) -> None:
     project_number = get_project_number(project_id)
     compute_sa = f"{project_number}-compute@developer.gserviceaccount.com"
     print_success(f"Default Cloud Run compute service account: {compute_sa}")
+
+    print_step("Ensuring Cloud Storage bucket for image cache...")
+    bucket_name = config.get("IMAGE_STORAGE_BUCKET") or f"{project_id}-images"
+    region = config.get("GCP_REGION", "europe-west1")
+    ensure_storage_bucket(project_id, bucket_name, region, compute_sa)
+
+    print_step(
+        "Granting Datastore/Firestore IAM permissions to compute service account..."
+    )
+    run_cmd(
+        [
+            "gcloud",
+            "projects",
+            "add-iam-policy-binding",
+            project_id,
+            f"--member=serviceAccount:{compute_sa}",
+            "--role=roles/datastore.user",
+        ],
+        capture_output=True,
+    )
+    print_success("Granted roles/datastore.user to compute service account.")
 
     print_step("Provisioning secrets in GCP Secret Manager...")
     if not config.get("SESSION_SECRET_KEY"):
@@ -278,6 +344,17 @@ def build_deploy_command(project_root: Path, config: dict[str, str]) -> list[str
             secret_id = key.lower().replace("_", "-")
             secret_bindings.append(f"{key}={secret_id}:latest")
 
+    bucket_name = config.get("IMAGE_STORAGE_BUCKET") or f"{project_id}-images"
+    env_vars = [
+        "AUTH_MODE=gcp_oauth",
+        "STORAGE_BACKEND=firestore",
+        "IMAGE_STORAGE_BACKEND=gcs",
+        f"IMAGE_STORAGE_BUCKET={bucket_name}",
+        f"GCP_PROJECT_ID={project_id}",
+    ]
+    if config.get("FIRESTORE_DATABASE_ID"):
+        env_vars.append(f"FIRESTORE_DATABASE_ID={config['FIRESTORE_DATABASE_ID']}")
+
     deploy_cmd: list[str] = [
         "gcloud",
         "run",
@@ -304,7 +381,7 @@ def build_deploy_command(project_root: Path, config: dict[str, str]) -> list[str
         "--concurrency",
         "80",
         "--set-env-vars",
-        "AUTH_MODE=gcp_oauth",
+        ",".join(env_vars),
     ]
 
     if secret_bindings:

@@ -1,10 +1,16 @@
 """Adapter and infrastructure implementations (Jira API client, Webhooks, WebSocket hub)."""
 
+from jira_dashboard.adapters.blob_storage import (
+    BlobStorageProtocol,
+    GoogleCloudStorageBlobStorage,
+    LocalDiskBlobStorage,
+)
 from jira_dashboard.adapters.factory import (
     create_blob_storage,
     create_jira_client,
     create_storage,
 )
+from jira_dashboard.adapters.firestore_storage import FirestoreStorage
 from jira_dashboard.adapters.gemini_client import (
     GeminiImageClient,
     GoogleGenAIImageClient,
@@ -19,12 +25,6 @@ from jira_dashboard.adapters.jira_client import (
     JiraClientProtocol,
 )
 from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
-from jira_dashboard.adapters.blob_storage import (
-    BlobStorageProtocol,
-    GoogleCloudStorageBlobStorage,
-    LocalDiskBlobStorage,
-)
-from jira_dashboard.adapters.firestore_storage import FirestoreStorage
 from jira_dashboard.adapters.storage import SQLiteStorage
 from jira_dashboard.adapters.storage_protocol import StorageProtocol
 from jira_dashboard.adapters.sync_worker import JiraSyncWorker

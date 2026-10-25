@@ -14,6 +14,41 @@ export interface BeforeInstallPromptEvent extends Event {
 }
 
 /**
+ * Sets up periodic and visibility-based background checks for Service Worker updates.
+ * Useful for dashboards and wallboards left open across app version updates.
+ */
+export function setupServiceWorkerUpdateChecks(
+  registration: ServiceWorkerRegistration,
+  intervalMs = 3600000 // default: 1 hour
+): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const checkUpdate = () => {
+    try {
+      registration.update().catch((err) => {
+        console.warn('[PWA] Service Worker update check failed:', err);
+      });
+    } catch {
+      // Ignore synchronous registration errors
+    }
+  };
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      checkUpdate();
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  const intervalId = setInterval(checkUpdate, intervalMs);
+
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    clearInterval(intervalId);
+  };
+}
+
+/**
  * Registers the PWA Service Worker relative to the current base path
  * (supporting both standalone deployment and Home Assistant Ingress dynamic proxying).
  */
@@ -25,7 +60,9 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   try {
     const registration = await navigator.serviceWorker.register('./sw.js', {
       scope: './',
+      updateViaCache: 'none',
     });
+    setupServiceWorkerUpdateChecks(registration);
     return registration;
   } catch (err) {
     console.warn('[PWA] Service Worker registration failed:', err);

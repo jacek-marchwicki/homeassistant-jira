@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   registerServiceWorker,
+  setupServiceWorkerUpdateChecks,
   isRunningStandalone,
   isAndroidDevice,
   isIOSDevice,
@@ -22,10 +23,11 @@ describe('PWA Utilities', () => {
   });
 
   describe('registerServiceWorker', () => {
-    it('registers sw.js with relative scope when supported', async () => {
+    it('registers sw.js with relative scope and updateViaCache: none when supported', async () => {
       const mockRegister = vi.fn().mockResolvedValue({
         scope: './',
-      } as ServiceWorkerRegistration);
+        update: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ServiceWorkerRegistration);
 
       Object.defineProperty(window, 'navigator', {
         value: {
@@ -39,7 +41,10 @@ describe('PWA Utilities', () => {
       });
 
       const reg = await registerServiceWorker();
-      expect(mockRegister).toHaveBeenCalledWith('./sw.js', { scope: './' });
+      expect(mockRegister).toHaveBeenCalledWith('./sw.js', {
+        scope: './',
+        updateViaCache: 'none',
+      });
       expect(reg?.scope).toBe('./');
     });
 
@@ -70,6 +75,57 @@ describe('PWA Utilities', () => {
 
       const reg = await registerServiceWorker();
       expect(reg).toBeUndefined();
+    });
+  });
+
+  describe('setupServiceWorkerUpdateChecks', () => {
+    it('calls registration.update on visibilitychange when document is visible', () => {
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      const registration = { update: mockUpdate } as unknown as ServiceWorkerRegistration;
+
+      const cleanup = setupServiceWorkerUpdateChecks(registration, 60000);
+
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+      cleanup();
+    });
+
+    it('does not call registration.update on visibilitychange when document is hidden', () => {
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      const registration = { update: mockUpdate } as unknown as ServiceWorkerRegistration;
+
+      const cleanup = setupServiceWorkerUpdateChecks(registration, 60000);
+
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'hidden',
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(mockUpdate).not.toHaveBeenCalled();
+      cleanup();
+    });
+
+    it('periodically calls registration.update via timer', () => {
+      vi.useFakeTimers();
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      const registration = { update: mockUpdate } as unknown as ServiceWorkerRegistration;
+
+      const cleanup = setupServiceWorkerUpdateChecks(registration, 5000);
+
+      vi.advanceTimersByTime(5000);
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(5000);
+      expect(mockUpdate).toHaveBeenCalledTimes(2);
+
+      cleanup();
+      vi.useRealTimers();
     });
   });
 

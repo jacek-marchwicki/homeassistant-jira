@@ -1,5 +1,5 @@
 // Jira Dashboard Service Worker (PWA)
-const CACHE_NAME = 'jira-dashboard-v1';
+const CACHE_NAME = 'jira-dashboard-v2';
 
 // Core assets to pre-cache on install
 const PRECACHE_ASSETS = [
@@ -49,10 +49,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Navigation requests (HTML document): Network-first with cache fallback
-  if (request.mode === 'navigate') {
+  // 2. Navigation & HTML document requests: Network-first with cache fallback
+  // Ensures fresh index.html when online without breaking offline availability
+  const isHtmlNavigation =
+    request.mode === 'navigate' ||
+    url.pathname.endsWith('/') ||
+    url.pathname.endsWith('/index.html');
+
+  if (isHtmlNavigation) {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-cache' })
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
@@ -64,7 +70,7 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => {
           return caches.match(request).then((cachedResponse) => {
-            return cachedResponse || caches.match('./');
+            return cachedResponse || caches.match('./') || caches.match('/index.html');
           });
         })
     );

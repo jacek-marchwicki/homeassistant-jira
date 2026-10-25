@@ -170,6 +170,82 @@ describe('IssueCard component', () => {
     expect(transitionSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
   });
 
+  it('applies viewTransitionName style based on issue key and status, but omits it for drag overlays', async () => {
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockIssueTodo.key]}>
+            <IssueCard issue={mockIssueTodo} />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const todoArticle = container.querySelector('article[data-testid="issue-card-PROJ-101"]') as HTMLElement | null;
+    expect(todoArticle).not.toBeNull();
+    expect(todoArticle?.style.viewTransitionName).toBe('issue-proj-101');
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockIssueDone.key]}>
+            <IssueCard issue={mockIssueDone} />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const doneArticle = container.querySelector('article[data-testid="issue-card-PROJ-102"]') as HTMLElement | null;
+    expect(doneArticle).not.toBeNull();
+    expect(doneArticle?.style.viewTransitionName).toBe('issue-done-proj-102');
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <IssueCard issue={mockIssueTodo} isDragOverlay />
+        </DndContext>
+      );
+    });
+
+    const overlayArticle = container.querySelector('article[data-testid="issue-card-PROJ-101"]') as HTMLElement | null;
+    expect(overlayArticle).not.toBeNull();
+    expect(overlayArticle?.style.viewTransitionName).toBeFalsy();
+  });
+
+  it('invokes document.startViewTransition when available on quick Done action', async () => {
+    const startViewTransitionSpy = vi.fn((cb: () => void) => {
+      cb();
+    });
+    (document as unknown as { startViewTransition: unknown }).startViewTransition = startViewTransitionSpy;
+
+    const transitionSpy = vi.fn();
+    act(() => {
+      useBoardStore.setState({
+        transitionIssueOptimistic: transitionSpy,
+      });
+    });
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockIssueTodo.key]}>
+            <IssueCard issue={mockIssueTodo} />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const doneBtn = container.querySelector('button[aria-label="Mark PROJ-101 as Done"]');
+    await act(async () => {
+      doneBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(startViewTransitionSpy).toHaveBeenCalledTimes(1);
+    expect(transitionSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
+
+    delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
+  });
+
   it('calls setEditingIssue when clicking anywhere on the card, but NOT when clicking Done button', async () => {
     const setEditingIssueSpy = vi.fn();
     const transitionSpy = vi.fn();

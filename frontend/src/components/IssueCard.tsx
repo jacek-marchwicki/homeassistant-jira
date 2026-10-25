@@ -19,6 +19,7 @@ import {
 } from '../utils/boardUtils.ts';
 import { triggerDoneCelebration } from '../utils/celebrationEffects.ts';
 import { useTaskBackground, getCardBackgroundStyle } from '../utils/useTaskBackground.ts';
+import { getViewTransitionName, runWithViewTransition } from '../utils/viewTransition.ts';
 
 interface IssueCardProps {
   issue: JiraIssue;
@@ -61,11 +62,13 @@ export function IssueCard({
 
   const { backgroundUrl, hasBackground } = useTaskBackground(issue.key);
   const cardBackgroundStyle = getCardBackgroundStyle(backgroundUrl);
+  const viewTransitionName = isDragOverlay ? undefined : getViewTransitionName(issue.key, isDone);
 
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
+    viewTransitionName,
     ...cardBackgroundStyle,
   };
 
@@ -80,7 +83,9 @@ export function IssueCard({
       triggerDoneCelebration();
     }
     const doneCol = columns.find((c) => c.category === 'done');
-    transitionIssueOptimistic(issue.key, 'done', doneCol?.name);
+    runWithViewTransition(() => {
+      transitionIssueOptimistic(issue.key, 'done', doneCol?.name);
+    });
   };
 
   return (

@@ -28,7 +28,7 @@ class TestTaskBackgroundsEndpoint(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temp_dir = tempfile.mkdtemp()
-        self.cache_dir = Path(self.temp_dir) / "background_cache"
+        self.cache_dir = Path(self.temp_dir).resolve() / "background_cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.mock_gemini = MockGeminiImageClient()
@@ -42,10 +42,13 @@ class TestTaskBackgroundsEndpoint(unittest.TestCase):
         )
         self.settings_patcher.start()
 
-        # Replace presentation gemini_client with mock
+        # Replace presentation gemini_client and blob_storage with test isolated instances
         self._orig_gemini_client = gemini_client
         import jira_dashboard.presentation.main as main_mod
+        from jira_dashboard.adapters.blob_storage import LocalDiskBlobStorage
 
+        self._orig_blob_storage = main_mod.blob_storage
+        main_mod.blob_storage = LocalDiskBlobStorage(self.cache_dir)
         main_mod.gemini_client = self.mock_gemini
 
         self.client = TestClient(app)
@@ -81,6 +84,7 @@ class TestTaskBackgroundsEndpoint(unittest.TestCase):
         import jira_dashboard.presentation.main as main_mod
 
         main_mod.gemini_client = self._orig_gemini_client
+        main_mod.blob_storage = self._orig_blob_storage
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_nonexistent_issue_returns_404(self) -> None:

@@ -44,14 +44,17 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from jira_dashboard import __version__
 from jira_dashboard.adapters import (
     DEFAULT_COLUMNS,
+    BlobStorageProtocol,
     FakeJiraClient,
     GeminiImageClient,
     JiraAPIError,
     JiraSyncWorker,
-    SQLiteStorage,
+    StorageProtocol,
     compute_background_content_hash,
+    create_blob_storage,
     create_gemini_client,
     create_jira_client,
+    create_storage,
 )
 from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import (
@@ -92,8 +95,9 @@ logger = logging.getLogger(__name__)
 settings = JiraDashboardSettings.load()
 jira_client = create_jira_client(settings)
 gemini_client: GeminiImageClient | None = create_gemini_client(settings)
-storage = SQLiteStorage(settings.sqlite_db_path)
+storage: StorageProtocol = create_storage(settings)
 storage.init_db()
+blob_storage: BlobStorageProtocol = create_blob_storage(settings)
 
 # Seed SQLite cache from FakeJiraClient only during testing/simulation mode
 if (
@@ -2080,11 +2084,15 @@ def _serve_cached_file(file_path: Path | str) -> Response:
 def _serve_previous_or_204(issue_key: str) -> Response:
     """Serve previously cached image for an issue if available, else 204 No Content."""
     prev_hash = storage.get_issue_last_background_hash(issue_key)
-    if prev_hash:
-        prev_rec = storage.get_background_image(prev_hash)
-        if prev_rec and Path(prev_rec["file_path"]).is_file():
+    if prev_hash and blob_storage.exists(prev_hash):
+        data = blob_storage.get(prev_hash)
+        if data:
             storage.touch_background_image(prev_hash)
-            return _serve_cached_file(prev_rec["file_path"])
+            return Response(
+                content=data,
+                media_type="image/webp",
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
     return Response(status_code=204)
 
 
@@ -2117,11 +2125,15 @@ async def get_issue_background(key: str) -> Response:
 
     # 3. Check existing cached image
     bg_rec = storage.get_background_image(current_hash)
-    if bg_rec:
-        file_path = Path(bg_rec["file_path"])
-        if file_path.is_file():
+    if bg_rec and blob_storage.exists(current_hash):
+        data = blob_storage.get(current_hash)
+        if data:
             storage.touch_background_image(current_hash)
-            return _serve_cached_file(file_path)
+            return Response(
+                content=data,
+                media_type="image/webp",
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
 
     # 4. Debounce check: if modified < debounce_seconds ago, serve previous or 204
     now = time.time()
@@ -2145,16 +2157,13 @@ async def get_issue_background(key: str) -> Response:
     if not image_bytes:
         return _serve_previous_or_204(key)
 
-    # 8. Save to disk
-    cache_dir = settings.background_cache_dir
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    file_path = cache_dir / f"{current_hash}.webp"
-    file_path.write_bytes(image_bytes)
+    # 8. Save via blob storage (local disk or GCS)
+    locator = blob_storage.save(current_hash, image_bytes)
 
     # 9. Record in DB and increment quota
     storage.save_background_image(
         content_hash=current_hash,
-        file_path=str(file_path),
+        file_path=locator,
         byte_size=len(image_bytes),
         issue_key=key,
     )

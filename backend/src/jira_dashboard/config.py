@@ -87,7 +87,7 @@ class JiraDashboardSettings(BaseModel):
     polling_interval_seconds: int = Field(
         default=60, description="Interval in seconds for fallback polling (0 disables polling)"
     )
-    sqlite_db_path: str = Field(
+    sqlite_db_path: Path | str = Field(
         default="/data/jira_dashboard.sqlite3",
         description="Path to SQLite database for offline storage",
     )
@@ -140,6 +140,26 @@ class JiraDashboardSettings(BaseModel):
     mcp_client_secret: str | None = Field(
         default=None,
         description="Client Secret for Gemini MCP OAuth authorization",
+    )
+    storage_backend: str | None = Field(
+        default=None,
+        description="Storage backend ('sqlite' or 'firestore')",
+    )
+    firestore_database_id: str = Field(
+        default="(default)",
+        description="Firestore database identifier",
+    )
+    image_storage_backend: str | None = Field(
+        default=None,
+        description="Blob image storage backend ('local' or 'gcs')",
+    )
+    image_storage_bucket: str | None = Field(
+        default=None,
+        description="GCS bucket name for image storage",
+    )
+    gcp_project_id: str | None = Field(
+        default=None,
+        description="Google Cloud Project ID",
     )
 
     @property
@@ -235,6 +255,11 @@ class JiraDashboardSettings(BaseModel):
             "session_secret_key": "SESSION_SECRET_KEY",
             "mcp_client_id": "MCP_CLIENT_ID",
             "mcp_client_secret": "MCP_CLIENT_SECRET",
+            "storage_backend": "STORAGE_BACKEND",
+            "firestore_database_id": "FIRESTORE_DATABASE_ID",
+            "image_storage_backend": "IMAGE_STORAGE_BACKEND",
+            "image_storage_bucket": "IMAGE_STORAGE_BUCKET",
+            "gcp_project_id": "GCP_PROJECT_ID",
         }
 
         int_fields = {

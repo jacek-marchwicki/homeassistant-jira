@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from jira_dashboard.adapters.jira_client import JiraAPIError, JiraClientProtocol
-from jira_dashboard.adapters.storage import SQLiteStorage
+from jira_dashboard.adapters.storage_protocol import StorageProtocol
 from jira_dashboard.domain import (
     IssueType,
     Priority,
@@ -29,7 +29,7 @@ class JiraSyncWorker:
 
     def __init__(
         self,
-        storage: SQLiteStorage,
+        storage: StorageProtocol,
         jira_client: JiraClientProtocol,
         ws_broadcast_func: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> None:

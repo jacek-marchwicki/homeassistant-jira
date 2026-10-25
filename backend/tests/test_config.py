@@ -85,6 +85,11 @@ def test_auth_config_env_vars(monkeypatch) -> None:
     monkeypatch.setenv("SESSION_SECRET_KEY", "custom-sign-key")
     monkeypatch.setenv("MCP_CLIENT_ID", "custom-mcp-client")
     monkeypatch.setenv("MCP_CLIENT_SECRET", "custom-mcp-secret")
+    monkeypatch.setenv("STORAGE_BACKEND", "firestore")
+    monkeypatch.setenv("FIRESTORE_DATABASE_ID", "custom-db")
+    monkeypatch.setenv("IMAGE_STORAGE_BACKEND", "gcs")
+    monkeypatch.setenv("IMAGE_STORAGE_BUCKET", "custom-img-bucket")
+    monkeypatch.setenv("GCP_PROJECT_ID", "my-gcp-proj")
 
     settings = JiraDashboardSettings.load()
     assert settings.auth_mode == "gcp_oauth"
@@ -94,3 +99,8 @@ def test_auth_config_env_vars(monkeypatch) -> None:
     assert settings.session_secret_key == "custom-sign-key"
     assert settings.mcp_client_id == "custom-mcp-client"
     assert settings.mcp_client_secret == "custom-mcp-secret"
+    assert settings.storage_backend == "firestore"
+    assert settings.firestore_database_id == "custom-db"
+    assert settings.image_storage_backend == "gcs"
+    assert settings.image_storage_bucket == "custom-img-bucket"
+    assert settings.gcp_project_id == "my-gcp-proj"

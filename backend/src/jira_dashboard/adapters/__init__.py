@@ -1,6 +1,10 @@
 """Adapter and infrastructure implementations (Jira API client, Webhooks, WebSocket hub)."""
 
-from jira_dashboard.adapters.factory import create_jira_client
+from jira_dashboard.adapters.factory import (
+    create_blob_storage,
+    create_jira_client,
+    create_storage,
+)
 from jira_dashboard.adapters.gemini_client import (
     GeminiImageClient,
     GoogleGenAIImageClient,
@@ -42,6 +46,8 @@ __all__ = [
     "SQLiteStorage",
     "StorageProtocol",
     "compute_background_content_hash",
+    "create_blob_storage",
     "create_gemini_client",
     "create_jira_client",
+    "create_storage",
 ]

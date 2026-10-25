@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from jira_dashboard import __version__
-from jira_dashboard.adapters import JiraClientProtocol, SQLiteStorage
+from jira_dashboard.adapters import JiraClientProtocol, StorageProtocol
 from jira_dashboard.domain import (
     IssueType,
     JiraIssue,
@@ -417,7 +417,7 @@ class MCPServerHandler:
     def __init__(
         self,
         jira_client: JiraClientProtocol,
-        storage: SQLiteStorage,
+        storage: StorageProtocol,
         base_url: str = "",
         broadcast_func: Any = None,
         on_issue_created: Any = None,

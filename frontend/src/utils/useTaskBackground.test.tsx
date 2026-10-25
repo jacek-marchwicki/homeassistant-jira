@@ -6,6 +6,7 @@ import {
   clearBackgroundCache,
   getCardBackgroundStyle,
 } from './useTaskBackground.ts';
+import { useBoardStore } from '../store/boardStore.ts';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,6 +30,7 @@ describe('useTaskBackground hook', () => {
     clearBackgroundCache();
     latestResult = null;
     originalImage = globalThis.Image;
+    useBoardStore.setState({ hideImages: false });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -98,6 +100,28 @@ describe('useTaskBackground hook', () => {
 
     expect(latestResult?.hasBackground).toBe(false);
     expect(latestResult?.backgroundUrl).toBeNull();
+  });
+
+  it('suppresses background image and returns null when hideImages is true', async () => {
+    let imageInstantiated = false;
+    globalThis.Image = class {
+      constructor() {
+        imageInstantiated = true;
+      }
+      set onload(_cb: () => void) {}
+      set onerror(_cb: () => void) {}
+      set src(_val: string) {}
+    } as unknown as typeof Image;
+
+    useBoardStore.setState({ hideImages: true });
+
+    await act(async () => {
+      root.render(<TestComponent issueKey="PROJ-101" />);
+    });
+
+    expect(latestResult?.hasBackground).toBe(false);
+    expect(latestResult?.backgroundUrl).toBeNull();
+    expect(imageInstantiated).toBe(false);
   });
 
   it('computes correct card background styles with overlay gradient', () => {

@@ -52,6 +52,29 @@ def test_board_endpoint_contract(client: TestClient) -> None:
     assert status["category"] in {"todo", "inprogress", "inreview", "done", "blocked"}
 
 
+def test_board_endpoint_gemini_configured(client: TestClient) -> None:
+    """Verify /api/board reports gemini_configured accurately based on Gemini client status."""
+    import jira_dashboard.presentation.main as main_mod
+    from jira_dashboard.adapters.gemini_client import MockGeminiImageClient
+
+    orig_client = main_mod.gemini_client
+    orig_key = main_mod.settings.gemini_api_key
+    try:
+        main_mod.gemini_client = None
+        main_mod.settings.gemini_api_key = None
+        resp_no_gemini = client.get("/api/board?refresh=true")
+        assert resp_no_gemini.status_code == 200
+        assert resp_no_gemini.json()["gemini_configured"] is False
+
+        main_mod.gemini_client = MockGeminiImageClient()
+        resp_with_gemini = client.get("/api/board?refresh=true")
+        assert resp_with_gemini.status_code == 200
+        assert resp_with_gemini.json()["gemini_configured"] is True
+    finally:
+        main_mod.gemini_client = orig_client
+        main_mod.settings.gemini_api_key = orig_key
+
+
 def test_websocket_handshake_and_ping(client: TestClient) -> None:
     """Verify WebSocket /ws connection handshake, initial connection event, and ping/pong."""
     with client.websocket_connect("/ws") as websocket:

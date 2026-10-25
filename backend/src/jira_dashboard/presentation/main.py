@@ -319,6 +319,7 @@ class BoardResponse(BaseModel):
     jira_url: str | None = None
     columns: list[BoardColumn] = []
     issues: list[JiraIssue]
+    gemini_configured: bool = False
 
 
 _cached_board_response: BoardResponse | None = None
@@ -409,6 +410,15 @@ async def fetch_and_cache_board(force: bool = False) -> BoardResponse:
         if jira_base_url.endswith("/browse"):
             jira_base_url = jira_base_url[:-7].rstrip("/")
 
+        is_gemini_available = bool(
+            gemini_client is not None
+            and (
+                bool(settings.gemini_api_key and settings.gemini_api_key.strip())
+                or os.environ.get("JIRA_USE_FAKE") == "1"
+                or os.environ.get("TESTING") == "1"
+            )
+        )
+
         cached = BoardResponse(
             board_id=board_id,
             board_name=board_name,
@@ -416,6 +426,7 @@ async def fetch_and_cache_board(force: bool = False) -> BoardResponse:
             jira_url=jira_base_url,
             columns=columns,
             issues=issues,
+            gemini_configured=is_gemini_available,
         )
         _cached_board_response = cached
         _board_cache_timestamp = time.time()

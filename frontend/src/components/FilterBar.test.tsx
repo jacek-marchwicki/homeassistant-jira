@@ -192,6 +192,7 @@ describe('FilterBar component', () => {
         currentUser: 'Jacek Marchwicki',
         activeFilters: ['active'],
         hideImages: false,
+        geminiConfigured: true,
       });
       root.render(<FilterBar />);
     });
@@ -227,6 +228,28 @@ describe('FilterBar component', () => {
     });
     expect(useBoardStore.getState().hideImages).toBe(false);
     expect(hideImagesBtn?.className).not.toContain('bg-[var(--jira-primary)]');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not render Hide Images toggle button when geminiConfigured is false', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({
+        currentUser: 'Jacek Marchwicki',
+        activeFilters: ['active'],
+        geminiConfigured: false,
+      });
+      root.render(<FilterBar />);
+    });
+
+    const buttons = container.querySelectorAll('button');
+    const hideImagesBtn = Array.from(buttons).find((b) => b.textContent?.trim() === 'Hide Images');
+    expect(hideImagesBtn).toBeUndefined();
 
     await act(async () => {
       root.unmount();

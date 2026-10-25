@@ -170,6 +170,7 @@ describe('Zustand BoardStore', () => {
         board_name: 'HOME Board',
         columns: customColumns,
         issues: [mockIssue],
+        gemini_configured: true,
       }),
     });
 
@@ -177,6 +178,7 @@ describe('Zustand BoardStore', () => {
 
     expect(useBoardStore.getState().columns).toEqual(customColumns);
     expect(useBoardStore.getState().boardName).toBe('HOME Board');
+    expect(useBoardStore.getState().geminiConfigured).toBe(true);
     expect(useBoardStore.getState().isLoading).toBe(false);
   });
 

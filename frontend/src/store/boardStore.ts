@@ -106,6 +106,7 @@ export interface CachedBoardData {
   columns: BoardColumn[];
   issues: JiraIssue[];
   availableUsers?: JiraUser[];
+  geminiConfigured?: boolean;
 }
 
 export function loadCachedView(): DashboardView {
@@ -274,6 +275,7 @@ export interface BoardStoreState {
   accountTypes: AccountTypes;
   showChildren: boolean;
   hideImages: boolean;
+  geminiConfigured: boolean;
   isSettingsOpen: boolean;
   errorMessage: string | null;
   rollbackQueue: Record<string, JiraIssue>;
@@ -453,6 +455,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   accountTypes: loadCachedAccountTypes(),
   showChildren: false,
   hideImages: loadCachedHideImages(),
+  geminiConfigured: initialCache?.geminiConfigured ?? false,
   isSettingsOpen: initialRoute.kind === 'settings',
   errorMessage: null,
   rollbackQueue: {},
@@ -836,10 +839,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           columns: data.columns && data.columns.length > 0 ? data.columns : DEFAULT_COLUMNS,
           issues: sortIssuesByRank(data.issues || []),
           availableUsers: get().availableUsers,
+          geminiConfigured: Boolean(data.gemini_configured),
         };
         saveCachedBoard(nextState);
         set({
           ...nextState,
+          geminiConfigured: Boolean(data.gemini_configured),
           errorMessage: null,
           isLoading: false,
           isSyncing: false,

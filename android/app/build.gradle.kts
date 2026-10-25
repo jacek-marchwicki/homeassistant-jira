@@ -20,14 +20,14 @@ kotlin {
 
 android {
     namespace = "com.jacek.test.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.jacek.test.app"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 5
-        versionName = "0.0.5"
+        targetSdk = 36
+        versionCode = 6
+        versionName = "0.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

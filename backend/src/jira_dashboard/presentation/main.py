@@ -2409,21 +2409,41 @@ CANDIDATE_DIST_DIRS = [
 
 
 class SPAStaticFiles(StaticFiles):
-    """Static files with a single-page-app fallback to ``index.html``.
+    """Static files with a single-page-app fallback to ``index.html`` and fine-grained caching.
 
     Client-side routes such as ``/task/HOME-123`` have no file on disk; serving
     ``index.html`` for them lets the frontend router handle deep links and reloads.
+    Fine-grained ``Cache-Control`` headers ensure HTML and Service Worker scripts are
+    revalidated immediately while hashed immutable bundles are cached permanently.
     """
 
     async def get_response(self, path: str, scope: Any) -> Response:
+        served_path = path
         try:
             response = await super().get_response(path, scope)
         except StarletteHTTPException as exc:
             if exc.status_code != 404:
                 raise
-            return await super().get_response("index.html", scope)
+            served_path = "index.html"
+            response = await super().get_response("index.html", scope)
         if response.status_code == 404:
-            return await super().get_response("index.html", scope)
+            served_path = "index.html"
+            response = await super().get_response("index.html", scope)
+
+        # Apply fine-grained Cache-Control headers
+        normalized_path = served_path.strip("/").lower()
+        if (
+            normalized_path == ""
+            or normalized_path == "index.html"
+            or normalized_path == "sw.js"
+            or normalized_path.startswith("sw.")
+        ):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        elif normalized_path.startswith("assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers.setdefault("Cache-Control", "public, max-age=86400")
+
         return response
 
 

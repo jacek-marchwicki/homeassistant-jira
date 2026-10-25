@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.jacek.test.app.data.KioskPreferences
+import com.jacek.test.app.data.WebDataManager
 import com.jacek.test.app.service.ScreenStateService
 import com.jacek.test.app.ui.KioskActivity
 import com.jacek.test.app.ui.MainConfigScreen
@@ -138,7 +139,17 @@ class MainActivity : ComponentActivity() {
                                     showFloatingExit = enabled
                                 },
                                 onOpenWebpage = { currentScreen = Screen.Preview },
-                                onLaunchKioskDirectly = { launchKioskDirectly() }
+                                onLaunchKioskDirectly = { launchKioskDirectly() },
+                                onClearWebCache = {
+                                    WebDataManager.clearWebCache(this@MainActivity) {
+                                        Toast.makeText(this@MainActivity, "Web cache cleared", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                onClearWebAppData = {
+                                    WebDataManager.clearWebAppData(this@MainActivity) {
+                                        Toast.makeText(this@MainActivity, "Web app data (cookies & storage) cleared", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             )
                         }
                         Screen.Preview -> {

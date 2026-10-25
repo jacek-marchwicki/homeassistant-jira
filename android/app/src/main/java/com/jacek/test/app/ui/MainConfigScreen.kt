@@ -16,8 +16,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OpenInBrowser
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,6 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -81,11 +85,14 @@ fun MainConfigScreen(
     onToggleKeepScreenOn: (Boolean) -> Unit,
     onToggleShowFloatingExit: (Boolean) -> Unit,
     onOpenWebpage: () -> Unit,
-    onLaunchKioskDirectly: () -> Unit
+    onLaunchKioskDirectly: () -> Unit,
+    onClearWebCache: () -> Unit = {},
+    onClearWebAppData: () -> Unit = {}
 ) {
     var urlInput by remember(currentUrl) { mutableStateOf(currentUrl) }
     var zoomSliderValue by remember(pageZoom) { mutableFloatStateOf(pageZoom.toFloat()) }
     var newDomainInput by remember { mutableStateOf("") }
+    var showClearDataDialog by remember { mutableStateOf(false) }
 
     val presets = listOf(
         "HA Local (http)" to "http://homeassistant.local:8123",
@@ -535,6 +542,74 @@ fun MainConfigScreen(
                 }
             }
 
+            // Web Storage & Cache Management Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "WebView Storage & Cache",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    // Clear Web Cache item
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Clear Web Cache", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Clears cached web pages, stylesheets, images, and network files",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                        OutlinedButton(
+                            onClick = onClearWebCache,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Cached, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text("Clear Cache")
+                        }
+                    }
+
+                    // Clear Web App Data item
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Clear Web App Data", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Clears cookies, local storage, session storage, databases, and saved logins",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                        Button(
+                            onClick = { showClearDataDialog = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.DeleteForever, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text("Clear All Data")
+                        }
+                    }
+                }
+            }
+
             // Action Buttons
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -561,5 +636,35 @@ fun MainConfigScreen(
                 }
             }
         }
+    }
+
+    if (showClearDataDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDataDialog = false },
+            title = { Text("Clear All Web Data?") },
+            text = {
+                Text(
+                    "This will delete all cookies, local storage, databases, and saved session data for all web pages in the app. You will be logged out of active sessions (e.g. Home Assistant)."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearDataDialog = false
+                        onClearWebAppData()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Clear All Data")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDataDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

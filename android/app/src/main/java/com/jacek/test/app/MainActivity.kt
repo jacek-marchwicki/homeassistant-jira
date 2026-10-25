@@ -1,156 +1,186 @@
 package com.jacek.test.app
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.jacek.test.app.data.KioskPreferences
+import com.jacek.test.app.service.ScreenStateService
+import com.jacek.test.app.ui.KioskActivity
+import com.jacek.test.app.ui.MainConfigScreen
+import com.jacek.test.app.ui.WebPreviewScreen
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var preferences: KioskPreferences
+
+    private var hasOverlayPermission by mutableStateOf(false)
+    private var hasNotificationPermission by mutableStateOf(false)
+    private var isServiceRunning by mutableStateOf(false)
+    private var currentUrl by mutableStateOf("")
+    private var keepScreenOn by mutableStateOf(false)
+    private var showFloatingExit by mutableStateOf(true)
+
+    private var currentScreen by mutableStateOf<Screen>(Screen.Config)
+
+    sealed interface Screen {
+        object Config : Screen
+        object Preview : Screen
+    }
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            hasNotificationPermission = isGranted
+            if (isGranted && preferences.isServiceEnabled) {
+                startKioskService()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        preferences = KioskPreferences(this)
+        loadPreferencesState()
+
         enableEdgeToEdge()
+
         setContent {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    HelloWorldScreen()
+                    when (currentScreen) {
+                        Screen.Config -> {
+                            MainConfigScreen(
+                                currentUrl = currentUrl,
+                                hasOverlayPermission = hasOverlayPermission,
+                                hasNotificationPermission = hasNotificationPermission,
+                                isServiceRunning = isServiceRunning,
+                                keepScreenOn = keepScreenOn,
+                                showFloatingExit = showFloatingExit,
+                                onSaveUrl = { newUrl ->
+                                    preferences.kioskUrl = newUrl
+                                    currentUrl = preferences.kioskUrl
+                                    Toast.makeText(this, "URL Saved", Toast.LENGTH_SHORT).show()
+                                },
+                                onRequestOverlayPermission = { requestOverlayPermission() },
+                                onRequestNotificationPermission = { requestNotificationPermission() },
+                                onToggleService = { enabled ->
+                                    preferences.isServiceEnabled = enabled
+                                    if (enabled) {
+                                        if (!Settings.canDrawOverlays(this)) {
+                                            requestOverlayPermission()
+                                        } else {
+                                            startKioskService()
+                                        }
+                                    } else {
+                                        stopKioskService()
+                                    }
+                                },
+                                onToggleKeepScreenOn = { enabled ->
+                                    preferences.keepScreenOn = enabled
+                                    keepScreenOn = enabled
+                                },
+                                onToggleShowFloatingExit = { enabled ->
+                                    preferences.showFloatingExit = enabled
+                                    showFloatingExit = enabled
+                                },
+                                onOpenWebpage = { currentScreen = Screen.Preview },
+                                onLaunchKioskDirectly = { launchKioskDirectly() }
+                            )
+                        }
+                        Screen.Preview -> {
+                            WebPreviewScreen(
+                                url = currentUrl,
+                                onBack = { currentScreen = Screen.Config }
+                            )
+                        }
+                    }
                 }
             }
         }
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HelloWorldScreen() {
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.app_logo),
-                contentDescription = stringResource(R.string.app_name),
-                modifier = Modifier
-                    .size(108.dp)
-                    .clip(RoundedCornerShape(24.dp))
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = stringResource(R.string.hello_world),
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Welcome to TestApp Integrator!",
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    InfoRow(label = "Application", value = stringResource(R.string.app_name))
-                    InfoRow(label = "Package Name", value = stringResource(R.string.package_name))
-                    InfoRow(label = "Version", value = "1.0.0 (Code 1)")
-                    InfoRow(label = "Target SDK", value = "Android 15 (API 35)")
-                }
-            }
+    override fun onResume() {
+        super.onResume()
+        checkPermissions()
+        loadPreferencesState()
+        if (preferences.isServiceEnabled && hasOverlayPermission && hasNotificationPermission) {
+            startKioskService()
         }
     }
-}
 
-@Composable
-fun InfoRow(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.outline
-        )
-        Text(
-            text = value,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    private fun loadPreferencesState() {
+        currentUrl = preferences.kioskUrl
+        keepScreenOn = preferences.keepScreenOn
+        showFloatingExit = preferences.showFloatingExit
+        isServiceRunning = preferences.isServiceEnabled
     }
-}
 
-@Preview(showBackground = true)
-@Composable
-fun HelloWorldScreenPreview() {
-    MaterialTheme {
-        HelloWorldScreen()
+    private fun checkPermissions() {
+        hasOverlayPermission = Settings.canDrawOverlays(this)
+        hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    private fun requestOverlayPermission() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName")
+        )
+        startActivity(intent)
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private fun startKioskService() {
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Overlay permission required", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(this, ScreenStateService::class.java)
+        ContextCompat.startForegroundService(this, intent)
+        isServiceRunning = true
+    }
+
+    private fun stopKioskService() {
+        val intent = Intent(this, ScreenStateService::class.java)
+        stopService(intent)
+        isServiceRunning = false
+    }
+
+    private fun launchKioskDirectly() {
+        val intent = Intent(this, KioskActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(intent)
     }
 }

@@ -418,6 +418,8 @@ def build_deploy_command(project_root: Path, config: dict[str, str]) -> list[str
         "512Mi",
         "--concurrency",
         "80",
+        "--clear-volume-mounts",
+        "--clear-volumes",
         "--set-env-vars",
         ",".join(env_vars),
     ]

@@ -115,6 +115,8 @@ def test_build_deploy_command_clean_flags(tmp_path: Path) -> None:
     assert "IMAGE_STORAGE_BACKEND=gcs" in cmd_str
     assert "IMAGE_STORAGE_BUCKET=my-project-images" in cmd_str
     assert "GCP_PROJECT_ID=my-project" in cmd_str
+    assert "--clear-volume-mounts" in cmd_str
+    assert "--clear-volumes" in cmd_str
     assert "--execution-environment" not in cmd_str
     assert "--add-volume" not in cmd_str
     assert "--add-volume-mount" not in cmd_str

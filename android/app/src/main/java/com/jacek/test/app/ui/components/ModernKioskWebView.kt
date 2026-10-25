@@ -1,0 +1,201 @@
+package com.jacek.test.app.ui.components
+
+import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Build
+import android.util.Log
+import android.view.ViewGroup
+import android.webkit.ConsoleMessage
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+
+private const val TAG = "ModernKioskWebView"
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun ModernKioskWebView(
+    url: String,
+    modifier: Modifier = Modifier,
+    onWebViewCreated: (WebView) -> Unit = {},
+    onPageTitleChanged: (String?) -> Unit = {},
+    onError: (String) -> Unit = {}
+) {
+    var progress by remember { mutableIntStateOf(0) }
+    var isLoading by remember { mutableStateOf(true) }
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                WebView(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+
+                    // Modern WebSettings configuration
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        mediaPlaybackRequiresUserGesture = false
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        safeBrowsingEnabled = true
+                        useWideViewPort = true
+                        loadWithOverviewMode = true
+                        builtInZoomControls = true
+                        displayZoomControls = false
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                        allowFileAccess = false
+                        allowContentAccess = false
+                    }
+
+                    // AndroidX WebKit modern feature support
+                    if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) {
+                        WebSettingsCompat.setSafeBrowsingEnabled(settings, true)
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)
+                    ) {
+                        try {
+                            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "Algorithmic darkening not supported on this device: ${t.message}")
+                        }
+                    }
+
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?
+                        ): Boolean {
+                            val targetUri = request?.url ?: return false
+                            val scheme = targetUri.scheme?.lowercase()
+                            return if (scheme == "http" || scheme == "https") {
+                                false // Open inside WebView
+                            } else {
+                                // Ignore or handle custom schemes
+                                Log.i(TAG, "Custom URI requested: $targetUri")
+                                false
+                            }
+                        }
+
+                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                            super.onPageStarted(view, url, favicon)
+                            isLoading = true
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            isLoading = false
+                            onPageTitleChanged(view?.title)
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?
+                        ) {
+                            super.onReceivedError(view, request, error)
+                            if (request?.isForMainFrame == true) {
+                                val description = error?.description?.toString() ?: "Unknown error"
+                                Log.e(TAG, "WebView error loading main frame: $description")
+                                onError(description)
+                            }
+                        }
+
+                        override fun onRenderProcessGone(
+                            view: WebView?,
+                            detail: RenderProcessGoneDetail?
+                        ): Boolean {
+                            Log.e(TAG, "WebView render process gone. Did crash: ${detail?.didCrash()}")
+                            view?.destroy()
+                            return true
+                        }
+                    }
+
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                            super.onProgressChanged(view, newProgress)
+                            progress = newProgress
+                            isLoading = newProgress < 100
+                        }
+
+                        override fun onReceivedTitle(view: WebView?, title: String?) {
+                            super.onReceivedTitle(view, title)
+                            onPageTitleChanged(title)
+                        }
+
+                        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                            Log.d(TAG, "JS [${consoleMessage?.messageLevel()}]: ${consoleMessage?.message()} (line ${consoleMessage?.lineNumber()})")
+                            return true
+                        }
+                    }
+
+                    loadUrl(url)
+                    webViewRef = this
+                    onWebViewCreated(this)
+                }
+            },
+            update = { webView ->
+                if (webView.url != url && url.isNotBlank()) {
+                    webView.loadUrl(url)
+                }
+            }
+        )
+
+        AnimatedVisibility(
+            visible = isLoading,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+        ) {
+            LinearProgressIndicator(
+                progress = { progress / 100f },
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            webViewRef?.let { wv ->
+                wv.stopLoading()
+                wv.clearHistory()
+                wv.removeAllViews()
+                wv.destroy()
+            }
+        }
+    }
+}

@@ -164,6 +164,27 @@ def test_ensure_storage_bucket_creates_and_binds_iam() -> None:
         )
 
 
+def test_ensure_firestore_database_creates_when_missing() -> None:
+    """Verify ensure_firestore_database creates native database if none exist."""
+    with patch("subprocess.run") as mock_subrun, patch("deploy_gcp.run_cmd") as mock_run_cmd:
+        mock_subrun.return_value = MagicMock(stdout="", returncode=0)
+
+        deploy_gcp.ensure_firestore_database(project_id="test-proj", region="europe-west1")
+
+        mock_run_cmd.assert_called_once_with(
+            [
+                "gcloud",
+                "firestore",
+                "databases",
+                "create",
+                "--location=europe-west1",
+                "--type=firestore-native",
+                "--project=test-proj",
+            ],
+            capture_output=True,
+        )
+
+
 def test_dockerfile_clean_of_litestream_and_entrypoint() -> None:
     """Validate Dockerfile does not include Litestream or docker-entrypoint.sh."""
     project_root = SCRIPTS_DIR.parent

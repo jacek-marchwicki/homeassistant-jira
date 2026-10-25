@@ -214,6 +214,41 @@ def ensure_storage_bucket(
     print_success(f"Configured GCS bucket gs://{bucket_name}")
 
 
+def ensure_firestore_database(project_id: str, region: str) -> None:
+    """Ensure Firestore database exists in Native mode."""
+    print(f"  • Checking Firestore database in project '{project_id}'...")
+    check = subprocess.run(
+        [
+            "gcloud",
+            "firestore",
+            "databases",
+            "list",
+            f"--project={project_id}",
+            "--format=value(name)",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if not check.stdout.strip():
+        print(f"  • Creating default Firestore database in {region}...")
+        run_cmd(
+            [
+                "gcloud",
+                "firestore",
+                "databases",
+                "create",
+                f"--location={region}",
+                "--type=firestore-native",
+                f"--project={project_id}",
+            ],
+            capture_output=True,
+        )
+        print_success(f"Created default Firestore database in {region}.")
+    else:
+        print_success("Firestore database exists.")
+
+
 def sync_secrets(project_root: Path, env_path: str | None = None) -> None:
     """Synchronize credentials from .env.gcp into Google Cloud Secret Manager."""
     print_step("Checking prerequisites and loading configuration...")
@@ -242,6 +277,9 @@ def sync_secrets(project_root: Path, env_path: str | None = None) -> None:
     bucket_name = config.get("IMAGE_STORAGE_BUCKET") or f"{project_id}-images"
     region = config.get("GCP_REGION", "europe-west1")
     ensure_storage_bucket(project_id, bucket_name, region, compute_sa)
+
+    print_step("Ensuring Firestore database...")
+    ensure_firestore_database(project_id, region)
 
     print_step(
         "Granting Datastore/Firestore IAM permissions to compute service account..."

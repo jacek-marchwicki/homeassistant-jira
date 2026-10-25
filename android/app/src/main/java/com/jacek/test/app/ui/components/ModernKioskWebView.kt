@@ -54,6 +54,30 @@ fun ModernKioskWebView(
     var progress by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var lastAppliedZoom by remember { mutableIntStateOf(-1) }
+
+    fun applyPageZoom(view: WebView?, zoomPercent: Int) {
+        if (view == null) return
+        val zoomFactor = zoomPercent / 100.0
+        val js = """
+            (function() {
+                try {
+                    const zoomFactor = $zoomFactor;
+                    let zoomStyle = document.getElementById('kiosk-display-zoom-style');
+                    if (!zoomStyle) {
+                        zoomStyle = document.createElement('style');
+                        zoomStyle.id = 'kiosk-display-zoom-style';
+                        document.head.appendChild(zoomStyle);
+                    }
+                    zoomStyle.innerHTML = 'html, body { zoom: ' + zoomFactor + ' !important; }';
+                    if (document.body) {
+                        document.body.style.zoom = zoomFactor;
+                    }
+                } catch(e) {}
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(js, null)
+    }
 
     fun injectStatusBarInsets(view: WebView?) {
         if (!injectStatusBarPadding || view == null || statusBarHeightDp <= 0) return
@@ -109,7 +133,7 @@ fun ModernKioskWebView(
                         cacheMode = WebSettings.LOAD_DEFAULT
                         allowFileAccess = false
                         allowContentAccess = false
-                        textZoom = pageZoom
+                        textZoom = 100 // Keep font scale proportional with display zoom
                     }
 
                     setInitialScale(pageZoom)
@@ -155,6 +179,7 @@ fun ModernKioskWebView(
                             super.onPageStarted(view, url, favicon)
                             isLoading = true
                             injectStatusBarInsets(view)
+                            applyPageZoom(view, pageZoom)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
@@ -162,6 +187,7 @@ fun ModernKioskWebView(
                             isLoading = false
                             onPageTitleChanged(view?.title)
                             injectStatusBarInsets(view)
+                            applyPageZoom(view, pageZoom)
                         }
 
                         override fun onReceivedError(
@@ -192,8 +218,9 @@ fun ModernKioskWebView(
                             super.onProgressChanged(view, newProgress)
                             progress = newProgress
                             isLoading = newProgress < 100
-                            if (newProgress > 60) {
+                            if (newProgress > 50) {
                                 injectStatusBarInsets(view)
+                                applyPageZoom(view, pageZoom)
                             }
                         }
 
@@ -217,9 +244,10 @@ fun ModernKioskWebView(
                 if (webView.url != url && url.isNotBlank()) {
                     webView.loadUrl(url)
                 }
-                if (webView.settings.textZoom != pageZoom) {
-                    webView.settings.textZoom = pageZoom
+                if (lastAppliedZoom != pageZoom) {
+                    lastAppliedZoom = pageZoom
                     webView.setInitialScale(pageZoom)
+                    applyPageZoom(webView, pageZoom)
                 }
                 injectStatusBarInsets(webView)
             }

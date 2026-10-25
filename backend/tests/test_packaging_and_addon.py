@@ -221,18 +221,29 @@ def test_env_example_and_dockerignore() -> None:
 
 
 def test_health_endpoints() -> None:
-    """Validate /health and /api/health return HTTP 200 with ok status."""
+    """Validate /health and /api/health return HTTP 200 with ok status and version."""
+    from jira_dashboard import __version__
+
     client = TestClient(app)
 
     res_root = client.get("/health")
     assert res_root.status_code == 200
     assert res_root.json()["status"] == "ok"
     assert res_root.json()["app"] == "homeassistant-jira"
+    assert res_root.json()["version"] == __version__
 
     res_api = client.get("/api/health")
     assert res_api.status_code == 200
     assert res_api.json()["status"] == "ok"
     assert res_api.json()["app"] == "homeassistant-jira"
+    assert res_api.json()["version"] == __version__
+
+    # Verify frontend/package.json version matches backend version
+    frontend_pkg_path = PROJECT_ROOT / "frontend" / "package.json"
+    assert frontend_pkg_path.is_file(), "frontend/package.json must exist"
+    with open(frontend_pkg_path, encoding="utf-8") as f:
+        frontend_pkg = json.load(f)
+    assert frontend_pkg["version"] == __version__
 
 
 def test_dynamic_ingress_middleware() -> None:

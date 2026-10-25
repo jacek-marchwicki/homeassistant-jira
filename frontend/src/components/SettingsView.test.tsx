@@ -88,4 +88,83 @@ describe('SettingsView', () => {
     expect(useBoardStore.getState().accountTypes['sarah connor']).toBeUndefined();
     act(() => root.unmount());
   });
+
+  it('displays the installed app version in the About section', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok', app: 'homeassistant-jira', version: '0.7.0' }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<SettingsView />);
+    });
+
+    const aboutHeading = container.querySelector('#settings-about-heading');
+    expect(aboutHeading).toBeTruthy();
+    expect(aboutHeading?.textContent).toBe('About');
+
+    const versionBadge = container.querySelector('[data-testid="app-version"]');
+    expect(versionBadge).toBeTruthy();
+    expect(versionBadge?.textContent).toContain('0.7.0');
+
+    act(() => root.unmount());
+  });
+
+  it('displays the installed app version even when offline (health check rejects)', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch (offline)'));
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<SettingsView />);
+    });
+
+    const versionBadge = container.querySelector('[data-testid="app-version"]');
+    expect(versionBadge).toBeTruthy();
+    expect(versionBadge?.textContent).toContain('0.7.0');
+
+    // No error message displayed in alert
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+
+    act(() => root.unmount());
+  });
+
+  it('displays backend version when different from client version', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok', app: 'homeassistant-jira', version: '0.8.0' }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<SettingsView />);
+    });
+
+    // Wait for microtask / state update
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const backendBadge = container.querySelector('[data-testid="backend-version"]');
+    expect(backendBadge).toBeTruthy();
+    expect(backendBadge?.textContent).toContain('0.8.0');
+
+    act(() => root.unmount());
+  });
 });

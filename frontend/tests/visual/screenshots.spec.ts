@@ -1241,6 +1241,31 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(page.getByText('Pending to send (2)')).toBeVisible();
     await expect(page).toHaveScreenshot('modal-connection-status-pending-transactions.png');
   });
+
+  test('Capture Settings View with Version Display (Desktop Dark & Mobile)', async ({ page }) => {
+    // Navigate to Settings
+    const settingsButton = page.locator('header button[aria-label="Settings"]');
+    await expect(settingsButton).toBeVisible();
+    await settingsButton.click();
+
+    // Verify Settings page is rendered
+    await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'About', level: 2 })).toBeVisible();
+    await expect(page.getByTestId('app-version')).toBeVisible();
+
+    // 1. Desktop Dark Mode Settings View
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page).toHaveScreenshot('settings-view-desktop-dark.png', {
+      fullPage: true,
+    });
+
+    // 2. Mobile Viewport Settings View
+    await page.setViewportSize({ width: 375, height: 667 });
+    await expect(page).toHaveScreenshot('settings-view-mobile.png', {
+      fullPage: true,
+    });
+  });
 });
+
 
 

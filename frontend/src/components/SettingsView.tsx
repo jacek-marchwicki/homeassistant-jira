@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
 import { AccountType, getAccountType, getAssigneesFromBoard } from '../utils/boardUtils.ts';
+import { getApiUrl } from '../utils/paths.ts';
+import { APP_VERSION } from '../utils/version.ts';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'parent', label: 'Parent' },
@@ -26,6 +28,25 @@ export function SettingsView() {
     authStatus,
     logout,
   } = useBoardStore();
+
+  const [backendVersion, setBackendVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch(getApiUrl('/api/health'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data?.version) {
+          setBackendVersion(data.version);
+        }
+      })
+      .catch(() => {
+        // Offline or unreachable: safely ignore; client version is always rendered
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const people = useMemo(
     () => getAssigneesFromBoard(issues, availableUsers, currentUser),
@@ -149,6 +170,34 @@ export function SettingsView() {
           </div>
         </section>
       )}
+
+      <section className="mt-6 pt-6 border-t border-[var(--jira-border)]" aria-labelledby="settings-about-heading">
+        <h2 id="settings-about-heading" className="text-sm font-semibold text-[var(--jira-text-primary)]">
+          About
+        </h2>
+        <div className="mt-3 p-3 rounded-xl border border-[var(--jira-border)] bg-[var(--jira-surface)] flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-[var(--jira-text-primary)]">Jira Dashboard</p>
+            <p className="text-xs text-[var(--jira-text-secondary)]">Home Assistant Integration</p>
+          </div>
+          <div className="text-right">
+            <span
+              data-testid="app-version"
+              className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[var(--jira-canvas)] text-[var(--jira-text-primary)] border border-[var(--jira-border)]"
+            >
+              v{APP_VERSION}
+            </span>
+            {backendVersion && backendVersion !== APP_VERSION && (
+              <p
+                data-testid="backend-version"
+                className="text-2xs text-[var(--jira-text-muted)] mt-1 font-mono"
+              >
+                backend: v{backendVersion}
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
     </main>
     </div>
   );

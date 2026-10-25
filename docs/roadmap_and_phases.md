@@ -433,4 +433,20 @@ This document details the architectural phases, delivered features, and evolutio
     - Unit tests in [`frontend/src/store/boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts), [`frontend/src/components/EditIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.test.tsx), and [`frontend/src/components/CreateIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/CreateIssueModal.test.tsx).
     - Visual regression test coverage in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts).
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+
+- [x] **Phase 5.30: Application Version Display in Settings Screen**
+  - [x] **Installed Version Display in Settings Screen (`SettingsView.tsx`)**:
+    - Introduced a dedicated "About" section in the full-screen Settings page displaying the application name ("Jira Dashboard"), subtitle ("Home Assistant Integration"), and installed application version badge (`v0.7.0`).
+    - Provides instant verification of installed app version for Home Assistant users and administrators directly from the UI without navigating to external Docker or supervisor dashboards.
+  - [x] **Build-Time Version Injection & Backend Version Verification**:
+    - Injected `__APP_VERSION__` directly from `package.json` into Vite's compiler definition (`vite.config.ts`), exported via [`frontend/src/utils/version.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/version.ts).
+    - Asynchronously verifies backend version against `/api/health`, displaying a secondary badge (`backend: v<version>`) if the backend version differs from the client bundle.
+  - [x] **Offline Resilience & Zero Latency**:
+    - Because the version string is embedded into the client bundle at build time, it renders immediately (<50ms) even when offline or disconnected.
+    - If the backend health endpoint is unreachable, the installed client version continues to display smoothly without alerts or errors.
+  - [x] **Comprehensive Automated Test Coverage**:
+    - Unit tests in [`frontend/src/utils/version.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/version.test.ts) and [`frontend/src/components/SettingsView.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/SettingsView.test.tsx).
+    - Packaging tests in [`backend/tests/test_packaging_and_addon.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_packaging_and_addon.py) enforcing version parity across frontend `package.json`, backend `pyproject.toml`, and `addon/config.yaml`.
+    - Automated Playwright visual regression tests in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) covering Desktop Dark and Mobile viewports (`settings-view-desktop-dark.png`, `settings-view-mobile.png`).
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+

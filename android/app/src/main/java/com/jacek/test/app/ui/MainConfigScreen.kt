@@ -68,8 +68,9 @@ fun MainConfigScreen(
 ) {
     var urlInput by remember(currentUrl) { mutableStateOf(currentUrl) }
     val presets = listOf(
+        "HA Local (http)" to "http://homeassistant.local:8123",
+        "HA Demo (https)" to "https://demo.home-assistant.io",
         "Google" to "https://www.google.com",
-        "Home Assistant Demo" to "https://demo.home-assistant.io",
         "Wikipedia" to "https://en.m.wikipedia.org"
     )
 

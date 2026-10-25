@@ -47,10 +47,22 @@ class KioskPreferences(context: Context) {
             if (trimmed.isEmpty()) {
                 return DEFAULT_URL
             }
-            return if (trimmed.startsWith("http://", ignoreCase = true) ||
+            if (trimmed.startsWith("http://", ignoreCase = true) ||
                 trimmed.startsWith("https://", ignoreCase = true)
             ) {
-                trimmed
+                return trimmed
+            }
+            // Check if it's a local address (.local, private IP, localhost, or port 8123)
+            val isLocal = trimmed.endsWith(".local", ignoreCase = true) ||
+                trimmed.contains(".local:", ignoreCase = true) ||
+                trimmed.startsWith("localhost", ignoreCase = true) ||
+                trimmed.startsWith("192.168.") ||
+                trimmed.startsWith("10.") ||
+                trimmed.startsWith("172.") ||
+                trimmed.contains(":8123")
+
+            return if (isLocal) {
+                "http://$trimmed"
             } else {
                 "https://$trimmed"
             }

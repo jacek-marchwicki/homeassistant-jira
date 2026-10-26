@@ -152,6 +152,7 @@ describe('CreateIssueModal component', () => {
 
     const closeBtn = container.querySelector('button[aria-label="Close create dialog"]') as HTMLButtonElement;
     expect(closeBtn).not.toBeNull();
+    const initialCloseBtnClassName = closeBtn.className;
     // Verify it uses ArrowLeft icon
     expect(closeBtn.querySelector('svg.lucide-arrow-left')).not.toBeNull();
 
@@ -180,8 +181,11 @@ describe('CreateIssueModal component', () => {
     // Verify it uses X icon
     expect(cancelBtnAfter.querySelector('svg.lucide-x')).not.toBeNull();
 
-    // Verify UI did not shift: same button container dimensions and classes
-    expect(cancelBtnAfter.className).toBe(closeBtn.className);
+    // Verify Cancel button has a red round background to clearly signal a destructive action
+    expect(cancelBtnAfter.className).toContain('rounded-full');
+    expect(cancelBtnAfter.className).toContain('bg-red-500');
+    expect(cancelBtnAfter.className).toContain('text-red');
+    expect(cancelBtnAfter.className).not.toBe(initialCloseBtnClassName);
 
     await act(async () => {
       cancelBtnAfter.click();
@@ -505,5 +509,22 @@ describe('CreateIssueModal component', () => {
       })
     );
     expect(handleClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a red circular background on destructive cancel "x" button when form is modified', async () => {
+    await act(async () => {
+      root.render(<CreateIssueModal isOpen={true} onClose={() => {}} />);
+    });
+
+    const summaryInput = container.querySelector('#create-summary') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(summaryInput, 'Changed task title');
+    });
+
+    const cancelBtn = container.querySelector('button[aria-label="Cancel changes"]') as HTMLButtonElement;
+    expect(cancelBtn).not.toBeNull();
+    expect(cancelBtn.className).toContain('rounded-full');
+    expect(cancelBtn.className).toContain('bg-red-500');
+    expect(cancelBtn.className).toContain('text-red');
   });
 });

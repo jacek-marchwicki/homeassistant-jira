@@ -197,9 +197,10 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
           <div className="flex items-center gap-2 min-w-0">
             {isDirty ? (
               <button
+                key="cancel-changes-button"
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/30 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer shrink-0"
                 aria-label="Cancel changes"
                 title="Cancel changes"
               >
@@ -207,6 +208,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               </button>
             ) : (
               <button
+                key="close-dialog-button"
                 type="button"
                 onClick={onClose}
                 className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"

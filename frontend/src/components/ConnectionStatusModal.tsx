@@ -14,6 +14,7 @@ const ACTION_LABELS: Record<OfflineOutboxItem['action'], string> = {
   update_issue: 'Update issue',
   transition_issue: 'Transition issue',
   rank_issue: 'Reorder issue',
+  delete_issue: 'Delete issue',
 };
 
 function formatTime(ts: number | null): string {
@@ -70,6 +71,8 @@ function renderTransactionDetails(item: OfflineOutboxItem, users: JiraUser[]) {
     } else {
       details.push('Reorder position');
     }
+  } else if (item.action === 'delete_issue') {
+    details.push(`Delete task ${item.issueKey || ''}`.trim());
   }
 
   if (details.length === 0) {

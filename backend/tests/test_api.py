@@ -342,6 +342,27 @@ class TestPresentationApi(unittest.TestCase):
             self.assertEqual(payload.get("rank_before_key"), top_key)
         self.assertEqual(payload.get("rank"), created.get("rank"))
 
+    def test_delete_issue_endpoint_success(self) -> None:
+        """Verify DELETE /api/issues/{key} removes issue and returns deleted status."""
+        # Ensure PROJ-101 exists initially
+        board = self.client.get("/api/board").json()
+        self.assertTrue(any(i["key"] == "PROJ-101" for i in board["issues"]))
+
+        response = self.client.delete("/api/issues/PROJ-101")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "deleted")
+        self.assertEqual(data["key"], "PROJ-101")
+
+        # Confirm it is no longer returned in /api/board
+        board_after = self.client.get("/api/board").json()
+        self.assertFalse(any(i["key"] == "PROJ-101" for i in board_after["issues"]))
+
+    def test_delete_nonexistent_issue_endpoint(self) -> None:
+        """Verify DELETE /api/issues/{key} returns 404 for nonexistent issue."""
+        response = self.client.delete("/api/issues/NONEXISTENT-999")
+        self.assertEqual(response.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

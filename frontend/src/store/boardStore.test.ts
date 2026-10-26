@@ -471,6 +471,88 @@ describe('Zustand BoardStore', () => {
     expect(useBoardStore.getState().errorMessage).toContain('Failed to create issue');
   });
 
+  it('deleteIssueOptimistic removes issue optimistically and syncs with DELETE endpoint', async () => {
+    const issueToDelete: JiraIssue = {
+      id: '201',
+      key: 'PROJ-201',
+      summary: 'Task to be deleted',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      priority: 'medium',
+    };
+    useBoardStore.setState({
+      issues: [issueToDelete],
+      editingIssue: issueToDelete,
+      offlineOutbox: [],
+    });
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'deleted', key: 'PROJ-201' }),
+    });
+
+    await useBoardStore.getState().deleteIssueOptimistic('PROJ-201');
+
+    // Optimistically removed from issues array
+    expect(useBoardStore.getState().issues.some((i) => i.key === 'PROJ-201')).toBe(false);
+    // Active editingIssue closed
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+
+    // Verify DELETE request sent
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/issues/PROJ-201'),
+      expect.objectContaining({
+        method: 'DELETE',
+      })
+    );
+  });
+
+  it('deleteIssueOptimistic rolls back on server failure', async () => {
+    const issueToKeep: JiraIssue = {
+      id: '202',
+      key: 'PROJ-202',
+      summary: 'Task that fails to delete',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      priority: 'high',
+    };
+    useBoardStore.setState({
+      issues: [issueToKeep],
+      editingIssue: issueToKeep,
+    });
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    });
+
+    await useBoardStore.getState().deleteIssueOptimistic('PROJ-202');
+
+    // Restored to issues array on rollback
+    expect(useBoardStore.getState().issues.some((i) => i.key === 'PROJ-202')).toBe(true);
+    expect(useBoardStore.getState().errorMessage).toContain('Failed to delete issue');
+  });
+
+  it('handles WebSocket issue_deleted event', () => {
+    const issue: JiraIssue = {
+      id: '203',
+      key: 'PROJ-203',
+      summary: 'Task deleted remotely',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      priority: 'medium',
+    };
+    useBoardStore.setState({
+      issues: [issue],
+      editingIssue: issue,
+    });
+
+    useBoardStore.getState().handleWsMessage({
+      event: 'issue_deleted',
+      issue_key: 'PROJ-203',
+    });
+
+    expect(useBoardStore.getState().issues.some((i) => i.key === 'PROJ-203')).toBe(false);
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+  });
+
   it('handles WebSocket issue_created event', () => {
     useBoardStore.getState().handleWsMessage({
       event: 'issue_created',

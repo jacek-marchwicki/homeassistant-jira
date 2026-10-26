@@ -272,6 +272,10 @@ class JiraClientProtocol(Protocol):
         """Delete a comment on an issue."""
         ...
 
+    async def delete_issue(self, issue_key: str) -> bool:
+        """Delete an issue from Jira."""
+        ...
+
     async def rank_issue(
         self,
         issue_key: str,
@@ -849,3 +853,14 @@ class FakeJiraClient:
                 return True
 
         raise JiraAPIError(f"Comment {comment_id} not found on issue {issue_key}", status_code=404)
+
+    async def delete_issue(self, issue_key: str) -> bool:
+        """Delete an existing issue from memory."""
+        if self.simulate_transition_failure or self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        if issue_key not in self._issues:
+            raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
+
+        del self._issues[issue_key]
+        self._comments.pop(issue_key, None)
+        return True

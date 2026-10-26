@@ -1267,3 +1267,45 @@ def test_create_and_update_issue_with_adf_description() -> None:
         await client.close()
 
     asyncio.run(_test())
+
+
+def test_delete_issue_success() -> None:
+    """Verify delete_issue sends DELETE request and returns True on 204."""
+
+    async def _test() -> None:
+        deleted_url: str | None = None
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal deleted_url
+            if request.method == "DELETE" and "/rest/api/3/issue/DEV-101" in str(request.url):
+                deleted_url = str(request.url)
+                return httpx.Response(204)
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        success = await client.delete_issue("DEV-101")
+        assert success is True
+        assert deleted_url is not None
+        assert "/rest/api/3/issue/DEV-101" in deleted_url
+        await client.close()
+
+    asyncio.run(_test())
+
+
+def test_delete_issue_error_handling() -> None:
+    """Verify delete_issue raises JiraAPIError when Jira returns 404/400."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                404,
+                json={"errorMessages": ["Issue does not exist or you do not have permission"]},
+            )
+
+        client = create_mock_client(handler)
+        with pytest.raises(JiraAPIError) as exc_info:
+            await client.delete_issue("DEV-404")
+        assert exc_info.value.status_code == 404
+        await client.close()
+
+    asyncio.run(_test())

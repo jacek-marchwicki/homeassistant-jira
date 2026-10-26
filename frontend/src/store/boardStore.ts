@@ -62,7 +62,7 @@ export function isServerRejectionError(err: unknown): err is ServerRejectionErro
 
 export interface OfflineOutboxItem {
   id: string;
-  action: 'create_issue' | 'update_issue' | 'transition_issue' | 'rank_issue';
+  action: 'create_issue' | 'update_issue' | 'transition_issue' | 'rank_issue' | 'delete_issue';
   issueKey?: string;
   payload: Record<string, any>;
   createdAt: number;
@@ -345,6 +345,7 @@ export interface BoardStoreState {
   flushPendingQuickDone: () => Promise<void>;
   updateIssueOptimistic: (issueKey: string, updates: IssueUpdatePayload) => Promise<void>;
   createIssueOptimistic: (payload: IssueCreatePayload) => Promise<JiraIssue | null>;
+  deleteIssueOptimistic: (issueKey: string) => Promise<void>;
   rankIssueOptimistic: (
     issueKey: string,
     rankBeforeKey?: string,
@@ -1405,6 +1406,79 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 
+  deleteIssueOptimistic: async (issueKey: string) => {
+    const { issues, rollbackQueue } = get();
+    const originalIssue = issues.find((i) => i.key === issueKey);
+    if (!originalIssue) return;
+
+    // 1. Instant optimistic state removal (< 50ms)
+    const nextIssues = issues.filter((i) => i.key !== issueKey);
+    const nextEditing = get().editingIssue?.key === issueKey ? null : get().editingIssue;
+    const nextRoute = get().routeTaskKey === issueKey ? null : get().routeTaskKey;
+
+    set({
+      issues: nextIssues,
+      editingIssue: nextEditing,
+      routeTaskKey: nextRoute,
+      rollbackQueue: { ...rollbackQueue, [issueKey]: originalIssue },
+    });
+    persistCurrentBoardState(get);
+
+    // 2. Perform async delete request
+    try {
+      const res = await fetch(getApiUrl(`/api/issues/${issueKey}`), {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}`);
+      }
+      // Success: clear rollback entry
+      const currentRollback = { ...get().rollbackQueue };
+      delete currentRollback[issueKey];
+      set({ rollbackQueue: currentRollback });
+    } catch (err: any) {
+      // Check if network offline
+      const isNetworkError =
+        (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        err.message === 'Failed to fetch' ||
+        err.name === 'TypeError' ||
+        err.message?.includes('offline') ||
+        err.message?.includes('Network');
+
+      if (isNetworkError) {
+        const outboxItem: OfflineOutboxItem = {
+          id: `del-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          action: 'delete_issue',
+          issueKey,
+          payload: {},
+          createdAt: Date.now(),
+        };
+        const updatedOutbox = [...get().offlineOutbox, outboxItem];
+        saveCachedOutbox(updatedOutbox);
+        set({
+          offlineOutbox: updatedOutbox,
+          pendingSyncCount: updatedOutbox.length,
+          syncStatus: 'offline',
+        });
+        return;
+      }
+
+      // Real failure -> rollback
+      const currentRollback = { ...get().rollbackQueue };
+      const issueToRestore = currentRollback[issueKey];
+      delete currentRollback[issueKey];
+      if (issueToRestore) {
+        set({
+          issues: sortIssuesByRank([...get().issues, issueToRestore]),
+          rollbackQueue: currentRollback,
+          errorMessage: `Failed to delete issue ${issueKey}: ${err.message || 'Server error'}`,
+        });
+        persistCurrentBoardState(get);
+      }
+    }
+  },
+
   rankIssueOptimistic: async (
     issueKey: string,
     rankBeforeKey?: string,
@@ -1561,6 +1635,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item.payload),
           });
+        } else if (item.action === 'delete_issue' && item.issueKey) {
+          res = await fetch(getApiUrl(`/api/issues/${item.issueKey}`), {
+            method: 'DELETE',
+            credentials: 'include',
+          });
         } else {
           const idx = remainingOutbox.findIndex((it) => it.id === item.id);
           if (idx !== -1) remainingOutbox.splice(idx, 1);
@@ -1568,39 +1647,46 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         }
 
         if (res.ok) {
-          const remoteIssue: JiraIssue = await res.json();
-          set((state) => {
-            if (item.action === 'create_issue' && item.issueKey) {
-              const withoutTemp = state.issues.filter((i) => i.key !== item.issueKey);
-              const exists = withoutTemp.some((i) => i.key === remoteIssue.key);
-              if (exists) {
+          if (item.action === 'delete_issue') {
+            set((state) => ({
+              issues: state.issues.filter((i) => i.key !== item.issueKey),
+              editingIssue: state.editingIssue?.key === item.issueKey ? null : state.editingIssue,
+            }));
+          } else {
+            const remoteIssue: JiraIssue = await res.json();
+            set((state) => {
+              if (item.action === 'create_issue' && item.issueKey) {
+                const withoutTemp = state.issues.filter((i) => i.key !== item.issueKey);
+                const exists = withoutTemp.some((i) => i.key === remoteIssue.key);
+                if (exists) {
+                  return {
+                    issues: sortIssuesByRank(
+                      withoutTemp.map((i) =>
+                        i.key === remoteIssue.key ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                      )
+                    ),
+                  };
+                }
                 return {
                   issues: sortIssuesByRank(
-                    withoutTemp.map((i) =>
-                      i.key === remoteIssue.key ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                    state.issues.map((i) =>
+                      i.key === item.issueKey ? { ...remoteIssue, _optimisticState: 'synced' } : i
+                    )
+                  ),
+                };
+              } else {
+                return {
+                  issues: sortIssuesByRank(
+                    state.issues.map((i) =>
+                      i.key === (item.issueKey || remoteIssue.key)
+                        ? { ...remoteIssue, _optimisticState: 'synced' }
+                        : i
                     )
                   ),
                 };
               }
-              return {
-                issues: sortIssuesByRank(
-                  state.issues.map((i) =>
-                    i.key === item.issueKey ? { ...remoteIssue, _optimisticState: 'synced' } : i
-                  )
-                ),
-              };
-            } else {
-              return {
-                issues: sortIssuesByRank(
-                  state.issues.map((i) =>
-                    i.key === (item.issueKey || remoteIssue.key)
-                      ? { ...remoteIssue, _optimisticState: 'synced' }
-                      : i
-                  )
-                ),
-              };
-            }
-          });
+            });
+          }
         } else {
           // Server rejected or conflict: adopt remote state if returned
           try {
@@ -1835,6 +1921,13 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           ),
         };
       });
+      persistCurrentBoardState(get);
+    } else if (msg.event === 'issue_deleted' && msg.issue_key) {
+      set((state) => ({
+        issues: state.issues.filter((item) => item.key !== msg.issue_key),
+        editingIssue: state.editingIssue?.key === msg.issue_key ? null : state.editingIssue,
+        routeTaskKey: state.routeTaskKey === msg.issue_key ? null : state.routeTaskKey,
+      }));
       persistCurrentBoardState(get);
     } else if (msg.event === 'board_synced' && Array.isArray(msg.issues)) {
       set({ issues: sortIssuesByRank(msg.issues as JiraIssue[]) });

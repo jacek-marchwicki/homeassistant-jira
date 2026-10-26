@@ -414,6 +414,12 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(cloneBtn).toBeVisible();
     await expect(cloneBtn).toContainText('Clone task');
 
+    // 3c. Verify red Delete task button is present right after Clone task
+    const deleteBtn = modal.getByTestId('delete-issue-button');
+    await expect(deleteBtn).toBeVisible();
+    await expect(deleteBtn).toContainText('Delete task');
+
+
     // 4. Capture full screen modal snapshot
     await expect(page).toHaveScreenshot('modal-edit-issue.png');
 

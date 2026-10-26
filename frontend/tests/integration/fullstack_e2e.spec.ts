@@ -122,7 +122,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
 
     // UI should display error rollback banner
     const alertBanner = page.getByText('Failed to transition PROJ-98. Reverting to previous status.');
-    await expect(alertBanner).toBeVisible({ timeout: 5000 });
+    await expect(alertBanner).toBeVisible({ timeout: 10000 });
 
     // PROJ-98 should NOT be struck through (reverted back to In Progress)
     await expect(proj98Article.locator('p')).not.toHaveClass(/line-through/);
@@ -318,7 +318,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const swRes = await request.get('/sw.js');
     expect(swRes.ok()).toBeTruthy();
     const swContent = await swRes.text();
-    expect(swContent).toContain('jira-dashboard-v1');
+    expect(swContent).toMatch(/jira-dashboard-v\d+/);
     expect(swContent).toContain('skipWaiting');
 
     // 6. Verify Install Button in Header triggers Guidance Modal

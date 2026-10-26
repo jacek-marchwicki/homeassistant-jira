@@ -1299,3 +1299,16 @@ class JiraCloudClient(JiraClientProtocol):
             raise JiraAPIError(
                 f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
             ) from exc
+
+    async def delete_issue(self, issue_key: str) -> bool:
+        """Delete an existing issue via Jira Cloud REST API."""
+        try:
+            res = await self._send_request("DELETE", f"/rest/api/3/issue/{issue_key}")
+            if res.status_code == 204 or res.is_success:
+                return True
+            self._handle_response_errors(res)
+            return True
+        except httpx.RequestError as exc:
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc

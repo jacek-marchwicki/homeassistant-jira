@@ -2482,28 +2482,65 @@ class SPAStaticFiles(StaticFiles):
 
     Client-side routes such as ``/task/HOME-123`` have no file on disk; serving
     ``index.html`` for them lets the frontend router handle deep links and reloads.
+    Missing static assets (e.g. under ``assets/`` or files with static extensions) are
+    NOT fallen back to ``index.html`` so browsers receive genuine 404s rather than HTML
+    causing strict MIME check failures.
     Fine-grained ``Cache-Control`` headers ensure HTML and Service Worker scripts are
     revalidated immediately while hashed immutable bundles are cached permanently.
     """
 
+    @staticmethod
+    def _is_static_asset_path(path: str) -> bool:
+        normalized = path.strip("/").lower()
+        if normalized.startswith("assets/"):
+            return True
+        last_segment = normalized.split("/")[-1]
+        if "." in last_segment and not last_segment.startswith("."):
+            ext = last_segment.rsplit(".", 1)[-1]
+            if ext in {
+                "css",
+                "js",
+                "mjs",
+                "map",
+                "json",
+                "webmanifest",
+                "png",
+                "jpg",
+                "jpeg",
+                "gif",
+                "svg",
+                "ico",
+                "webp",
+                "avif",
+                "woff",
+                "woff2",
+                "ttf",
+                "eot",
+                "wasm",
+                "txt",
+                "xml",
+            }:
+                return True
+        return False
+
     async def get_response(self, path: str, scope: Any) -> Response:
         served_path = path
+        is_asset = self._is_static_asset_path(path)
         try:
             response = await super().get_response(path, scope)
         except StarletteHTTPException as exc:
-            if exc.status_code != 404:
+            if exc.status_code != 404 or is_asset:
                 raise
             served_path = "index.html"
             response = await super().get_response("index.html", scope)
-        if response.status_code == 404:
+        if response.status_code == 404 and not is_asset:
             served_path = "index.html"
             response = await super().get_response("index.html", scope)
 
         # Apply fine-grained Cache-Control headers
         normalized_path = served_path.strip("/").lower()
         if (
-            normalized_path == ""
-            or normalized_path == "index.html"
+            normalized_path in ("", ".", "index.html")
             or normalized_path == "sw.js"
             or normalized_path.startswith("sw.")
         ):

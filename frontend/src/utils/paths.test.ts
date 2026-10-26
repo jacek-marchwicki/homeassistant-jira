@@ -40,6 +40,11 @@ describe('Path and URL Utilities for Home Assistant Ingress and Standalone', () 
       expect(getBasePath()).toBe('/api/hassio_ingress/token-abc-123');
     });
 
+    it('extracts Ingress prefix even without trailing slash', () => {
+      setMockLocation('/api/hassio_ingress/token-abc-123', 'homeassistant.local:8123', 'http:');
+      expect(getBasePath()).toBe('/api/hassio_ingress/token-abc-123');
+    });
+
     it('extracts Ingress prefix when nested paths are appended', () => {
       setMockLocation(
         '/api/hassio_ingress/token-abc-123/issues/PROJ-101',

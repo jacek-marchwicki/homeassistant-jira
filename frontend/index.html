@@ -3,12 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <!-- Deep links (e.g. /task/HOME-123) must resolve relative assets against the app root,
-         including under a Home Assistant Ingress prefix. -->
+         including under a Home Assistant Ingress prefix (with or without trailing slash). -->
     <script>
       (function () {
         var p = window.location.pathname;
-        var m = p.match(/^(.*?)\/(?:task\/[^/]+|create|board|backlog|people)\/?$/);
-        var base = m ? m[1] + '/' : p.replace(/[^/]*$/, '');
+        var m = p.match(/^(.*?)\/(?:task\/[^/]+|create|board|backlog|people|settings|status)\/?$/);
+        var base;
+        if (m) {
+          base = m[1] + '/';
+        } else if (/^.*?\/api\/hassio_ingress\/[^/]+$/.test(p)) {
+          base = p + '/';
+        } else {
+          base = p.replace(/[^/]*$/, '');
+        }
         document.write('<base href="' + base + '">');
       })();
     </script>

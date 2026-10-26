@@ -6,6 +6,6 @@ describe('APP_VERSION', () => {
     expect(APP_VERSION).toBeDefined();
     expect(typeof APP_VERSION).toBe('string');
     expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+/);
-    expect(APP_VERSION).toBe('0.8.0');
+    expect(APP_VERSION).toBe('0.9.0');
   });
 });

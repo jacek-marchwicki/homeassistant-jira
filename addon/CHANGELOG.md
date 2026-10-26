@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+- **Task Deletion with Confirmation**: Permanently delete tasks directly from the task edit/details screen with an interactive confirmation prompt, optimistic UI removal, and real-time synchronization across connected clients.
+- **Linked Issues & Navigation**: Render linked Jira issues ("blocks", "is blocked by", "relates to") inside task details cards and dialogs with clickable badges for instant deep-linking and in-place navigation.
+- **Mobile & PWA Safe Area Layouts**: Hardened viewport layouts for standalone PWA mode and iOS Safari with dynamic `env(safe-area-inset-*)` notches/home bars, responsive modal header offsets, and automatic viewport scrolling to keep form inputs fully visible when virtual keyboards open.
+- **Translucent Destructive Action Styling**: Refined the modal cancel/close action button with a modern translucent red circular indicator for distinct visual clarity without clutter.
+- **Storage Reset Hardening**: Added table existence checks during test and staging sync outbox resets for reliable database resets.
+
 ## 0.8.0
 
 - **Serverless Persistence (Firestore & Google Cloud Storage)**: Native Google Cloud Firestore adapter for transactional multi-instance storage (board cache, outbox mutations, account types, and Gemini AI image metadata) and Google Cloud Storage (GCS) adapter for chore/task background image blobs, removing single-instance SQLite and Cloud Storage FUSE dependencies on GCP Cloud Run.

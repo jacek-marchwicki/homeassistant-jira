@@ -143,9 +143,10 @@ export function CreateIssueModal({
           <div className="flex items-center gap-2 min-w-0">
             {isDirty ? (
               <button
+                key="cancel-changes-button"
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer shrink-0"
                 aria-label="Cancel changes"
                 title="Cancel changes"
               >
@@ -153,6 +154,7 @@ export function CreateIssueModal({
               </button>
             ) : (
               <button
+                key="close-dialog-button"
                 type="button"
                 onClick={onClose}
                 className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors cursor-pointer shrink-0"

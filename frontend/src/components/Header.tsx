@@ -98,7 +98,7 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
   }, [boardIssues]);
 
   return (
-    <header className="flex flex-nowrap items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 border-b border-[var(--jira-border)] bg-[var(--jira-surface)] sticky top-0 z-30">
+    <header className="flex flex-nowrap items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 pb-2 sm:pb-3 pt-[calc(0.5rem+env(safe-area-inset-top,0px))] sm:pt-3 border-b border-[var(--jira-border)] bg-[var(--jira-surface)] sticky top-0 z-30">
       {/* Left scrollable navigation, status & metadata */}
       <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar min-w-0 py-0.5">
         {/* Title & Board Metadata - Board name hidden on mobile in favor of sprint */}

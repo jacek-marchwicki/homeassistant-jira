@@ -185,7 +185,7 @@ export function PeopleBoard({ now = new Date() }: PeopleBoardProps) {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <main className="flex-1 p-4 flex flex-col overflow-y-auto">
+      <main className="flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] flex flex-col overflow-y-auto">
         {/* People Board Columns by Assignee */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-4 overflow-x-auto min-w-0">
           {people.map((person) => {

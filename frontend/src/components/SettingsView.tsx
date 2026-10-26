@@ -55,7 +55,7 @@ export function SettingsView() {
 
   return (
     <div className="min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]">
-    <main className="p-4 sm:p-6 max-w-3xl w-full mx-auto" aria-label="Settings">
+      <main className="p-4 sm:p-6 pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] max-w-3xl w-full mx-auto" aria-label="Settings">
       <div className="flex items-center gap-2">
         <button
           type="button"

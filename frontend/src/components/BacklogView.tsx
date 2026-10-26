@@ -148,7 +148,7 @@ export function BacklogView() {
     >
       <main
         data-testid="backlog-view"
-        className="flex-1 p-4 max-w-7xl mx-auto w-full flex flex-col gap-6 overflow-y-auto"
+        className="flex-1 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] max-w-7xl mx-auto w-full flex flex-col gap-6 overflow-y-auto"
       >
         {/* Section 1: Active Sprint / Board Issues */}
         <section className="rounded-xl border border-[var(--jira-border)] bg-[var(--jira-surface)] shadow-xs overflow-hidden">

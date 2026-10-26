@@ -184,4 +184,14 @@ describe('PeopleBoard Component', () => {
     expect(alexSortableId).toBe('usr-alex:SHARED-100');
     expect(jacekSortableId).not.toBe(alexSortableId);
   });
+
+  it('applies safe-area bottom inset padding so content is fully scrollable above navigation buttons', async () => {
+    await act(async () => {
+      root.render(<PeopleBoard now={mockNow} />);
+    });
+
+    const main = container.querySelector('main');
+    expect(main).not.toBeNull();
+    expect(main?.className).toContain('pb-[calc(1rem+env(safe-area-inset-bottom,0px))]');
+  });
 });

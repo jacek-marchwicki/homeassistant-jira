@@ -97,6 +97,18 @@ describe('Header component', () => {
     expect(rightContainer.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
   });
 
+  it('applies safe-area top inset padding to ensure buttons are displayed below the status bar', async () => {
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    const header = container.querySelector('header');
+    expect(header).not.toBeNull();
+    expect(header?.className).toContain('pt-[calc(0.5rem+env(safe-area-inset-top,0px))]');
+    expect(header?.className).toContain('sticky');
+    expect(header?.className).toContain('top-0');
+  });
+
   it('hides board name and sprint name (Active issues) on mobile screens', async () => {
     await act(async () => {
       root.render(<Header />);

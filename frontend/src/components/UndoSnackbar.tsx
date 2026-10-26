@@ -34,7 +34,7 @@ export function UndoSnackbar() {
       role="status"
       aria-live="polite"
       data-testid="undo-snackbar"
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-3.5 px-4 py-2.5 rounded-xl bg-[var(--jira-surface-elevated)] text-[var(--jira-text-primary)] border border-[var(--jira-border)] shadow-2xl max-w-[92vw] sm:max-w-md w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
+      className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-3.5 px-4 py-2.5 rounded-xl bg-[var(--jira-surface-elevated)] text-[var(--jira-text-primary)] border border-[var(--jira-border)] shadow-2xl max-w-[92vw] sm:max-w-md w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />

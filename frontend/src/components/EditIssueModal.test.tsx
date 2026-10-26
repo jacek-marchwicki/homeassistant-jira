@@ -627,4 +627,63 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     expect(cancelBtn.className).toContain('bg-red-500');
     expect(cancelBtn.className).toContain('text-red');
   });
+
+  it('applies safe-area insets on mobile for status bar and navigation buttons', async () => {
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
+    });
+
+    const header = container.querySelector('[data-testid="edit-issue-modal-header"]');
+    expect(header).not.toBeNull();
+    expect(header?.className).toContain('pt-[calc(1rem+env(safe-area-inset-top,0px))]');
+
+    const content = container.querySelector('[data-testid="edit-issue-modal-content"]');
+    expect(content).not.toBeNull();
+    expect(content?.className).toContain('pb-[calc(2rem+env(safe-area-inset-bottom,0px))]');
+  });
+
+  it('dynamically sizes modal height to visualViewport on mobile when keyboard opens', async () => {
+    const originalInnerWidth = window.innerWidth;
+    const originalInnerHeight = window.innerHeight;
+    const originalVisualViewport = window.visualViewport;
+
+    Object.defineProperty(window, 'innerWidth', { value: 375, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 667, writable: true });
+
+    let resizeCallback: (() => void) | null = null;
+    const mockVisualViewport = {
+      height: 667,
+      width: 375,
+      offsetTop: 0,
+      pageTop: 0,
+      addEventListener: vi.fn((event: string, cb: () => void) => {
+        if (event === 'resize') resizeCallback = cb;
+      }),
+      removeEventListener: vi.fn(),
+    };
+    Object.defineProperty(window, 'visualViewport', { value: mockVisualViewport, writable: true });
+
+    try {
+      await act(async () => {
+        root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
+      });
+
+      const dialogBox = container.querySelector('[role="dialog"] > div') as HTMLElement;
+      expect(dialogBox).not.toBeNull();
+      expect(dialogBox.style.height).toBe('667px');
+
+      // Simulate keyboard opening (height shrinks to 350px)
+      mockVisualViewport.height = 350;
+      await act(async () => {
+        resizeCallback?.();
+      });
+
+      expect(dialogBox.style.height).toBe('350px');
+      expect(dialogBox.style.maxHeight).toBe('350px');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, writable: true });
+      Object.defineProperty(window, 'innerHeight', { value: originalInnerHeight, writable: true });
+      Object.defineProperty(window, 'visualViewport', { value: originalVisualViewport, writable: true });
+    }
+  });
 });

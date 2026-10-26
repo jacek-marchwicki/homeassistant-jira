@@ -10,6 +10,7 @@ import { PrioritySelect } from './PrioritySelect.tsx';
 import { StatusSelect } from './StatusSelect.tsx';
 import { RichTextEditor } from './RichTextEditor.tsx';
 import { DatePicker } from './DatePicker.tsx';
+import { useMobileViewport } from '../utils/useMobileViewport.ts';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -37,6 +38,25 @@ export function CreateIssueModal({
   const [startDate, setStartDate] = useState('');
   const [recreateAfter, setRecreateAfter] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  const { isMobile, viewportHeight, viewportOffsetTop } = useMobileViewport(isOpen);
+
+  const dialogStyle = useMemo(() => {
+    if (!isMobile || !viewportHeight) return undefined;
+    return {
+      height: `${viewportHeight}px`,
+      maxHeight: `${viewportHeight}px`,
+      top: viewportOffsetTop !== undefined && viewportOffsetTop > 0 ? `${viewportOffsetTop}px` : undefined,
+    };
+  }, [isMobile, viewportHeight, viewportOffsetTop]);
+
+  const handleFormFocus = (e: React.FocusEvent) => {
+    if (!isMobile) return;
+    const target = e.target as HTMLElement;
+    setTimeout(() => {
+      target.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }, 120);
+  };
 
   const statusOptions = useMemo(() => getAvailableStatuses(columns), [columns]);
 
@@ -131,13 +151,14 @@ export function CreateIssueModal({
       aria-labelledby="create-issue-title"
     >
       <div
+        style={dialogStyle}
         className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-[var(--jira-surface)] border-0 sm:border border-[var(--jira-border)] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl relative flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div
           data-testid="create-issue-modal-header"
-          className="shrink-0 sticky top-0 z-10 flex items-center justify-between p-4 sm:p-6 pb-4 sm:pb-4 border-b border-[var(--jira-border)] bg-[var(--jira-surface)]"
+          className="shrink-0 sticky top-0 z-10 flex items-center justify-between p-4 sm:p-6 pb-4 sm:pb-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:pt-6 border-b border-[var(--jira-border)] bg-[var(--jira-surface)]"
         >
           {/* Far-left: Close (back arrow) / Cancel (X) button + Title */}
           <div className="flex items-center gap-2 min-w-0">
@@ -186,7 +207,7 @@ export function CreateIssueModal({
         {/* Modal Scrollable Content */}
         <div
           data-testid="create-issue-modal-content"
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 pt-4 pb-8 sm:pb-6"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] sm:pb-6"
         >
           {/* Validation Error Banner */}
           {validationError && (
@@ -197,7 +218,7 @@ export function CreateIssueModal({
           )}
 
           {/* Create Form */}
-          <form id="create-issue-form" onSubmit={handleSubmit} className="space-y-4">
+          <form id="create-issue-form" onSubmit={handleSubmit} onFocusCapture={handleFormFocus} className="space-y-4">
           {/* Summary Input */}
           <div>
             <label

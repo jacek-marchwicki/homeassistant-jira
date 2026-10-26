@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.1
+
+- fix(ingress): prevent HTML fallback for missing static assets and fix Ingress base tag resolution
+- feat(release): implement unified release automation script and agent workflow skill
+
 ## 0.9.0
 
 - **Task Deletion with Confirmation**: Permanently delete tasks directly from the task edit/details screen with an interactive confirmation prompt, optimistic UI removal, and real-time synchronization across connected clients.

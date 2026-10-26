@@ -167,4 +167,20 @@ describe('SettingsView', () => {
 
     act(() => root.unmount());
   });
+
+  it('applies safe-area insets at top for status bar and bottom for navigation buttons', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<SettingsView />);
+    });
+
+    const main = container.querySelector('main');
+    expect(main).not.toBeNull();
+    expect(main?.className).toContain('pt-[calc(1rem+env(safe-area-inset-top,0px))]');
+    expect(main?.className).toContain('pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]');
+
+    act(() => root.unmount());
+  });
 });

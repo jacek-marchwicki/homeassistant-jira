@@ -97,4 +97,28 @@ describe('UndoSnackbar component', () => {
 
     expect(undoSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('applies safe-area bottom positioning to float above mobile navigation buttons', async () => {
+    act(() => {
+      useBoardStore.setState({
+        pendingQuickDone: {
+          issueKey: 'PROJ-101',
+          originalIssue: mockIssue,
+          timeoutId: 123 as unknown as ReturnType<typeof setTimeout>,
+          targetCategory: 'done',
+          targetStatus: 'Done',
+          startTime: Date.now(),
+          durationMs: 5000,
+        },
+      });
+    });
+
+    await act(async () => {
+      root.render(<UndoSnackbar />);
+    });
+
+    const snackbar = container.firstElementChild as HTMLElement;
+    expect(snackbar).toBeTruthy();
+    expect(snackbar.className).toContain('bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))]');
+  });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { useMobileViewport, MobileViewportState } from './useMobileViewport.ts';
+import { useMobileViewport, getMobileModalStyles, MobileViewportState } from './useMobileViewport.ts';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -111,5 +111,40 @@ describe('useMobileViewport hook', () => {
 
     expect(latestResult?.keyboardOpen).toBe(true);
     expect(latestResult?.viewportHeight).toBe(370);
+  });
+
+  it('locks body overflow while enabled on mobile and restores on unmount', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 375, writable: true });
+    document.body.style.overflow = 'visible';
+
+    await act(async () => {
+      root.render(<TestComponent enabled={true} />);
+    });
+
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    expect(document.body.style.overflow).toBe('visible');
+  });
+
+  it('calculates getMobileModalStyles for bounded mobile modal positioning', () => {
+    const desktopStyles = getMobileModalStyles(false, 350, 0);
+    expect(desktopStyles.outerStyle).toBeUndefined();
+    expect(desktopStyles.dialogStyle).toBeUndefined();
+
+    const mobileStyles = getMobileModalStyles(true, 350, 20);
+    expect(mobileStyles.outerStyle).toEqual({
+      height: '350px',
+      maxHeight: '350px',
+      top: '20px',
+      bottom: 'auto',
+    });
+    expect(mobileStyles.dialogStyle).toEqual({
+      height: '350px',
+      maxHeight: '350px',
+    });
   });
 });

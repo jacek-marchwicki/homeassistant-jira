@@ -43,4 +43,23 @@ describe('themeBridge', () => {
     const inHA = isRunningInHomeAssistant();
     expect(typeof inHA).toBe('boolean');
   });
+
+  it('updates meta theme-color tag to match theme for PWA status bar', () => {
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'theme-color');
+      meta.setAttribute('content', '#0f172a');
+      document.head.appendChild(meta);
+    }
+
+    applyTheme('light');
+    expect(meta.getAttribute('content')).toBe('#f1f5f9');
+
+    applyTheme('dark');
+    expect(meta.getAttribute('content')).toBe('#1e293b');
+
+    applyTheme('kiosk');
+    expect(meta.getAttribute('content')).toBe('#0e131d');
+  });
 });

@@ -146,7 +146,7 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
       onClick={onClose}
     >
       <div
-        className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-md bg-[var(--jira-surface)] border-0 sm:border border-[var(--jira-border)] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl p-4 sm:p-6 pb-8 sm:pb-6 relative overflow-y-auto overscroll-contain text-[var(--jira-text-primary)]"
+        className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-md bg-[var(--jira-surface)] border-0 sm:border border-[var(--jira-border)] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl p-4 sm:p-6 pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:pt-6 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] sm:pb-6 relative overflow-y-auto overscroll-contain text-[var(--jira-text-primary)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-[var(--jira-border)]">

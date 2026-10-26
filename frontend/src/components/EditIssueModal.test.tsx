@@ -668,6 +668,10 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
         root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
       });
 
+      const outerWrapper = container.querySelector('[role="dialog"]') as HTMLElement;
+      expect(outerWrapper).not.toBeNull();
+      expect(outerWrapper.style.height).toBe('667px');
+
       const dialogBox = container.querySelector('[role="dialog"] > div') as HTMLElement;
       expect(dialogBox).not.toBeNull();
       expect(dialogBox.style.height).toBe('667px');
@@ -678,6 +682,7 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
         resizeCallback?.();
       });
 
+      expect(outerWrapper.style.height).toBe('350px');
       expect(dialogBox.style.height).toBe('350px');
       expect(dialogBox.style.maxHeight).toBe('350px');
     } finally {

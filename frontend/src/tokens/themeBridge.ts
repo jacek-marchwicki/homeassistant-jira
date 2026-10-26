@@ -38,6 +38,17 @@ export function applyTheme(theme: ThemeMode): void {
     root.setAttribute('data-theme', theme);
   }
 
+  // Update PWA theme-color meta tag to match theme status bar
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) {
+    const themeColors: Record<ThemeMode, string> = {
+      dark: '#1e293b',
+      light: '#f1f5f9',
+      kiosk: '#0e131d',
+    };
+    metaThemeColor.setAttribute('content', themeColors[theme] || '#1e293b');
+  }
+
   const storage = getStorage();
   if (storage) {
     storage.setItem(THEME_STORAGE_KEY, theme);

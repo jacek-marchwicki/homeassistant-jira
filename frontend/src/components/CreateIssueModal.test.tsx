@@ -568,6 +568,10 @@ describe('CreateIssueModal component', () => {
         root.render(<CreateIssueModal isOpen={true} onClose={() => {}} />);
       });
 
+      const outerWrapper = container.querySelector('[role="dialog"]') as HTMLElement;
+      expect(outerWrapper).not.toBeNull();
+      expect(outerWrapper.style.height).toBe('667px');
+
       const dialogBox = container.querySelector('[role="dialog"] > div') as HTMLElement;
       expect(dialogBox).not.toBeNull();
       expect(dialogBox.style.height).toBe('667px');
@@ -578,6 +582,7 @@ describe('CreateIssueModal component', () => {
         resizeCallback?.();
       });
 
+      expect(outerWrapper.style.height).toBe('350px');
       expect(dialogBox.style.height).toBe('350px');
       expect(dialogBox.style.maxHeight).toBe('350px');
     } finally {

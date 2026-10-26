@@ -13,7 +13,7 @@ import { RichTextEditor } from './RichTextEditor.tsx';
 import { DatePicker } from './DatePicker.tsx';
 import { LinkedIssuesSection } from './LinkedIssuesSection.tsx';
 import { useTaskBackground, getCardBackgroundStyle } from '../utils/useTaskBackground.ts';
-import { useMobileViewport } from '../utils/useMobileViewport.ts';
+import { useMobileViewport, getMobileModalStyles } from '../utils/useMobileViewport.ts';
 
 function formatDateTime(isoString?: string | null): string | null {
   if (!isoString) return null;
@@ -66,14 +66,10 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
   const { isMobile, viewportHeight, viewportOffsetTop } = useMobileViewport(isOpen);
 
-  const dialogStyle = React.useMemo(() => {
-    if (!isMobile || !viewportHeight) return undefined;
-    return {
-      height: `${viewportHeight}px`,
-      maxHeight: `${viewportHeight}px`,
-      top: viewportOffsetTop !== undefined && viewportOffsetTop > 0 ? `${viewportOffsetTop}px` : undefined,
-    };
-  }, [isMobile, viewportHeight, viewportOffsetTop]);
+  const { outerStyle, dialogStyle } = React.useMemo(
+    () => getMobileModalStyles(isMobile, viewportHeight, viewportOffsetTop),
+    [isMobile, viewportHeight, viewportOffsetTop]
+  );
 
   const handleFormFocus = (e: React.FocusEvent) => {
     if (!isMobile) return;
@@ -195,6 +191,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
   return (
     <div
+      style={outerStyle}
       className="fixed inset-0 z-50 flex sm:items-center sm:justify-center sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
       role="dialog"

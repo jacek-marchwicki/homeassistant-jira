@@ -10,7 +10,7 @@ import { PrioritySelect } from './PrioritySelect.tsx';
 import { StatusSelect } from './StatusSelect.tsx';
 import { RichTextEditor } from './RichTextEditor.tsx';
 import { DatePicker } from './DatePicker.tsx';
-import { useMobileViewport } from '../utils/useMobileViewport.ts';
+import { useMobileViewport, getMobileModalStyles } from '../utils/useMobileViewport.ts';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -41,14 +41,10 @@ export function CreateIssueModal({
 
   const { isMobile, viewportHeight, viewportOffsetTop } = useMobileViewport(isOpen);
 
-  const dialogStyle = useMemo(() => {
-    if (!isMobile || !viewportHeight) return undefined;
-    return {
-      height: `${viewportHeight}px`,
-      maxHeight: `${viewportHeight}px`,
-      top: viewportOffsetTop !== undefined && viewportOffsetTop > 0 ? `${viewportOffsetTop}px` : undefined,
-    };
-  }, [isMobile, viewportHeight, viewportOffsetTop]);
+  const { outerStyle, dialogStyle } = useMemo(
+    () => getMobileModalStyles(isMobile, viewportHeight, viewportOffsetTop),
+    [isMobile, viewportHeight, viewportOffsetTop]
+  );
 
   const handleFormFocus = (e: React.FocusEvent) => {
     if (!isMobile) return;
@@ -144,6 +140,7 @@ export function CreateIssueModal({
 
   return (
     <div
+      style={outerStyle}
       className="fixed inset-0 z-50 flex sm:items-center sm:justify-center sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
       role="dialog"

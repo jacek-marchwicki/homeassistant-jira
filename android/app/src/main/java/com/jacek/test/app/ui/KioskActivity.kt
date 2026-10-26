@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -44,7 +46,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
 import com.jacek.test.app.R
 import com.jacek.test.app.data.KioskPreferences
 import com.jacek.test.app.data.ThemeMode
@@ -80,6 +84,16 @@ class KioskActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
+        ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { v, insets ->
+            val applied = ViewCompat.onApplyWindowInsets(v, insets)
+            webView?.let { wv ->
+                insets.toWindowInsets()?.let { rawInsets ->
+                    wv.dispatchApplyWindowInsets(rawInsets)
+                }
+            }
+            applied
+        }
+
         // Handle physical back button / back gesture
         onBackPressedDispatcher.addCallback(this) {
             val wv = webView
@@ -92,6 +106,10 @@ class KioskActivity : ComponentActivity() {
 
         setContent {
             val statusBarHeightDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().value.toInt()
+            val navBarHeightDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value.toInt()
+            val layoutDir = LocalLayoutDirection.current
+            val cutoutLeftDp = WindowInsets.displayCutout.asPaddingValues().calculateLeftPadding(layoutDir).value.toInt()
+            val cutoutRightDp = WindowInsets.displayCutout.asPaddingValues().calculateRightPadding(layoutDir).value.toInt()
             val isDark = currentThemeMode.isDark(isSystemInDarkTheme())
 
             TestAppTheme(themeMode = currentThemeMode) {
@@ -104,6 +122,9 @@ class KioskActivity : ComponentActivity() {
                         pageZoom = preferences.pageZoom,
                         injectStatusBarPadding = preferences.injectStatusBarPadding,
                         statusBarHeightDp = statusBarHeightDp,
+                        navBarHeightDp = navBarHeightDp,
+                        cutoutLeftDp = cutoutLeftDp,
+                        cutoutRightDp = cutoutRightDp,
                         isDark = isDark,
                         showFloatingExit = preferences.showFloatingExit,
                         isUrlAllowed = { targetUrl -> preferences.isUrlAllowed(targetUrl) },
@@ -173,6 +194,9 @@ fun KioskScreen(
     pageZoom: Int,
     injectStatusBarPadding: Boolean,
     statusBarHeightDp: Int,
+    navBarHeightDp: Int = 0,
+    cutoutLeftDp: Int = 0,
+    cutoutRightDp: Int = 0,
     isDark: Boolean = false,
     showFloatingExit: Boolean,
     isUrlAllowed: (String) -> Boolean,
@@ -187,6 +211,9 @@ fun KioskScreen(
             pageZoom = pageZoom,
             injectStatusBarPadding = injectStatusBarPadding,
             statusBarHeightDp = statusBarHeightDp,
+            navBarHeightDp = navBarHeightDp,
+            cutoutLeftDp = cutoutLeftDp,
+            cutoutRightDp = cutoutRightDp,
             isDark = isDark,
             isUrlAllowed = isUrlAllowed,
             onBlockedUrl = onBlockedUrl,

@@ -1,11 +1,15 @@
 package com.jacek.test.app.ui.components
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.Build
 import android.util.Log
 import android.view.ContextThemeWrapper
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.RenderProcessGoneDetail
@@ -35,10 +39,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 
 private const val TAG = "ModernKioskWebView"
+
+private fun Context.findActivity(): Activity? {
+    var ctx = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -48,6 +62,9 @@ fun ModernKioskWebView(
     pageZoom: Int = 100,
     injectStatusBarPadding: Boolean = true,
     statusBarHeightDp: Int = 0,
+    navBarHeightDp: Int = 0,
+    cutoutLeftDp: Int = 0,
+    cutoutRightDp: Int = 0,
     isDark: Boolean = false,
     isUrlAllowed: (String) -> Boolean = { true },
     onBlockedUrl: (String) -> Unit = {},
@@ -60,6 +77,15 @@ fun ModernKioskWebView(
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var lastAppliedZoom by remember { mutableIntStateOf(-1) }
     var lastAppliedDark by remember { mutableStateOf<Boolean?>(null) }
+
+    fun dispatchInsetsToWebView(wv: WebView?) {
+        if (wv == null) return
+        val rawInsets = ViewCompat.getRootWindowInsets(wv)?.toWindowInsets()
+            ?: wv.context.findActivity()?.window?.decorView?.rootWindowInsets
+        if (rawInsets != null) {
+            wv.dispatchApplyWindowInsets(rawInsets)
+        }
+    }
 
     fun applyPageZoom(view: WebView?, zoomPercent: Int) {
         if (view == null) return
@@ -94,24 +120,154 @@ fun ModernKioskWebView(
     }
 
     fun injectStatusBarInsets(view: WebView?) {
-        if (!injectStatusBarPadding || view == null || statusBarHeightDp <= 0) return
+        if (view == null) return
+        if (!injectStatusBarPadding || statusBarHeightDp <= 0) {
+            val clearJs = """
+                (function() {
+                    try {
+                        if (window.__kioskSafeAreaObserver) {
+                            window.__kioskSafeAreaObserver.disconnect();
+                            window.__kioskSafeAreaObserver = null;
+                        }
+                        if (window.__kioskSafeAreaInterval) {
+                            clearInterval(window.__kioskSafeAreaInterval);
+                            window.__kioskSafeAreaInterval = null;
+                        }
+                        function cleanDoc(doc) {
+                            if (!doc) return;
+                            const s = doc.getElementById('kiosk-safe-area-style');
+                            if (s) s.remove();
+                            if (doc.documentElement) {
+                                doc.documentElement.style.removeProperty('--safe-area-inset-top');
+                                doc.documentElement.style.removeProperty('--safe-area-inset-bottom');
+                                doc.documentElement.style.removeProperty('--safe-area-inset-left');
+                                doc.documentElement.style.removeProperty('--safe-area-inset-right');
+                                doc.documentElement.style.removeProperty('--app-safe-area-inset-top');
+                                doc.documentElement.style.removeProperty('--app-safe-area-inset-bottom');
+                                doc.documentElement.style.removeProperty('--app-safe-area-inset-left');
+                                doc.documentElement.style.removeProperty('--app-safe-area-inset-right');
+                                doc.documentElement.style.removeProperty('--status-bar-height');
+                            }
+                        }
+                        cleanDoc(document);
+                    } catch(e) {}
+                })();
+            """.trimIndent()
+            view.evaluateJavascript(clearJs, null)
+            return
+        }
+
         val js = """
             (function() {
                 try {
                     const top = $statusBarHeightDp;
-                    document.documentElement.style.setProperty('--safe-area-inset-top', top + 'px');
-                    document.documentElement.style.setProperty('--status-bar-height', top + 'px');
-                    let injectedStyle = document.getElementById('kiosk-safe-area-style');
-                    if (!injectedStyle) {
-                        injectedStyle = document.createElement('style');
-                        injectedStyle.id = 'kiosk-safe-area-style';
-                        document.head.appendChild(injectedStyle);
+                    const bottom = $navBarHeightDp;
+                    const left = $cutoutLeftDp;
+                    const right = $cutoutRightDp;
+                    const topPx = top + 'px';
+                    const bottomPx = bottom + 'px';
+                    const leftPx = left + 'px';
+                    const rightPx = right + 'px';
+
+                    function applyToDoc(doc, isIframe) {
+                        if (!doc || !doc.documentElement) return;
+                        const root = doc.documentElement;
+                        if (root.style.getPropertyValue('--safe-area-inset-top') !== topPx) {
+                            root.style.setProperty('--safe-area-inset-top', topPx);
+                            root.style.setProperty('--safe-area-inset-bottom', bottomPx);
+                            root.style.setProperty('--safe-area-inset-left', leftPx);
+                            root.style.setProperty('--safe-area-inset-right', rightPx);
+                            root.style.setProperty('--app-safe-area-inset-top', topPx);
+                            root.style.setProperty('--app-safe-area-inset-bottom', bottomPx);
+                            root.style.setProperty('--app-safe-area-inset-left', leftPx);
+                            root.style.setProperty('--app-safe-area-inset-right', rightPx);
+                            root.style.setProperty('--status-bar-height', topPx);
+                        }
+
+                        let styleEl = doc.getElementById('kiosk-safe-area-style');
+                        const isHomeAssistant = !!doc.querySelector('home-assistant');
+                        let cssRules = ':root { ' +
+                            '--safe-area-inset-top: ' + topPx + ' !important; ' +
+                            '--safe-area-inset-bottom: ' + bottomPx + ' !important; ' +
+                            '--safe-area-inset-left: ' + leftPx + ' !important; ' +
+                            '--safe-area-inset-right: ' + rightPx + ' !important; ' +
+                            '--app-safe-area-inset-top: ' + topPx + ' !important; ' +
+                            '--app-safe-area-inset-bottom: ' + bottomPx + ' !important; ' +
+                            '--app-safe-area-inset-left: ' + leftPx + ' !important; ' +
+                            '--app-safe-area-inset-right: ' + rightPx + ' !important; ' +
+                            '--status-bar-height: ' + topPx + ' !important; ' +
+                            '}';
+
+                        if (isIframe || !isHomeAssistant) {
+                            cssRules += ' body { padding-top: ' + topPx + ' !important; }';
+                        }
+
+                        if (!styleEl) {
+                            styleEl = doc.createElement('style');
+                            styleEl.id = 'kiosk-safe-area-style';
+                            styleEl.textContent = cssRules;
+                            (doc.head || root).appendChild(styleEl);
+                        } else if (styleEl.textContent !== cssRules) {
+                            styleEl.textContent = cssRules;
+                        }
                     }
-                    const hasViewportFitCover = !!document.querySelector('meta[name="viewport"][content*="viewport-fit=cover"]');
-                    if (!hasViewportFitCover) {
-                        injectedStyle.innerHTML = 'body { padding-top: ' + top + 'px !important; }';
-                    } else {
-                        injectedStyle.innerHTML = '';
+
+                    function findIframes(node) {
+                        let frames = [];
+                        if (!node) return frames;
+                        if (node.tagName === 'IFRAME') {
+                            frames.push(node);
+                        }
+                        if (node.shadowRoot) {
+                            frames = frames.concat(findIframes(node.shadowRoot));
+                        }
+                        const children = node.children || [];
+                        for (let i = 0; i < children.length; i++) {
+                            frames = frames.concat(findIframes(children[i]));
+                        }
+                        return frames;
+                    }
+
+                    function processAll() {
+                        applyToDoc(document, false);
+                        const frames = findIframes(document.body || document.documentElement);
+                        for (let i = 0; i < frames.length; i++) {
+                            try {
+                                const fDoc = frames[i].contentDocument;
+                                if (fDoc) {
+                                    applyToDoc(fDoc, true);
+                                }
+                            } catch(e) {}
+                        }
+                    }
+
+                    processAll();
+
+                    if (!window.__kioskSafeAreaObserver) {
+                        let debounceTimer = null;
+                        window.__kioskSafeAreaObserver = new MutationObserver(function() {
+                            if (debounceTimer) return;
+                            debounceTimer = setTimeout(function() {
+                                debounceTimer = null;
+                                processAll();
+                            }, 250);
+                        });
+                        window.__kioskSafeAreaObserver.observe(document.documentElement, {
+                            childList: true,
+                            subtree: true
+                        });
+                    }
+
+                    if (!window.__kioskSafeAreaInterval) {
+                        let runCount = 0;
+                        window.__kioskSafeAreaInterval = setInterval(function() {
+                            processAll();
+                            runCount++;
+                            if (runCount >= 10) {
+                                clearInterval(window.__kioskSafeAreaInterval);
+                                window.__kioskSafeAreaInterval = null;
+                            }
+                        }, 500);
                     }
                 } catch(e) {}
             })();
@@ -237,6 +393,13 @@ fun ModernKioskWebView(
                         WebSettingsCompat.setSafeBrowsingEnabled(settings, true)
                     }
 
+                    addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                        override fun onViewAttachedToWindow(v: View) {
+                            dispatchInsetsToWebView(this@apply)
+                        }
+                        override fun onViewDetachedFromWindow(v: View) {}
+                    })
+
                     applyTheme(this, isDark)
                     lastAppliedDark = isDark
 
@@ -265,6 +428,7 @@ fun ModernKioskWebView(
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             super.onPageStarted(view, url, favicon)
                             isLoading = true
+                            dispatchInsetsToWebView(view)
                             injectStatusBarInsets(view)
                             applyPageZoom(view, pageZoom)
                             injectThemeSupport(view, isDark)
@@ -274,6 +438,7 @@ fun ModernKioskWebView(
                             super.onPageFinished(view, url)
                             isLoading = false
                             onPageTitleChanged(view?.title)
+                            dispatchInsetsToWebView(view)
                             injectStatusBarInsets(view)
                             applyPageZoom(view, pageZoom)
                             injectThemeSupport(view, isDark)
@@ -308,6 +473,7 @@ fun ModernKioskWebView(
                             progress = newProgress
                             isLoading = newProgress < 100
                             if (newProgress > 50) {
+                                dispatchInsetsToWebView(view)
                                 injectStatusBarInsets(view)
                                 applyPageZoom(view, pageZoom)
                                 injectThemeSupport(view, isDark)
@@ -343,6 +509,7 @@ fun ModernKioskWebView(
                     lastAppliedDark = isDark
                     applyTheme(webView, isDark)
                 }
+                dispatchInsetsToWebView(webView)
                 injectStatusBarInsets(webView)
             }
         )

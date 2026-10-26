@@ -318,7 +318,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const swRes = await request.get('/sw.js');
     expect(swRes.ok()).toBeTruthy();
     const swContent = await swRes.text();
-    expect(swContent).toContain('jira-dashboard-');
+    expect(swContent).toMatch(/jira-dashboard-v\d+/);
     expect(swContent).toContain('skipWaiting');
 
     // 6. Verify Install Button in Header triggers Guidance Modal

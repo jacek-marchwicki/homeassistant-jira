@@ -414,11 +414,17 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(cloneBtn).toBeVisible();
     await expect(cloneBtn).toContainText('Clone task');
 
-    // 3c. Verify linked tasks section is present right above dates and capture snapshot
+    // 3c. Verify red Delete task button is present right after Clone task
+    const deleteBtn = modal.getByTestId('delete-issue-button');
+    await expect(deleteBtn).toBeVisible();
+    await expect(deleteBtn).toContainText('Delete task');
+
+    // 3d. Verify linked tasks section is present right above dates and capture snapshot
     const linkedSection = modal.getByTestId('linked-issues-section');
     await expect(linkedSection).toBeVisible();
     await expect(linkedSection.getByText(/Linked tasks/)).toBeVisible();
     await expect(linkedSection).toHaveScreenshot('component-linked-issues.png');
+
 
     // 4. Capture full screen modal snapshot
     await expect(page).toHaveScreenshot('modal-edit-issue.png');

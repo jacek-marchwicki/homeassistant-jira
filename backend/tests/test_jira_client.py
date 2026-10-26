@@ -248,3 +248,32 @@ def test_fake_jira_client_rank_issue(monkeypatch: pytest.MonkeyPatch) -> None:
         assert keys2.index("PROJ-72") < keys2.index("PROJ-101")
 
     asyncio.run(_test())
+
+
+def test_fake_jira_client_delete_issue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify FakeJiraClient delete_issue removes issue and comments."""
+    monkeypatch.setenv("JIRA_USE_FAKE", "1")
+
+    async def _test() -> None:
+        client = FakeJiraClient()
+        assert await client.get_issue("PROJ-101") is not None
+        result = await client.delete_issue("PROJ-101")
+        assert result is True
+        assert await client.get_issue("PROJ-101") is None
+        issues = await client.get_board_issues("board-1")
+        assert all(i.key != "PROJ-101" for i in issues)
+
+    asyncio.run(_test())
+
+
+def test_fake_jira_client_delete_nonexistent_issue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify FakeJiraClient delete_issue raises 404 for nonexistent issue."""
+    monkeypatch.setenv("JIRA_USE_FAKE", "1")
+
+    async def _test() -> None:
+        client = FakeJiraClient()
+        with pytest.raises(JiraAPIError) as exc_info:
+            await client.delete_issue("NONEXISTENT-999")
+        assert exc_info.value.status_code == 404
+
+    asyncio.run(_test())

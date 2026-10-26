@@ -627,4 +627,85 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     expect(cancelBtn.className).toContain('bg-red-500');
     expect(cancelBtn.className).toContain('text-red');
   });
+
+  it('renders a red Delete task button right after Clone task button', async () => {
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={() => {}} />);
+    });
+
+    const cloneBtn = container.querySelector('[data-testid="clone-issue-button"]') as HTMLButtonElement;
+    expect(cloneBtn).not.toBeNull();
+
+    const deleteBtn = container.querySelector('[data-testid="delete-issue-button"]') as HTMLButtonElement;
+    expect(deleteBtn).not.toBeNull();
+    expect(deleteBtn.textContent).toContain('Delete task');
+
+    // Placed right after Clone task
+    expect(cloneBtn.nextElementSibling).toBe(deleteBtn);
+
+    // Styled in red
+    expect(deleteBtn.className).toMatch(/red/);
+  });
+
+  it('shows confirmation when Delete task is clicked, and cancels without deleting', async () => {
+    const deleteSpy = vi.fn();
+    const onCloseSpy = vi.fn();
+    useBoardStore.setState({
+      deleteIssueOptimistic: deleteSpy,
+    });
+
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={onCloseSpy} />);
+    });
+
+    const deleteBtn = container.querySelector('[data-testid="delete-issue-button"]') as HTMLButtonElement;
+    await act(async () => {
+      deleteBtn.click();
+    });
+
+    // Confirmation dialog/buttons must be shown
+    const confirmBtn = container.querySelector('[data-testid="confirm-delete-button"]') as HTMLButtonElement;
+    const cancelBtn = container.querySelector('[data-testid="cancel-delete-button"]') as HTMLButtonElement;
+    expect(confirmBtn).not.toBeNull();
+    expect(cancelBtn).not.toBeNull();
+    expect(deleteSpy).not.toHaveBeenCalled();
+
+    // Click cancel
+    await act(async () => {
+      cancelBtn.click();
+    });
+
+    // Confirmation dismissed, delete still not called, modal remains open
+    expect(container.querySelector('[data-testid="confirm-delete-button"]')).toBeNull();
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(onCloseSpy).not.toHaveBeenCalled();
+  });
+
+  it('calls deleteIssueOptimistic and onClose when deletion is confirmed', async () => {
+    const deleteSpy = vi.fn().mockResolvedValue(undefined);
+    const onCloseSpy = vi.fn();
+    useBoardStore.setState({
+      deleteIssueOptimistic: deleteSpy,
+    });
+
+    await act(async () => {
+      root.render(<EditIssueModal issue={testIssue} isOpen={true} onClose={onCloseSpy} />);
+    });
+
+    const deleteBtn = container.querySelector('[data-testid="delete-issue-button"]') as HTMLButtonElement;
+    await act(async () => {
+      deleteBtn.click();
+    });
+
+    const confirmBtn = container.querySelector('[data-testid="confirm-delete-button"]') as HTMLButtonElement;
+    await act(async () => {
+      confirmBtn.click();
+    });
+
+    expect(deleteSpy).toHaveBeenCalledWith('PROJ-101');
+    expect(onCloseSpy).toHaveBeenCalled();
+  });
+
+  });
 });
+

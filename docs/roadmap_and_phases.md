@@ -485,4 +485,27 @@ This document details the architectural phases, delivered features, and evolutio
     - Playwright visual regression snapshots updated in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts) (`component-modal-edit-dirty.png`, `component-modal-create-description.png`).
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
 
+- [x] **Phase 5.33: Task Deletion with Confirmation & Real-Time Sync**
+  - [x] **Red Danger Delete Task Action in Edit Screen (`EditIssueModal.tsx`)**:
+    - Placed a dedicated "Delete task" button in the secondary action row immediately following "Clone task", styled with red danger tokens (`text-red-400`, `border-red-500/30`, hover `bg-red-500/10`) and a `Trash2` icon.
+    - Preserves touch-target compliance ($\ge 44\text{px}$) across mobile, tablet, and desktop viewports.
+  - [x] **Two-Step Destructive Confirmation Prompt**:
+    - Clicking "Delete task" smoothly replaces the button with an in-place confirmation prompt: *"Delete task?"* alongside a prominent red *"Delete"* confirm button and a *"Cancel"* button to prevent accidental deletions.
+    - Clicking "Cancel" instantly restores the button state without mutating state or triggering network requests.
+    - Confirming deletion closes the modal and removes the issue optimistically.
+  - [x] **Optimistic UI (<50ms) with Rollback & Outbox Offline Resilience**:
+    - `deleteIssueOptimistic(issueKey)` removes the issue from local state in $<50\text{ms}$ while enqueuing previous state to `rollbackQueue`.
+    - If the backend or Jira rejects the deletion, state is gracefully restored and an error message is surfaced.
+    - When offline, enqueues a `'delete_issue'` transaction to `offlineOutbox` (`ha_jira_offline_outbox_v1` in `localStorage`), which automatically drains via `flushOfflineQueue` upon reconnection.
+  - [x] **Backend & Jira Cloud REST Integration**:
+    - Added `delete_issue(self, issue_key: str) -> bool` to `JiraClient` protocol, `FakeJiraClient`, and `JiraCloudClient` (`DELETE /rest/api/3/issue/{key}`).
+    - Added `DELETE /api/issues/{key}` endpoint in [`main.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/presentation/main.py) which cleans up Jira, local SQLite cache (`storage.delete_issue(key)`), and broadcasts `{"event": "issue_deleted", "issue_key": key}` over WebSocket to connected clients.
+  - [x] **Comprehensive Automated Test Coverage & Local CI Verification**:
+    - Backend unit tests in [`backend/tests/test_jira_client.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_jira_client.py), [`backend/tests/test_jira_cloud_client.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_jira_cloud_client.py), and [`backend/tests/test_api.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_api.py).
+    - Frontend unit and offline reactivity tests in [`frontend/src/store/boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts), [`frontend/src/store/offlineReactivity.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/offlineReactivity.test.ts), and [`frontend/src/components/EditIssueModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/EditIssueModal.test.tsx).
+    - Visual regression test coverage in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts).
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+
 

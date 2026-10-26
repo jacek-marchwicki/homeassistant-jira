@@ -2114,6 +2114,30 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     return created_issue
 
 
+@app.delete("/api/issues/{key}")
+async def delete_issue(key: str) -> dict[str, Any]:
+    """Delete an issue from Jira, local storage cache, and broadcast delta."""
+    try:
+        await jira_client.delete_issue(key)
+    except JiraAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    storage.delete_issue(key)
+    _cached_issue_state.pop(key, None)
+    if _cached_board_response is not None:
+        _cached_board_response.issues = [i for i in _cached_board_response.issues if i.key != key]
+
+    # Broadcast real-time delta via WebSockets
+    await ws_hub.broadcast(
+        {
+            "event": "issue_deleted",
+            "issue_key": key,
+        }
+    )
+
+    return {"status": "deleted", "key": key}
+
+
 def _serve_cached_file(file_path: Path | str) -> Response:
     """Helper to serve an image file with standard cache headers."""
     p = Path(file_path)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, X, Save, AlertCircle, ExternalLink, Calendar, Clock, Copy } from 'lucide-react';
+import { ArrowLeft, X, Save, AlertCircle, ExternalLink, Calendar, Clock, Copy, Trash2 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue, JiraIssueType, JiraPriority } from '../types/jira.ts';
 import { getAvailableStatuses, getJiraIssueUrl } from '../utils/boardUtils.ts';
@@ -43,10 +43,12 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
     columns,
     jiraUrl,
     updateIssueOptimistic,
+    deleteIssueOptimistic,
     openCreateModal,
     setEditingIssue,
     openIssueByKey,
   } = useBoardStore();
+
 
   const { backgroundUrl, hasBackground } = useTaskBackground(issue?.key);
   const modalBannerStyle = getCardBackgroundStyle(backgroundUrl);
@@ -62,6 +64,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
   const [startDate, setStartDate] = useState('');
   const [recreateAfter, setRecreateAfter] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   const statusOptions = getAvailableStatuses(columns);
   const issueUrl = issue ? getJiraIssueUrl(issue, jiraUrl) : '#';
@@ -86,6 +89,7 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
       setStartDate(issue.start_date ?? issue.startDate ?? '');
       setRecreateAfter(issue.recreate_after ?? issue.recreateAfter ?? '');
       setValidationError(null);
+      setIsConfirmingDelete(false);
     }
   }, [issue]);
 
@@ -156,6 +160,15 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
     } else {
       openIssueByKey(linkedKey);
     }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!issue) return;
+    setIsConfirmingDelete(false);
+    onClose();
+    await deleteIssueOptimistic(issue.key);
+  };
+
   };
 
   const isDirty = Boolean(
@@ -435,8 +448,8 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
             />
           </div>
 
-          {/* Secondary Actions: Clone task */}
-          <div className="pt-2 flex items-center justify-start">
+          {/* Secondary Actions: Clone task & Delete task */}
+          <div className="pt-2 flex flex-wrap items-center justify-start gap-2">
             <button
               type="button"
               onClick={handleClone}
@@ -448,6 +461,48 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
               <Copy className="w-4 h-4 text-[var(--jira-text-muted)]" />
               <span>Clone task</span>
             </button>
+
+            {isConfirmingDelete ? (
+              <div
+                className="inline-flex items-center gap-2 p-1 rounded-lg bg-red-500/10 border border-red-500/30 min-h-[44px]"
+                data-testid="delete-confirm-container"
+              >
+                <span className="text-xs font-medium text-red-300 pl-2">Delete task?</span>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  data-testid="confirm-delete-button"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-red-600 hover:bg-red-500 text-white transition-colors cursor-pointer min-h-[36px]"
+                  title="Confirm delete this task"
+                  aria-label="Confirm delete this task"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(false)}
+                  data-testid="cancel-delete-button"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--jira-canvas)] hover:bg-[var(--jira-surface-hover)] text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] border border-[var(--jira-border)] transition-colors cursor-pointer min-h-[36px]"
+                  title="Cancel delete"
+                  aria-label="Cancel delete"
+                >
+                  <span>Cancel</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(true)}
+                data-testid="delete-issue-button"
+                className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-[var(--jira-canvas)] hover:bg-red-500/10 text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 transition-colors cursor-pointer min-h-[44px]"
+                title="Delete this task"
+                aria-label="Delete this task"
+              >
+                <Trash2 className="w-4 h-4 text-red-400" />
+                <span>Delete task</span>
+              </button>
+            )}
           </div>
         </form>
 

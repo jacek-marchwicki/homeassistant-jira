@@ -220,6 +220,47 @@ describe('Cross-View & Filter Offline Reactivity', () => {
     expect(finalIssues[0].key).toBe('PROJ-205');
   });
 
+  it('deleting task while offline is optimistically removed, queued in outbox and synced on reconnection', async () => {
+    const issueToDelete: JiraIssue = {
+      id: '206',
+      key: 'PROJ-206',
+      summary: 'Task to delete offline',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      priority: 'medium',
+    };
+    useBoardStore.setState({
+      issues: [issueToDelete],
+      columns: testColumns,
+      offlineOutbox: [],
+      syncStatus: 'synced',
+    });
+
+    // 1. Simulate offline failure
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    await useBoardStore.getState().deleteIssueOptimistic('PROJ-206');
+
+    // Optimistically removed
+    expect(useBoardStore.getState().issues.some((i) => i.key === 'PROJ-206')).toBe(false);
+
+    // Queued in outbox
+    const outbox = useBoardStore.getState().offlineOutbox;
+    expect(outbox.length).toBe(1);
+    expect(outbox[0].action).toBe('delete_issue');
+    expect(outbox[0].issueKey).toBe('PROJ-206');
+
+    // 2. Reconnect and flush outbox
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'deleted', key: 'PROJ-206' }),
+    } as Response);
+
+    await useBoardStore.getState().flushOfflineQueue();
+
+    expect(useBoardStore.getState().offlineOutbox.length).toBe(0);
+    expect(useBoardStore.getState().issues.some((i) => i.key === 'PROJ-206')).toBe(false);
+  });
+
   it('updating and unassigning assignee while offline is queued in outbox and synced', async () => {
     // 1. Setup issue on board
     const initialIssue: JiraIssue = {

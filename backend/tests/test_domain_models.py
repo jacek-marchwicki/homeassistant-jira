@@ -5,6 +5,8 @@ import unittest
 from jira_dashboard.domain import (
     IssueType,
     JiraIssue,
+    JiraIssueLink,
+    JiraLinkedIssue,
     JiraStatus,
     JiraTransition,
     JiraUser,
@@ -120,6 +122,39 @@ class TestDomainModels(unittest.TestCase):
             updated_at="2026-10-04T22:00:00Z",
         )
         self.assertEqual(issue_with_rank.rank, "0|i00001:")
+
+    def test_issue_links_model(self) -> None:
+        """Verify JiraIssueLink and JiraLinkedIssue can be added to JiraIssue."""
+        linked = JiraLinkedIssue(
+            id="10002",
+            key="PROJ-102",
+            summary="Cloned issue summary",
+            status=self.done_status,
+            priority=Priority.HIGH,
+            issue_type=IssueType.BUG,
+            url="https://jira.example.com/browse/PROJ-102",
+        )
+        link = JiraIssueLink(
+            id="link-1",
+            relationship="clones",
+            issue=linked,
+            direction="outward",
+        )
+        issue = JiraIssue(
+            id="10001",
+            key="PROJ-101",
+            summary="Main issue",
+            issue_type=IssueType.TASK,
+            priority=Priority.MEDIUM,
+            status=self.todo_status,
+            updated_at="2026-10-04T22:00:00Z",
+            issue_links=[link],
+        )
+        self.assertEqual(len(issue.issue_links), 1)
+        self.assertEqual(issue.issue_links[0].relationship, "clones")
+        self.assertEqual(issue.issue_links[0].issue.key, "PROJ-102")
+        self.assertIsNotNone(issue.issue_links[0].issue.status)
+        self.assertEqual(issue.issue_links[0].issue.status.name, "Done")
 
     def test_parse_iso_timestamp(self) -> None:
         """Verify parse_iso_timestamp handles Jira Cloud formats, offsets, Z, and bad inputs."""

@@ -539,4 +539,71 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
       })
     );
   });
+
+  it('renders linked issues section right above Created/Updated dates section and allows clicking linked issue', async () => {
+    const linkedIssue: JiraIssue = {
+      id: '102',
+      key: 'PROJ-102',
+      summary: 'Second linked issue',
+      issue_type: 'bug',
+      priority: 'high',
+      status: { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
+      updated_at: '2026-10-05T00:00:00Z',
+    };
+
+    const issueWithLinks: JiraIssue = {
+      ...testIssue,
+      issue_links: [
+        {
+          id: 'link-101-102',
+          relationship: 'blocks',
+          direction: 'outward',
+          issue: {
+            id: '102',
+            key: 'PROJ-102',
+            summary: 'Second linked issue',
+            issue_type: 'bug',
+            priority: 'high',
+            status: { id: 'col-inprogress', name: 'In Progress', category: 'inprogress' },
+            url: 'https://jira.example.com/browse/PROJ-102',
+          },
+        },
+      ],
+    };
+
+    const setEditingIssueSpy = vi.fn();
+    useBoardStore.setState({
+      issues: [issueWithLinks, linkedIssue],
+      setEditingIssue: setEditingIssueSpy,
+    });
+
+    await act(async () => {
+      root.render(<EditIssueModal issue={issueWithLinks} isOpen={true} onClose={() => {}} />);
+    });
+
+    const linkedSection = container.querySelector('[data-testid="linked-issues-section"]');
+    const datesSection = container.querySelector('[data-testid="edit-issue-dates"]');
+
+    expect(linkedSection).not.toBeNull();
+    expect(datesSection).not.toBeNull();
+
+    // Verify ordering: linked issues section appears right above dates section
+    if (linkedSection && datesSection) {
+      expect(
+        linkedSection.compareDocumentPosition(datesSection) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+
+    // Verify clicking linked issue opens that issue
+    const linkedItem = container.querySelector('[data-testid="linked-issue-PROJ-102"]') as HTMLElement;
+    expect(linkedItem).not.toBeNull();
+
+    await act(async () => {
+      linkedItem.click();
+    });
+
+    expect(setEditingIssueSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'PROJ-102' })
+    );
+  });
 });

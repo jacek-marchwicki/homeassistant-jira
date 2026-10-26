@@ -35,6 +35,17 @@ class TestPresentationApi(unittest.TestCase):
         self.assertGreater(len(data["issues"]), 0)
         self.assertTrue(data["issues"][0]["url"].endswith("/browse/PROJ-101"))
 
+    def test_get_issue_endpoint(self) -> None:
+        """Verify GET /api/issues/{key} returns issue details or 404."""
+        response = self.client.get("/api/issues/PROJ-101")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["key"], "PROJ-101")
+        self.assertIn("issue_links", data)
+
+        res_404 = self.client.get("/api/issues/NONEXISTENT-999")
+        self.assertEqual(res_404.status_code, 404)
+
     def test_transition_issue_endpoint(self) -> None:
         """Verify POST /api/issues/{key}/transition transitions an issue."""
         response = self.client.post(

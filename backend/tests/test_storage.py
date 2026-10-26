@@ -12,6 +12,8 @@ from jira_dashboard.domain import (
     BoardColumn,
     IssueType,
     JiraIssue,
+    JiraIssueLink,
+    JiraLinkedIssue,
     JiraStatus,
     JiraUser,
     Priority,
@@ -424,4 +426,54 @@ def test_oauth_codes_storage_lifecycle(temp_db_path: Path) -> None:
 
     # 3. Nonexistent code
     assert storage.consume_oauth_code("nonexistent") is None
+    storage.close()
+
+
+def test_storage_issue_links_roundtrip(temp_db_path: Path) -> None:
+    """Verify that issues with issue_links are correctly stored and retrieved from SQLite."""
+    storage = SQLiteStorage(temp_db_path)
+    storage.init_db()
+
+    linked = JiraLinkedIssue(
+        id="202",
+        key="TEST-202",
+        summary="Target cloned issue",
+        status=JiraStatus(id="3", name="Done", category=StatusCategory.DONE),
+        priority=Priority.HIGH,
+        issue_type=IssueType.BUG,
+        url="https://jira.example.com/browse/TEST-202",
+    )
+    link = JiraIssueLink(
+        id="link-99",
+        relationship="is cloned by",
+        direction="inward",
+        issue=linked,
+    )
+
+    issue = JiraIssue(
+        id="201",
+        key="TEST-201",
+        summary="Parent task with links",
+        issue_type=IssueType.TASK,
+        priority=Priority.MEDIUM,
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        updated_at="2026-10-04T12:00:00Z",
+        issue_links=[link],
+    )
+
+    storage.upsert_issue(issue)
+
+    retrieved = storage.get_issue("TEST-201")
+    assert retrieved is not None
+    assert len(retrieved.issue_links) == 1
+    assert retrieved.issue_links[0].relationship == "is cloned by"
+    assert retrieved.issue_links[0].issue.key == "TEST-202"
+    assert retrieved.issue_links[0].issue.status.name == "Done"
+
+    all_issues = storage.get_issues()
+    found = next((i for i in all_issues if i.key == "TEST-201"), None)
+    assert found is not None
+    assert len(found.issue_links) == 1
+    assert found.issue_links[0].issue.key == "TEST-202"
+
     storage.close()

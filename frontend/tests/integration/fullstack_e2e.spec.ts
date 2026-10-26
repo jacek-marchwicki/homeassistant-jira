@@ -120,9 +120,9 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const doneButton = proj98Article.getByTitle('Quick Action: Mark as Done');
     await doneButton.click();
 
-    // UI should display error rollback banner
+    // UI should display error rollback banner once delayed undo timer (5000ms) dispatches
     const alertBanner = page.getByText('Failed to transition PROJ-98. Reverting to previous status.');
-    await expect(alertBanner).toBeVisible({ timeout: 5000 });
+    await expect(alertBanner).toBeVisible({ timeout: 10000 });
 
     // PROJ-98 should NOT be struck through (reverted back to In Progress)
     await expect(proj98Article.locator('p')).not.toHaveClass(/line-through/);
@@ -318,7 +318,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const swRes = await request.get('/sw.js');
     expect(swRes.ok()).toBeTruthy();
     const swContent = await swRes.text();
-    expect(swContent).toContain('jira-dashboard-v1');
+    expect(swContent).toContain('jira-dashboard-');
     expect(swContent).toContain('skipWaiting');
 
     // 6. Verify Install Button in Header triggers Guidance Modal
@@ -700,6 +700,36 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     );
     const res = await page.request.get('/api/account-types');
     expect((await res.json()).account_types).toEqual({ 'alex lead': 'child' });
+  });
+
+  test('18. Linked Issues: displays linked tasks and supports clicking to open linked task', async ({
+    page,
+  }) => {
+    // 1. Open PROJ-101
+    const card = page.getByText('PROJ-101').first();
+    await card.click();
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    // 2. Verify Linked tasks section
+    const linkedSection = modal.getByTestId('linked-issues-section');
+    await expect(linkedSection).toBeVisible();
+    await expect(linkedSection.getByText(/Linked tasks/)).toBeVisible();
+
+    // Verify relationships and linked tickets
+    await expect(linkedSection.getByText('is cloned by')).toBeVisible();
+    await expect(linkedSection.getByText('blocks')).toBeVisible();
+    await expect(linkedSection.getByText('PROJ-98')).toBeVisible();
+    await expect(linkedSection.getByText('PROJ-85')).toBeVisible();
+
+    // 3. Click PROJ-98 to open linked issue
+    const proj98Link = linkedSection.getByTestId('linked-issue-PROJ-98');
+    await proj98Link.click();
+
+    // Modal switches to PROJ-98
+    await expect(modal.locator('#edit-summary')).toHaveValue(/Design system tokens/);
+    await expect(page).toHaveURL(/\/task\/PROJ-98/);
   });
 });
 

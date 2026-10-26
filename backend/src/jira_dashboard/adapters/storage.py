@@ -18,6 +18,7 @@ from jira_dashboard.domain import (
     BoardColumn,
     IssueType,
     JiraIssue,
+    JiraIssueLink,
     JiraStatus,
     JiraUser,
     Priority,
@@ -331,6 +332,15 @@ class SQLiteStorage:
                 avatar_url=row["assignee_avatar_url"],
             )
 
+        issue_links: list[JiraIssueLink] = []
+        if "raw_json" in row.keys() and row["raw_json"]:
+            try:
+                raw_data = json.loads(row["raw_json"])
+                raw_links = raw_data.get("issue_links") or raw_data.get("issueLinks") or []
+                issue_links = [JiraIssueLink.model_validate(link) for link in raw_links]
+            except Exception:
+                issue_links = []
+
         return JiraIssue(
             id=row["id"] or row["key"],
             key=row["key"],
@@ -352,6 +362,7 @@ class SQLiteStorage:
             rank=row["rank"] if "rank" in row.keys() else None,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            issue_links=issue_links,
         )
 
     def save_issues(self, issues: list[JiraIssue]) -> None:

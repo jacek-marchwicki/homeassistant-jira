@@ -503,4 +503,51 @@ describe('Cross-View & Filter Offline Reactivity', () => {
     expect(useBoardStore.getState().currentView).toBe('backlog');
     expect(window.localStorage.getItem('ha_jira_current_view')).toBe('backlog');
   });
+
+  it('preserves issue_links during offline optimistic mutations and enqueues payload safely', async () => {
+    const issueWithLinks: JiraIssue = {
+      id: '501',
+      key: 'PROJ-501',
+      summary: 'Task with links to preserve',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      priority: 'medium',
+      issue_type: 'task',
+      updated_at: '2026-10-07T12:00:00Z',
+      issue_links: [
+        {
+          id: 'link-501',
+          relationship: 'clones',
+          direction: 'outward',
+          issue: {
+            id: '502',
+            key: 'PROJ-502',
+            summary: 'Cloned task',
+            status: { id: '13', name: 'Done', category: 'done' },
+          },
+        },
+      ],
+    };
+
+    useBoardStore.setState({
+      issues: [issueWithLinks],
+      columns: testColumns,
+      offlineOutbox: [],
+    });
+
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+    const start = performance.now();
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-501', {
+      summary: 'Updated Task Title Offline',
+    });
+    const duration = performance.now() - start;
+
+    expect(duration).toBeLessThan(50);
+
+    const updated = useBoardStore.getState().issues.find((i) => i.key === 'PROJ-501');
+    expect(updated?.summary).toBe('Updated Task Title Offline');
+    expect(updated?.issue_links?.length).toBe(1);
+    expect(updated?.issue_links?.[0].relationship).toBe('clones');
+    expect(updated?.issue_links?.[0].issue.key).toBe('PROJ-502');
+  });
 });

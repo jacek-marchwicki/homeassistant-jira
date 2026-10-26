@@ -319,6 +319,7 @@ export interface BoardStoreState {
   setCurrentView: (view: DashboardView) => void;
   toggleBacklogExpandedOnBoard: () => void;
   setEditingIssue: (issue: JiraIssue | null) => void;
+  openIssueByKey: (key: string) => Promise<void>;
   setCreateModalOpen: (open: boolean) => void;
   openCreateModal: (initialValues?: Partial<IssueCreatePayload>) => void;
   setConnectionModalOpen: (open: boolean) => void;
@@ -615,6 +616,30 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       const wasOpen = Boolean(get().editingIssue) || get().routeTaskKey !== null;
       set({ editingIssue: null, routeTaskKey: null });
       if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
+    }
+  },
+
+  openIssueByKey: async (key: string) => {
+    const { issues } = get();
+    const existing = issues.find((i) => i.key === key);
+    if (existing) {
+      get().setEditingIssue(existing);
+      return;
+    }
+    pushRoute({ kind: 'task', key });
+    set({ routeTaskKey: key });
+    try {
+      const res = await fetch(getApiUrl(`/api/issues/${encodeURIComponent(key)}`), {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const fetched: JiraIssue = await res.json();
+        get().setEditingIssue(fetched);
+      } else {
+        get().resolveRouteTask();
+      }
+    } catch {
+      get().resolveRouteTask();
     }
   },
 

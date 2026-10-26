@@ -11,6 +11,7 @@ import { StatusSelect } from './StatusSelect.tsx';
 import { CommentsSection } from './CommentsSection.tsx';
 import { RichTextEditor } from './RichTextEditor.tsx';
 import { DatePicker } from './DatePicker.tsx';
+import { LinkedIssuesSection } from './LinkedIssuesSection.tsx';
 import { useTaskBackground, getCardBackgroundStyle } from '../utils/useTaskBackground.ts';
 
 function formatDateTime(isoString?: string | null): string | null {
@@ -37,7 +38,15 @@ interface EditIssueModalProps {
 }
 
 export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) {
-  const { columns, jiraUrl, updateIssueOptimistic, openCreateModal } = useBoardStore();
+  const {
+    issues,
+    columns,
+    jiraUrl,
+    updateIssueOptimistic,
+    openCreateModal,
+    setEditingIssue,
+    openIssueByKey,
+  } = useBoardStore();
 
   const { backgroundUrl, hasBackground } = useTaskBackground(issue?.key);
   const modalBannerStyle = getCardBackgroundStyle(backgroundUrl);
@@ -138,6 +147,15 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
       start_date: startDate.trim() || null,
       recreate_after: recreateAfter.trim() || null,
     });
+  };
+
+  const handleSelectLinkedIssue = (linkedKey: string) => {
+    const found = issues.find((i) => i.key === linkedKey);
+    if (found) {
+      setEditingIssue(found);
+    } else {
+      openIssueByKey(linkedKey);
+    }
   };
 
   const isDirty = Boolean(
@@ -433,6 +451,12 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
 
         {/* Divider below Save and Cancel with vertical spacing */}
         <div className="mt-6 pt-5 border-t border-[var(--jira-border)] space-y-4">
+          {/* Linked Tasks Section (Cloned, Blocked, etc.) */}
+          <LinkedIssuesSection
+            issue={issue}
+            onSelectIssue={handleSelectLinkedIssue}
+          />
+
           {/* Issue Metadata Dates (Created & Updated) */}
           {(createdFormatted || updatedFormatted) && (
             <div

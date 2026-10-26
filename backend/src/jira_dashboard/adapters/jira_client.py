@@ -15,6 +15,8 @@ from jira_dashboard.domain import (
     IssueType,
     JiraComment,
     JiraIssue,
+    JiraIssueLink,
+    JiraLinkedIssue,
     JiraStatus,
     JiraUser,
     Priority,
@@ -74,6 +76,36 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         rank="0|i00001:",
         created_at="2026-10-01T09:00:00Z",
         updated_at="2026-10-04T22:30:00Z",
+        issue_links=[
+            JiraIssueLink(
+                id="link-101-98",
+                relationship="is cloned by",
+                direction="inward",
+                issue=JiraLinkedIssue(
+                    id="98",
+                    key="PROJ-98",
+                    summary="Design system tokens with Home Assistant theme bridging",
+                    status=STATUS_MAP[StatusCategory.IN_PROGRESS],
+                    priority=Priority.HIGHEST,
+                    issue_type=IssueType.STORY,
+                    url="https://jira.example.com/browse/PROJ-98",
+                ),
+            ),
+            JiraIssueLink(
+                id="link-101-85",
+                relationship="blocks",
+                direction="outward",
+                issue=JiraLinkedIssue(
+                    id="85",
+                    key="PROJ-85",
+                    summary="Jira webhook ingestion & signature validation engine",
+                    status=STATUS_MAP[StatusCategory.IN_REVIEW],
+                    priority=Priority.MEDIUM,
+                    issue_type=IssueType.TASK,
+                    url="https://jira.example.com/browse/PROJ-85",
+                ),
+            ),
+        ],
     ),
     JiraIssue(
         id="98",
@@ -92,6 +124,22 @@ DEFAULT_SEED_ISSUES: list[JiraIssue] = [
         rank="0|i00002:",
         created_at="2026-10-01T09:30:00Z",
         updated_at="2026-10-04T22:40:00Z",
+        issue_links=[
+            JiraIssueLink(
+                id="link-98-101",
+                relationship="clones",
+                direction="outward",
+                issue=JiraLinkedIssue(
+                    id="101",
+                    key="PROJ-101",
+                    summary="Configure Home Assistant Ingress dynamic proxy support",
+                    status=STATUS_MAP[StatusCategory.TODO],
+                    priority=Priority.HIGH,
+                    issue_type=IssueType.TASK,
+                    url="https://jira.example.com/browse/PROJ-101",
+                ),
+            ),
+        ],
     ),
     JiraIssue(
         id="85",

@@ -1562,4 +1562,49 @@ describe('URL navigation', () => {
       expect(state.issues.find((i) => i.key === 'PROJ-101')?.status.category).toBe('done');
     });
   });
+
+  describe('openIssueByKey', () => {
+    it('opens existing issue from store without network call', async () => {
+      const issueA: JiraIssue = { ...mockIssue, key: 'PROJ-101' };
+      const issueB: JiraIssue = { ...mockIssue, key: 'PROJ-102' };
+      useBoardStore.setState({
+        issues: [issueA, issueB],
+        editingIssue: null,
+      });
+
+      const fetchSpy = vi.fn();
+      global.fetch = fetchSpy;
+
+      await useBoardStore.getState().openIssueByKey('PROJ-102');
+
+      expect(useBoardStore.getState().editingIssue?.key).toBe('PROJ-102');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('fetches remote issue from /api/issues/:key when issue is not in memory', async () => {
+      const remoteIssue: JiraIssue = {
+        ...mockIssue,
+        key: 'REMOTE-999',
+        summary: 'Remote Linked Issue',
+      };
+      useBoardStore.setState({
+        issues: [mockIssue],
+        editingIssue: null,
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => remoteIssue,
+      });
+
+      await useBoardStore.getState().openIssueByKey('REMOTE-999');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/issues/REMOTE-999'),
+        expect.anything()
+      );
+      expect(useBoardStore.getState().editingIssue?.key).toBe('REMOTE-999');
+      expect(useBoardStore.getState().editingIssue?.summary).toBe('Remote Linked Issue');
+    });
+  });
 });

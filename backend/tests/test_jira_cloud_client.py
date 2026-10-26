@@ -1267,3 +1267,114 @@ def test_create_and_update_issue_with_adf_description() -> None:
         await client.close()
 
     asyncio.run(_test())
+
+
+def test_parse_issue_links() -> None:
+    """Verify JiraCloudClient parses inward and outward issuelinks correctly."""
+
+    async def _test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "/rest/api/3/issue/DEV-100" in str(request.url):
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "100",
+                        "key": "DEV-100",
+                        "fields": {
+                            "summary": "Main issue with inward and outward links",
+                            "priority": {"name": "High"},
+                            "issuetype": {"name": "Story"},
+                            "status": {
+                                "id": "1",
+                                "name": "To Do",
+                                "statusCategory": {"id": 1, "key": "new", "name": "To Do"},
+                            },
+                            "issuelinks": [
+                                {
+                                    "id": "link-1",
+                                    "type": {
+                                        "name": "Cloners",
+                                        "inward": "is cloned by",
+                                        "outward": "clones",
+                                    },
+                                    "inwardIssue": {
+                                        "id": "101",
+                                        "key": "DEV-101",
+                                        "fields": {
+                                            "summary": "Cloned issue",
+                                            "status": {
+                                                "id": "3",
+                                                "name": "Done",
+                                                "statusCategory": {
+                                                    "id": 3,
+                                                    "key": "done",
+                                                    "name": "Done",
+                                                },
+                                            },
+                                            "priority": {"name": "Medium"},
+                                            "issuetype": {"name": "Task"},
+                                        },
+                                    },
+                                },
+                                {
+                                    "id": "link-2",
+                                    "type": {
+                                        "name": "Blocks",
+                                        "inward": "is blocked by",
+                                        "outward": "blocks",
+                                    },
+                                    "outwardIssue": {
+                                        "id": "102",
+                                        "key": "DEV-102",
+                                        "fields": {
+                                            "summary": "Blocked downstream task",
+                                            "status": {
+                                                "id": "2",
+                                                "name": "In Progress",
+                                                "statusCategory": {
+                                                    "id": 2,
+                                                    "key": "indeterminate",
+                                                    "name": "In Progress",
+                                                },
+                                            },
+                                            "priority": {"name": "Highest"},
+                                            "issuetype": {"name": "Bug"},
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                )
+            return httpx.Response(404)
+
+        client = create_mock_client(handler)
+        issue = await client.get_issue("DEV-100")
+        assert issue is not None
+        assert len(issue.issue_links) == 2
+
+        link1 = issue.issue_links[0]
+        assert link1.id == "link-1"
+        assert link1.relationship == "is cloned by"
+        assert link1.direction == "inward"
+        assert link1.issue.key == "DEV-101"
+        assert link1.issue.summary == "Cloned issue"
+        assert link1.issue.status is not None
+        assert link1.issue.status.name == "Done"
+        assert link1.issue.priority == Priority.MEDIUM
+        assert link1.issue.issue_type == IssueType.TASK
+
+        link2 = issue.issue_links[1]
+        assert link2.id == "link-2"
+        assert link2.relationship == "blocks"
+        assert link2.direction == "outward"
+        assert link2.issue.key == "DEV-102"
+        assert link2.issue.summary == "Blocked downstream task"
+        assert link2.issue.status is not None
+        assert link2.issue.status.name == "In Progress"
+        assert link2.issue.priority == Priority.HIGHEST
+        assert link2.issue.issue_type == IssueType.BUG
+
+        await client.close()
+
+    asyncio.run(_test())

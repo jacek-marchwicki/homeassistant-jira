@@ -39,6 +39,24 @@ export interface JiraTransition {
   toStatus: JiraStatus;
 }
 
+export interface JiraLinkedIssue {
+  id: string;
+  key: string;
+  summary: string;
+  status?: JiraStatus | null;
+  priority?: JiraPriority | null;
+  issueType?: JiraIssueType | null;
+  issue_type?: JiraIssueType | null;
+  url?: string | null;
+}
+
+export interface JiraIssueLink {
+  id: string;
+  relationship: string;
+  issue: JiraLinkedIssue;
+  direction?: 'inward' | 'outward' | string;
+}
+
 export interface JiraIssue {
   id: string;
   key: string;
@@ -63,6 +81,8 @@ export interface JiraIssue {
   updatedAt?: string;
   updated_at?: string;
   rank?: string | null;
+  issueLinks?: JiraIssueLink[];
+  issue_links?: JiraIssueLink[];
   // Optimistic tracking state
   _optimisticState?: 'synced' | 'pending' | 'failed';
   _pendingTargetStatusId?: string;

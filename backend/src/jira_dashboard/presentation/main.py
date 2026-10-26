@@ -1672,6 +1672,34 @@ async def set_account_type(request: AccountTypeRequest) -> AccountTypesResponse:
     return AccountTypesResponse(account_types=updated)
 
 
+@app.get("/api/issues/{key}", response_model=JiraIssue)
+async def get_issue(key: str) -> JiraIssue:
+    """Fetch a single issue by key from local storage or Jira."""
+    issue = storage.get_issue(key)
+    if issue is not None:
+        return issue
+
+    if _cached_board_response is not None:
+        issue = next((i for i in _cached_board_response.issues if i.key == key), None)
+        if issue is not None:
+            return issue
+
+    if isinstance(jira_client, FakeJiraClient):
+        issue = jira_client._issues.get(key)
+        if issue is not None:
+            return issue
+
+    try:
+        issue = await jira_client.get_issue(key)
+        if issue is not None:
+            storage.upsert_issue(issue)
+            return issue
+    except Exception as exc:
+        logger.warning("Failed to fetch issue %s from Jira: %s", key, exc)
+
+    raise HTTPException(status_code=404, detail=f"Issue {key} not found")
+
+
 @app.post("/api/issues/{key}/transition", response_model=JiraIssue)
 async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
     """Transition an issue locally immediately, enqueue outbox sync to Jira, and broadcast delta."""

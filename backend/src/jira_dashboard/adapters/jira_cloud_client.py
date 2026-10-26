@@ -26,6 +26,8 @@ from jira_dashboard.domain import (
     IssueType,
     JiraComment,
     JiraIssue,
+    JiraIssueLink,
+    JiraLinkedIssue,
     JiraStatus,
     JiraUser,
     Priority,
@@ -119,6 +121,7 @@ JIRA_ISSUE_FIELDS: list[str] = [
     "customfield_10019",  # Jira LexoRank
     "rank",
     "customfield_10009",
+    "issuelinks",
 ]
 
 
@@ -402,6 +405,93 @@ class JiraCloudClient(JiraClientProtocol):
         created_at = fields.get("created") or fields.get("created_at")
         url = self._determine_browse_url(data, key)
 
+        # Issue Links (cloned, blocked, relates, etc.)
+        raw_links = fields.get("issuelinks") or []
+        issue_links: list[JiraIssueLink] = []
+        for link in raw_links:
+            if not isinstance(link, dict):
+                continue
+            link_id = str(link.get("id", ""))
+            type_info = link.get("type", {}) if isinstance(link.get("type"), dict) else {}
+            type_name = type_info.get("name", "Relates")
+            inward_desc = type_info.get("inward", type_name)
+            outward_desc = type_info.get("outward", type_name)
+
+            target_data = None
+            relationship = outward_desc
+            direction = "outward"
+
+            if "outwardIssue" in link:
+                target_data = link["outwardIssue"]
+                relationship = outward_desc
+                direction = "outward"
+            elif "inwardIssue" in link:
+                target_data = link["inwardIssue"]
+                relationship = inward_desc
+                direction = "inward"
+            elif "issue" in link:
+                target_data = link["issue"]
+                relationship = type_name
+                direction = "outward"
+
+            if target_data and isinstance(target_data, dict):
+                target_id = str(target_data.get("id", ""))
+                target_key = str(target_data.get("key", ""))
+                target_fields = (
+                    target_data.get("fields", {})
+                    if isinstance(target_data.get("fields"), dict)
+                    else {}
+                )
+
+                target_summary = target_fields.get("summary", "")
+
+                target_status = None
+                status_info = target_fields.get("status")
+                if status_info and isinstance(status_info, dict):
+                    s_id = str(status_info.get("id", ""))
+                    s_name = status_info.get("name", "")
+                    s_cat_info = (
+                        status_info.get("statusCategory", {})
+                        if isinstance(status_info.get("statusCategory"), dict)
+                        else {}
+                    )
+                    s_cat = map_category_key(s_cat_info.get("key", "new"), s_name)
+                    target_status = JiraStatus(
+                        id=s_id,
+                        name=s_name,
+                        category=s_cat,
+                        color=s_cat_info.get("colorName"),
+                    )
+
+                target_priority = None
+                prio_info = target_fields.get("priority")
+                if prio_info and isinstance(prio_info, dict):
+                    target_priority = map_priority(prio_info.get("name", "Medium"))
+
+                target_type = None
+                type_data = target_fields.get("issuetype")
+                if type_data and isinstance(type_data, dict):
+                    target_type = map_issue_type(type_data.get("name", "Task"))
+
+                target_url = self._determine_browse_url(target_data, target_key)
+
+                issue_links.append(
+                    JiraIssueLink(
+                        id=link_id or f"link-{key}-{target_key}",
+                        relationship=relationship,
+                        direction=direction,
+                        issue=JiraLinkedIssue(
+                            id=target_id or target_key,
+                            key=target_key,
+                            summary=target_summary,
+                            status=target_status,
+                            priority=target_priority,
+                            issue_type=target_type,
+                            url=target_url,
+                        ),
+                    )
+                )
+
         return JiraIssue(
             id=issue_id,
             key=key,
@@ -419,6 +509,7 @@ class JiraCloudClient(JiraClientProtocol):
             rank=rank,
             created_at=created_at,
             updated_at=updated_at,
+            issue_links=issue_links,
         )
 
     def _determine_browse_url(self, issue_data: dict[str, Any], key: str) -> str:

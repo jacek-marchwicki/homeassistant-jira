@@ -83,6 +83,27 @@ class JiraTransition(BaseModel):
     to_status: JiraStatus
 
 
+class JiraLinkedIssue(BaseModel):
+    """Represents a minimal view of an issue linked to another issue."""
+
+    id: str
+    key: str
+    summary: str = ""
+    status: JiraStatus | None = None
+    priority: Priority | None = None
+    issue_type: IssueType | None = None
+    url: str | None = None
+
+
+class JiraIssueLink(BaseModel):
+    """Represents a relationship between two Jira issues."""
+
+    id: str
+    relationship: str  # e.g., "is cloned by", "clones", "blocks", "is blocked by", "relates to"
+    issue: JiraLinkedIssue
+    direction: str = "outward"  # "inward" | "outward"
+
+
 class JiraIssue(BaseModel):
     """Represents a Jira issue entity with metadata."""
 
@@ -102,6 +123,7 @@ class JiraIssue(BaseModel):
     rank: str | None = None
     created_at: str | None = None
     updated_at: str
+    issue_links: list[JiraIssueLink] = []
 
     def is_done(self) -> bool:
         """Return True if issue is categorized as DONE."""

@@ -526,4 +526,20 @@ This document details the architectural phases, delivered features, and evolutio
     - Updated Playwright visual regression snapshots in [`frontend/tests/visual/screenshots.spec.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/tests/visual/screenshots.spec.ts).
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
 
+- [x] **Phase 5.35: Fast Unified Release Automation Script & Skill**
+  - [x] **Release Automation CLI Script ([`scripts/release.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/release.py))**:
+    - Automates the full dual-deployment release lifecycle across Home Assistant Add-on / GHCR multi-architecture container images and Google Cloud Platform (Cloud Run).
+    - Automatically bumps and keeps 13 repository version manifests synchronized in lockstep (`addon/config.yaml`, `addon/build.yaml`, `addon/CHANGELOG.md`, `backend/pyproject.toml`, `backend/src/jira_dashboard/__init__.py`, `backend/src/jira_dashboard/adapters/jira_cloud_client.py`, `backend/src/jira_dashboard/presentation/main.py`, packaging tests, frontend `package.json`, frontend `APP_VERSION` utils, and settings view tests).
+    - Generates markdown changelog entries and release notes directly from conventional Git commits since the previous tag.
+    - Runs mandatory pre-release local CI verification (`./scripts/run_ci_locally.py`) guaranteeing 100% test pass rate.
+    - Creates Git commits, annotated tags `vX.Y.Z`, pushes to remote, and publishes GitHub Releases via `gh release create`.
+    - Deploys to GCP Cloud Run via `scripts/deploy_gcp.py deploy`.
+    - Supports CLI flags: `--bump patch|minor|major`, `--version X.Y.Z`, `--dry-run`, `--skip-ci`, `--home-assistant-only`, `--skip-gcp`, and `--gcp-only`.
+  - [x] **Agent Skill ([`.agents/skills/release-app-workflow/SKILL.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/.agents/skills/release-app-workflow/SKILL.md))**:
+    - Complete workflow documentation and operational guidance for AI agents and human contributors to execute dual-target releases rapidly and safely.
+  - [x] **Comprehensive Automated Test Coverage**:
+    - Unit tests in [`backend/tests/test_release_script.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_release_script.py) verifying semver calculations, manifest updates, changelog formatting, and CLI `--dry-run` behavior.
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+
+
 

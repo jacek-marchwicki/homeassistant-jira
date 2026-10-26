@@ -225,13 +225,19 @@ class SQLiteStorage:
         """Recreate issue cache tables while preserving pending outbox records."""
         with self._lock:
             conn = self._get_connection()
-            # 1. Fetch pending outbox records
-            cur = conn.execute(
-                "SELECT client_mutation_id, action_type, issue_key, payload_json, "
-                "base_updated_at, status, retry_count, error_message, created_at, updated_at "
-                "FROM sync_outbox WHERE status = 'pending';"
-            )
-            pending_rows = cur.fetchall()
+            # 1. Fetch pending outbox records if table exists
+            table_check = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sync_outbox';"
+            ).fetchone()
+            if table_check:
+                cur = conn.execute(
+                    "SELECT client_mutation_id, action_type, issue_key, payload_json, "
+                    "base_updated_at, status, retry_count, error_message, created_at, updated_at "
+                    "FROM sync_outbox WHERE status = 'pending';"
+                )
+                pending_rows = cur.fetchall()
+            else:
+                pending_rows = []
 
             # 2. Drop and recreate tables
             with conn:

@@ -705,7 +705,6 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     expect(deleteSpy).toHaveBeenCalledWith('PROJ-101');
     expect(onCloseSpy).toHaveBeenCalled();
   });
-
-  });
 });
+
 

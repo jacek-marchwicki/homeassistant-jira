@@ -169,8 +169,6 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
     await deleteIssueOptimistic(issue.key);
   };
 
-  };
-
   const isDirty = Boolean(
     issue && (
       summary !== (issue.summary || '') ||

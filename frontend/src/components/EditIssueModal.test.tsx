@@ -253,7 +253,7 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     // Verify Cancel button has a red round background to clearly signal a destructive action
     expect(cancelBtnAfter.className).toContain('rounded-full');
     expect(cancelBtnAfter.className).toContain('bg-red-500');
-    expect(cancelBtnAfter.className).toContain('text-white');
+    expect(cancelBtnAfter.className).toContain('text-red');
     expect(cancelBtnAfter.className).not.toBe(initialCloseBtnClassName);
 
     await act(async () => {
@@ -558,6 +558,6 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     expect(cancelBtn).not.toBeNull();
     expect(cancelBtn.className).toContain('rounded-full');
     expect(cancelBtn.className).toContain('bg-red-500');
-    expect(cancelBtn.className).toContain('text-white');
+    expect(cancelBtn.className).toContain('text-red');
   });
 });

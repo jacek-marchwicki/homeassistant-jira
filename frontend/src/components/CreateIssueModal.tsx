@@ -146,7 +146,7 @@ export function CreateIssueModal({
                 key="cancel-changes-button"
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer shrink-0"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/30 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer shrink-0"
                 aria-label="Cancel changes"
                 title="Cancel changes"
               >

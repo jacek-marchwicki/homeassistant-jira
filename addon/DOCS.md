@@ -25,6 +25,7 @@ jira_url: "https://mycompany.atlassian.net"
 jira_email: "alex@mycompany.com"
 jira_api_token: "ATATT3xFfGF0exampletoken123"
 jira_board_id: "42"
+jira_webhook_secret: "my-webhook-secret-token"
 polling_interval_seconds: 60
 gemini_api_key: "AIzaSy..."
 gemini_model: "gemini-3.1-flash-lite-image"
@@ -41,6 +42,7 @@ gemini_cache_retention_seconds: 2592000
 | `jira_email` | String | Yes | Your Atlassian account email address for basic authentication. |
 | `jira_api_token` | Password | Yes | Jira Cloud API Token ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens)). |
 | `jira_board_id` | String | No | Target Jira Agile Board ID (defaults to primary board if empty). |
+| `jira_webhook_secret` | Password | No | Shared secret token to verify incoming webhooks/cloudhooks from Jira. |
 | `polling_interval_seconds` | Integer | No | Fallback polling interval in seconds (default: `60`). Set `0` to disable. |
 | `gemini_api_key` | Password | No | Google GenAI / Gemini API key for AI task illustration backgrounds ([get here](https://aistudio.google.com/app/apikey)). Leave empty to disable. |
 | `gemini_model` | String | No | Gemini image model identifier (default: `gemini-3.1-flash-lite-image`). |

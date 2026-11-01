@@ -33,6 +33,7 @@ def test_load_from_options_file(tmp_path: Path, monkeypatch) -> None:
         "jira_email": "ha-user@example.com",
         "jira_api_token": "secret-token-123",
         "jira_board_id": "board-42",
+        "jira_webhook_secret": "ha-webhook-secret-token",
         "polling_interval_seconds": 120,
     }
     options_file.write_text(json.dumps(data), encoding="utf-8")
@@ -52,6 +53,8 @@ def test_load_from_options_file(tmp_path: Path, monkeypatch) -> None:
     assert settings.jira_email == "ha-user@example.com"
     assert settings.jira_api_token == "secret-token-123"
     assert settings.jira_board_id == "board-42"
+    assert settings.webhook_secret == "ha-webhook-secret-token"
+    assert settings.jira_webhook_secret == "ha-webhook-secret-token"
     assert settings.polling_interval_seconds == 120
     assert settings.has_jira_credentials is True
 

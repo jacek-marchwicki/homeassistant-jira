@@ -2465,11 +2465,53 @@ async def delete_issue_comment(key: str, comment_id: str) -> dict[str, Any]:
     return {"status": "deleted", "comment_id": comment_id}
 
 
+def verify_webhook_request_secret(
+    raw_body: bytes,
+    expected_secret: str,
+    secret_param: str | None = None,
+    x_webhook_secret: str | None = None,
+    x_atlassian_webhook_secret: str | None = None,
+    x_hub_signature: str | None = None,
+    x_hub_signature_256: str | None = None,
+) -> bool:
+    """Verify incoming Jira webhook request against configured secret token.
+
+    Supports:
+    1. Jira Cloud native HMAC-SHA256 in X-Hub-Signature or X-Hub-Signature-256 (WebSub standard).
+    2. Plain-text secret query parameter (?secret=...).
+    3. Plain-text header X-Webhook-Secret or X-Atlassian-Webhook-Secret.
+    """
+    if not expected_secret:
+        return True
+
+    # 1. Jira Cloud HMAC signature verification (X-Hub-Signature: sha256=<hmac_hex>)
+    sig_header = x_hub_signature or x_hub_signature_256
+    if sig_header and "=" in sig_header:
+        algo, sig_value = sig_header.split("=", 1)
+        digest_mod = hashlib.sha256 if algo.strip().lower() == "sha256" else hashlib.sha1
+        expected_sig = hmac.new(
+            expected_secret.encode("utf-8"),
+            raw_body,
+            digest_mod,
+        ).hexdigest()
+        if hmac.compare_digest(expected_sig, sig_value.strip()):
+            return True
+
+    # 2. Plain-text secret verification
+    provided_plain = x_atlassian_webhook_secret or x_webhook_secret or secret_param
+    if provided_plain and hmac.compare_digest(provided_plain, expected_secret):
+        return True
+
+    return False
+
+
 @app.post("/api/webhooks/jira")
 async def handle_jira_webhook(
     request: Request,
     payload: dict[str, Any],
     secret: str | None = Query(default=None),
+    x_hub_signature: str | None = Header(default=None, alias="X-Hub-Signature"),
+    x_hub_signature_256: str | None = Header(default=None, alias="X-Hub-Signature-256"),
     x_webhook_secret: str | None = Header(default=None, alias="X-Webhook-Secret"),
     x_atlassian_webhook_secret: str | None = Header(
         default=None, alias="X-Atlassian-Webhook-Secret"
@@ -2478,8 +2520,17 @@ async def handle_jira_webhook(
     """Ingest incoming Jira Cloud webhook, update domain state, and broadcast to clients."""
     # Webhook Secret Authentication
     if settings.webhook_secret:
-        provided_secret = x_atlassian_webhook_secret or x_webhook_secret or secret
-        if provided_secret != settings.webhook_secret:
+        raw_body = await request.body()
+        is_valid = verify_webhook_request_secret(
+            raw_body=raw_body,
+            expected_secret=settings.webhook_secret,
+            secret_param=secret,
+            x_webhook_secret=x_webhook_secret,
+            x_atlassian_webhook_secret=x_atlassian_webhook_secret,
+            x_hub_signature=x_hub_signature,
+            x_hub_signature_256=x_hub_signature_256,
+        )
+        if not is_valid:
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
     return await webhook_processor.process_payload(payload)

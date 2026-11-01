@@ -62,6 +62,93 @@ def test_webhook_secret_required_and_matches_header(monkeypatch) -> None:
     assert res3.status_code == 200
 
 
+def test_webhook_x_hub_signature_sha256_accepted(monkeypatch) -> None:
+    """Verify webhook succeeds when provided matching Jira X-Hub-Signature HMAC-SHA256."""
+    import hashlib
+    import hmac
+    import json
+
+    secret = "secret-token-xyz"
+    monkeypatch.setattr(main.settings, "webhook_secret", secret)
+    client = TestClient(app)
+
+    raw_body = json.dumps(SAMPLE_PAYLOAD).encode("utf-8")
+    sig = "sha256=" + hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+
+    # 1. Standard Jira Cloud X-Hub-Signature header
+    res = client.post(
+        "/api/webhooks/jira",
+        content=raw_body,
+        headers={"Content-Type": "application/json", "X-Hub-Signature": sig},
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "processed"
+
+    # 2. X-Hub-Signature with extra query params (as Jira sends ?triggeredByUser=...)
+    res2 = client.post(
+        "/api/webhooks/jira?triggeredByUser=5b5b396ce859072d9083c343",
+        content=raw_body,
+        headers={"Content-Type": "application/json", "X-Hub-Signature": sig},
+    )
+    assert res2.status_code == 200
+    assert res2.json()["status"] == "processed"
+
+    # 3. X-Hub-Signature-256 header alias
+    res3 = client.post(
+        "/api/webhooks/jira",
+        content=raw_body,
+        headers={"Content-Type": "application/json", "X-Hub-Signature-256": sig},
+    )
+    assert res3.status_code == 200
+    assert res3.json()["status"] == "processed"
+
+
+def test_webhook_x_hub_signature_invalid_or_tampered(monkeypatch) -> None:
+    """Verify 401 is returned when X-Hub-Signature does not match payload."""
+    import hashlib
+    import hmac
+    import json
+
+    secret = "secret-token-xyz"
+    monkeypatch.setattr(main.settings, "webhook_secret", secret)
+    client = TestClient(app)
+
+    raw_body = json.dumps(SAMPLE_PAYLOAD).encode("utf-8")
+
+    # 1. Invalid signature hash
+    fake_sig = "sha256=" + ("0123456789abcdef" * 4)
+    res_bad_sig = client.post(
+        "/api/webhooks/jira",
+        content=raw_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Hub-Signature": fake_sig,
+        },
+    )
+    assert res_bad_sig.status_code == 401
+    assert "Invalid webhook secret" in res_bad_sig.json().get("detail", "")
+
+    # 2. Signature generated with different secret
+    wrong_sig = "sha256=" + hmac.new(b"wrong-secret", raw_body, hashlib.sha256).hexdigest()
+    res_wrong_secret = client.post(
+        "/api/webhooks/jira",
+        content=raw_body,
+        headers={"Content-Type": "application/json", "X-Hub-Signature": wrong_sig},
+    )
+    assert res_wrong_secret.status_code == 401
+
+    # 3. Tampered payload
+    valid_sig = "sha256=" + hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    tampered_data = {"webhookEvent": "jira:issue_updated", "tampered": True}
+    tampered_body = json.dumps(tampered_data).encode("utf-8")
+    res_tampered = client.post(
+        "/api/webhooks/jira",
+        content=tampered_body,
+        headers={"Content-Type": "application/json", "X-Hub-Signature": valid_sig},
+    )
+    assert res_tampered.status_code == 401
+
+
 def test_webhook_secret_rejection_on_invalid_or_missing(monkeypatch) -> None:
     """Verify 401 is returned when secret is missing or invalid."""
     monkeypatch.setattr(main.settings, "webhook_secret", "secret-token-xyz")

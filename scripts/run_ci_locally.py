@@ -79,6 +79,8 @@ def validate_ci_workflow(workflow_path: Path) -> None:
         raise ValueError("Missing 'frontend' job definition in ci.yml")
     if "e2e-and-visual" not in jobs:
         raise ValueError("Missing 'e2e-and-visual' job definition in ci.yml")
+    if "android" not in jobs:
+        raise ValueError("Missing 'android' job definition in ci.yml")
 
 
 def ensure_port_available(port: int = 8001) -> None:
@@ -108,6 +110,8 @@ def run_native_pipeline(
     project_root: Path,
     run_e2e: bool = False,
     run_visual: bool = False,
+    skip_android: bool = False,
+    run_android_only: bool = False,
 ) -> int:
     """Run all quality, lint, and test checks directly on the local host."""
     print(
@@ -116,6 +120,55 @@ def run_native_pipeline(
     print(
         f"{YELLOW}(Tip: Run './scripts/run_ci_locally.py --act' to simulate GitHub Actions in Docker){NC}\n"
     )
+
+    android_dir = project_root / "android"
+    gradlew_bin = android_dir / (
+        "gradlew.bat" if sys.platform == "win32" else "gradlew"
+    )
+
+    if run_android_only:
+        if not gradlew_bin.exists():
+            print(
+                f"{RED}Error: Android Gradle wrapper not found at {gradlew_bin}{NC}",
+                file=sys.stderr,
+            )
+            return 1
+        if sys.platform != "win32":
+            gradlew_bin.chmod(gradlew_bin.stat().st_mode | 0o111)
+
+        steps: list[
+            tuple[str, list[str] | callable, Path | None, dict[str, str] | None]
+        ] = [
+            (
+                "Step 1: Running Android companion app unit tests (./gradlew test)...",
+                [str(gradlew_bin), "test"],
+                android_dir,
+                None,
+            )
+        ]
+        total_start = time.perf_counter()
+        for description, cmd_or_func, cwd, env in steps:
+            print(f"{CYAN}{description}{NC}")
+            step_start = time.perf_counter()
+            try:
+                run_command(cmd_or_func, cwd=cwd, env=env)
+                duration = format_duration(time.perf_counter() - step_start)
+                print(f"{GREEN}✓ Completed in {duration}.{NC}\n")
+            except subprocess.CalledProcessError as exc:
+                print(
+                    f"\n{RED}{BOLD}✗ Command failed with exit code {exc.returncode}:{NC}"
+                )
+                print(
+                    f"  Command: {' '.join(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)])}\n"
+                )
+                return exc.returncode
+        total_duration = format_duration(time.perf_counter() - total_start)
+        print(f"{GREEN}{BOLD}============================================={NC}")
+        print(
+            f"{GREEN}{BOLD}🎉 Android CI Verification Checks Passed! ({total_duration}) 🎉{NC}"
+        )
+        print(f"{GREEN}{BOLD}============================================={NC}")
+        return 0
 
     # Detect local project virtualenv if available
     venv_py = project_root / ".venv" / "bin" / "python3"
@@ -170,10 +223,22 @@ def run_native_pipeline(
         ),
     ]
 
+    if not skip_android and gradlew_bin.exists():
+        if sys.platform != "win32":
+            gradlew_bin.chmod(gradlew_bin.stat().st_mode | 0o111)
+        steps.append(
+            (
+                "Step 6: Running Android companion app unit tests (./gradlew test)...",
+                [str(gradlew_bin), "test"],
+                android_dir,
+                None,
+            )
+        )
+
     if run_e2e:
         steps.append(
             (
-                "Step 6: Running Full-Stack E2E Integration tests (Playwright)...",
+                "Step 7: Running Full-Stack E2E Integration tests (Playwright)...",
                 ["npx", "--yes", "pnpm", "--dir", "frontend", "test:e2e"],
                 project_root,
                 {"JIRA_USE_FAKE": "1", "PLAYWRIGHT_PORT": "8001"},
@@ -183,7 +248,7 @@ def run_native_pipeline(
     if run_visual:
         steps.append(
             (
-                "Step 7: Running Visual Screenshot tests across viewports & themes (Playwright)...",
+                "Step 8: Running Visual Screenshot tests across viewports & themes (Playwright)...",
                 ["npx", "--yes", "pnpm", "--dir", "frontend", "test:visual"],
                 project_root,
                 {"JIRA_USE_FAKE": "1", "PLAYWRIGHT_PORT": "8002"},
@@ -328,6 +393,18 @@ Examples:
 
     test_group = parser.add_argument_group("Test Selection Options (Native Mode)")
     test_group.add_argument(
+        "--android",
+        dest="run_android_only",
+        action="store_true",
+        help="Run only Android companion app unit tests.",
+    )
+    test_group.add_argument(
+        "--skip-android",
+        dest="skip_android",
+        action="store_true",
+        help="Skip Android companion app unit tests.",
+    )
+    test_group.add_argument(
         "--e2e",
         dest="run_e2e",
         action="store_true",
@@ -408,7 +485,13 @@ def main() -> int:
 
     run_e2e = args.run_all or args.run_e2e
     run_visual = args.run_all or args.run_visual
-    return run_native_pipeline(project_root, run_e2e=run_e2e, run_visual=run_visual)
+    return run_native_pipeline(
+        project_root,
+        run_e2e=run_e2e,
+        run_visual=run_visual,
+        skip_android=args.skip_android,
+        run_android_only=args.run_android_only,
+    )
 
 
 if __name__ == "__main__":

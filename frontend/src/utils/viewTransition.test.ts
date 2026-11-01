@@ -4,13 +4,14 @@ import { getViewTransitionName, runWithViewTransition } from './viewTransition.t
 describe('viewTransition utility', () => {
   describe('getViewTransitionName', () => {
     it('generates a sanitized custom-ident for active issues', () => {
+      expect(getViewTransitionName('PROJ-101')).toBe('issue-proj-101');
       expect(getViewTransitionName('PROJ-101', false)).toBe('issue-proj-101');
       expect(getViewTransitionName('TASK-456', false)).toBe('issue-task-456');
     });
 
-    it('generates a distinct custom-ident for done issues', () => {
-      expect(getViewTransitionName('PROJ-101', true)).toBe('issue-done-proj-101');
-      expect(getViewTransitionName('TASK-456', true)).toBe('issue-done-task-456');
+    it('maintains a stable custom-ident for done issues to avoid disappearing background during transitions', () => {
+      expect(getViewTransitionName('PROJ-101', true)).toBe('issue-proj-101');
+      expect(getViewTransitionName('TASK-456', true)).toBe('issue-task-456');
     });
 
     it('sanitizes special characters into safe css identifier characters', () => {
@@ -19,7 +20,8 @@ describe('viewTransition utility', () => {
 
     it('scopes transition names to column id to prevent duplicate identifiers across people columns', () => {
       expect(getViewTransitionName('PROJ-101', false, 'col-jacek')).toBe('issue-col-jacek-proj-101');
-      expect(getViewTransitionName('PROJ-101', true, 'col-jacek')).toBe('issue-done-col-jacek-proj-101');
+      expect(getViewTransitionName('PROJ-101', true, 'col-jacek')).toBe('issue-col-jacek-proj-101');
+      expect(getViewTransitionName('PROJ-101', 'col-jacek')).toBe('issue-col-jacek-proj-101');
       expect(getViewTransitionName('PROJ-101', false, 'col-magda')).toBe('issue-col-magda-proj-101');
     });
   });

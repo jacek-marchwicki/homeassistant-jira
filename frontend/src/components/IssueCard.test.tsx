@@ -170,7 +170,7 @@ describe('IssueCard component', () => {
     expect(markDoneSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
   });
 
-  it('applies viewTransitionName style based on issue key and status, but omits it for drag overlays', async () => {
+  it('applies stable viewTransitionName style based on issue key regardless of status, but omits it for drag overlays', async () => {
     await act(async () => {
       root.render(
         <DndContext>
@@ -197,7 +197,9 @@ describe('IssueCard component', () => {
 
     const doneArticle = container.querySelector('article[data-testid="issue-card-PROJ-102"]') as HTMLElement | null;
     expect(doneArticle).not.toBeNull();
-    expect(doneArticle?.style.viewTransitionName).toBe('issue-done-proj-102');
+    // Must remain stable (issue-proj-102) rather than changing to issue-done-proj-102
+    // so CSS View Transitions morphs the card smoothly without disappearing background image
+    expect(doneArticle?.style.viewTransitionName).toBe('issue-proj-102');
 
     await act(async () => {
       root.render(
@@ -224,6 +226,63 @@ describe('IssueCard component', () => {
     const scopedArticle = container.querySelector('article[data-testid="issue-card-PROJ-101"]') as HTMLElement | null;
     expect(scopedArticle).not.toBeNull();
     expect(scopedArticle?.style.viewTransitionName).toBe('issue-user-123-proj-101');
+  });
+
+  it('keeps stable viewTransitionName and continuously renders background when marked as done', async () => {
+    let triggerOnload: (() => void) | null = null;
+    const MockImg = class {
+      set onload(cb: () => void) {
+        triggerOnload = cb;
+      }
+      set onerror(_cb: () => void) {}
+      set src(_val: string) {}
+    } as unknown as typeof Image;
+    window.Image = MockImg;
+    globalThis.Image = MockImg;
+
+    // 1. Initial render with active issue
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockIssueTodo.key]}>
+            <IssueCard issue={mockIssueTodo} sourceColumnId="col-1" />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    // 2. Image loads
+    await act(async () => {
+      triggerOnload?.();
+    });
+
+    const todoCard = container.querySelector('article[data-testid="issue-card-PROJ-101"]') as HTMLElement;
+    expect(todoCard).not.toBeNull();
+    expect(todoCard.style.viewTransitionName).toBe('issue-col-1-proj-101');
+    expect(todoCard.style.backgroundImage).toContain('/api/issues/PROJ-101/background');
+
+    // 3. Mark as done: re-render with done status category
+    const completedIssue: JiraIssue = {
+      ...mockIssueTodo,
+      status: { id: 'col-done', name: 'Done', category: 'done' },
+    };
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[completedIssue.key]}>
+            <IssueCard issue={completedIssue} sourceColumnId="col-1" />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const doneCard = container.querySelector('article[data-testid="issue-card-PROJ-101"]') as HTMLElement;
+    expect(doneCard).not.toBeNull();
+    // Stable view-transition-name guarantees browser morphs the card instead of cross-fading
+    expect(doneCard.style.viewTransitionName).toBe('issue-col-1-proj-101');
+    // Background image is immediately preserved without blank/empty flash
+    expect(doneCard.style.backgroundImage).toContain('/api/issues/PROJ-101/background');
   });
 
   it('invokes document.startViewTransition when available on quick Done action', async () => {

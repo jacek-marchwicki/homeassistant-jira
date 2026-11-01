@@ -143,4 +143,44 @@ describe('useTaskBackground hook', () => {
     const styleWithoutBg = getCardBackgroundStyle(null);
     expect(styleWithoutBg).toEqual({});
   });
+
+  it('synchronously returns cached background state without 1-frame lag on remounting or re-rendering', async () => {
+    let triggerOnload: (() => void) | null = null;
+    globalThis.Image = class {
+      set onload(cb: () => void) {
+        triggerOnload = cb;
+      }
+      set onerror(_cb: () => void) {}
+      set src(_val: string) {}
+    } as unknown as typeof Image;
+
+    // First mount and load
+    await act(async () => {
+      root.render(<TestComponent issueKey="PROJ-200" />);
+    });
+    expect(latestResult?.hasBackground).toBe(false);
+
+    await act(async () => {
+      triggerOnload?.();
+    });
+    expect(latestResult?.hasBackground).toBe(true);
+
+    // Unmount and remount (simulating card moving between sections in PeopleColumn)
+    await act(async () => {
+      root.unmount();
+    });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    // Render new instance: on initial render, cache MUST resolve synchronously
+    await act(async () => {
+      root.render(<TestComponent issueKey="PROJ-200" />);
+    });
+
+    const hasBgElem = container.querySelector('[data-testid="has-bg"]');
+    expect(hasBgElem?.textContent).toBe('true');
+    const bgUrlElem = container.querySelector('[data-testid="bg-url"]');
+    expect(bgUrlElem?.textContent).toContain('/api/issues/PROJ-200/background');
+  });
 });

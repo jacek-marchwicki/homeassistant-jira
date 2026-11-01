@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.2
+
+- fix(addon): remove obsolete jira_webhook_secret from Home Assistant configuration
+- fix(ui): prevent Android WebView black screen and card blink during view transitions
+
 ## 0.10.1
 
 - feat(webhook): support Jira native X-Hub-Signature HMAC and add HA configuration option

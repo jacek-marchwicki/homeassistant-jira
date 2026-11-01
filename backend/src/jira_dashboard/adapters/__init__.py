@@ -17,6 +17,8 @@ from jira_dashboard.adapters.gemini_client import (
     MockGeminiImageClient,
     compute_background_content_hash,
     create_gemini_client,
+    extract_retry_after,
+    is_rate_limit_error,
 )
 from jira_dashboard.adapters.jira_client import (
     DEFAULT_COLUMNS,
@@ -50,4 +52,6 @@ __all__ = [
     "create_gemini_client",
     "create_jira_client",
     "create_storage",
+    "extract_retry_after",
+    "is_rate_limit_error",
 ]

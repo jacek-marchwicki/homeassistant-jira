@@ -116,6 +116,10 @@ class JiraDashboardSettings(BaseModel):
         default=2592000,
         description="Retention duration in seconds (30 days) before unrequested images are pruned",
     )
+    gemini_cooldown_seconds: int = Field(
+        default=60,
+        description="Cooldown duration in seconds after encountering a Gemini 429 rate limit",
+    )
     auth_mode: str = Field(
         default="auto",
         description="Authentication mode: 'auto', 'none', 'homeassistant', or 'gcp_oauth'",
@@ -252,6 +256,7 @@ class JiraDashboardSettings(BaseModel):
             "gemini_daily_limit": "GEMINI_DAILY_LIMIT",
             "gemini_debounce_seconds": "GEMINI_DEBOUNCE_SECONDS",
             "gemini_cache_retention_seconds": "GEMINI_CACHE_RETENTION_SECONDS",
+            "gemini_cooldown_seconds": "GEMINI_COOLDOWN_SECONDS",
             "auth_mode": "AUTH_MODE",
             "allowed_emails": "ALLOWED_EMAILS",
             "google_client_id": "GOOGLE_CLIENT_ID",
@@ -271,6 +276,7 @@ class JiraDashboardSettings(BaseModel):
             "gemini_daily_limit",
             "gemini_debounce_seconds",
             "gemini_cache_retention_seconds",
+            "gemini_cooldown_seconds",
         }
 
         for field_name, env_var in env_mappings.items():

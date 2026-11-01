@@ -2220,9 +2220,24 @@ async def get_issue_background(key: str) -> Response:
     if daily_count >= settings.gemini_daily_limit:
         return _serve_previous_or_204(key)
 
+    # 6b. Rate limit / HTTP 429 cooldown check
+    if getattr(gemini_client, "is_rate_limited", False):
+        rem = getattr(gemini_client, "rate_limit_cooldown_remaining", 0.0)
+        logger.warning(
+            "Gemini client in rate-limit cooldown (%.1fs left); serving previous/204 for %s",
+            rem,
+            key,
+        )
+        return _serve_previous_or_204(key)
+
     # 7. Generate image
     prompt = settings.gemini_prompt_template.format(summary=issue.summary)
-    image_bytes = await gemini_client.generate_image(prompt, aspect_ratio="16:9")
+    try:
+        image_bytes = await gemini_client.generate_image(prompt, aspect_ratio="16:9")
+    except Exception as exc:
+        logger.warning("Gemini image generation threw exception for %s: %s", key, exc)
+        return _serve_previous_or_204(key)
+
     if not image_bytes:
         return _serve_previous_or_204(key)
 

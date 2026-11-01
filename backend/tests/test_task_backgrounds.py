@@ -267,3 +267,64 @@ class TestTaskBackgroundsEndpoint(unittest.TestCase):
         self.assertFalse(Path(file_path).exists())
         self.assertIsNone(storage.get_background_image(content_hash))
         self.assertIsNone(storage.get_issue_last_background_hash("CHORE-1"))
+
+    def test_rate_limit_initial_generation_returns_204(self) -> None:
+        """Verify 429 rate limit error on task with no prior image returns 204 without crashing."""
+        self.mock_gemini.simulate_429 = True
+
+        # First request triggers 429 simulation and cooldown
+        resp1 = self.client.get("/api/issues/CHORE-1/background")
+        self.assertEqual(resp1.status_code, 204)
+        self.assertTrue(self.mock_gemini.is_rate_limited)
+        self.assertEqual(self.mock_gemini.call_count, 1)
+
+        # Second request during active cooldown serves 204 without calling backend
+        resp2 = self.client.get("/api/issues/CHORE-1/background")
+        self.assertEqual(resp2.status_code, 204)
+        # Call count should not increase because client is rate-limited
+        self.assertEqual(self.mock_gemini.call_count, 1)
+
+    def test_rate_limit_serves_previously_cached_image(self) -> None:
+        """Verify 429 rate limit on edited chore gracefully degrades to previous image."""
+        # 1. Successfully generate initial image
+        resp_init = self.client.get("/api/issues/CHORE-1/background")
+        self.assertEqual(resp_init.status_code, 200)
+        initial_image_data = resp_init.content
+        self.assertEqual(self.mock_gemini.call_count, 1)
+
+        # 2. Modify issue well outside debounce settling window
+        settled_epoch = time.time() - 400
+        import datetime
+
+        settled_dt = datetime.datetime.fromtimestamp(settled_epoch, tz=datetime.timezone.utc)
+        settled_issue = self.issue_1.model_copy(
+            update={
+                "description": "Updated chore description that changes content hash",
+                "updated_at": settled_dt.isoformat(),
+            }
+        )
+        storage.save_issues([settled_issue])
+
+        # 3. Simulate 429 on Gemini
+        self.mock_gemini.simulate_rate_limit = True
+
+        # 4. Request background: degrades gracefully to previously cached image (200 OK)
+        resp_degrade = self.client.get("/api/issues/CHORE-1/background")
+        self.assertEqual(resp_degrade.status_code, 200)
+        self.assertEqual(resp_degrade.content, initial_image_data)
+        self.assertTrue(self.mock_gemini.is_rate_limited)
+
+        # 5. Subsequent request during active cooldown serves previous image without Gemini call
+        prev_calls = self.mock_gemini.call_count
+        resp_subsequent = self.client.get("/api/issues/CHORE-1/background")
+        self.assertEqual(resp_subsequent.status_code, 200)
+        self.assertEqual(resp_subsequent.content, initial_image_data)
+        self.assertEqual(self.mock_gemini.call_count, prev_calls)
+
+    def test_endpoint_handles_unhandled_gemini_exception_gracefully(self) -> None:
+        """Verify arbitrary exception during image generation returns 204 or previous image."""
+        self.mock_gemini.generate_image = unittest.mock.AsyncMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("Unexpected connection crash")
+        )
+        resp = self.client.get("/api/issues/CHORE-1/background")
+        self.assertEqual(resp.status_code, 204)

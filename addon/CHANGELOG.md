@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0
+
+- feat(webhook): automatic jira webhook registration and dual-mode cloudhook ingestion
+- feat(android): import and integrate Android Kiosk companion application with lockscreen persistence, display zoom, and offline recovery
+- feat(gemini): display image generation usage stats on dashboard
+- feat(gemini): handle HTTP 429 rate limit errors gracefully with cooldown
+- feat(mcp): default newly created task status to Ready
+- feat(gcp): add secret manager backup and restore automation script
+- fix(ui): prevent background image disappearing when marking task as done
+- docs: document Android Kiosk companion application in README and AGENTS
+
 ## 0.9.1
 
 - fix(ingress): prevent HTML fallback for missing static assets and fix Ingress base tag resolution

@@ -639,7 +639,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="Home Assistant Jira Dashboard API",
     description="Real-time backend API and WebSocket hub for Jira dashboard",
-    version="0.10.0",
+    version="0.10.1",
     lifespan=lifespan,
 )
 

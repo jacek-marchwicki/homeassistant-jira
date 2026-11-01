@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.1
+
+- feat(webhook): support Jira native X-Hub-Signature HMAC and add HA configuration option
+- feat(gcp): include JIRA_WEBHOOK_SECRET in deployment secret provisioning
+- test(visual): align visual regression snapshots with Ubuntu Linux CI rendering
+- refactor(gcp): remove unused optional secret files from backup script
+- feat(ci): add android companion app unit tests to local CI runner and github actions
+
 ## 0.10.0
 
 - feat(webhook): automatic jira webhook registration and dual-mode cloudhook ingestion

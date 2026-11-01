@@ -241,8 +241,14 @@ The project includes a hybrid CI runner [`scripts/run_ci_locally.py`](file:///Us
 
 #### Mode A: Fast Native Checks (Recommended Pre-Commit)
 ```bash
-# Run fast checks (YAML validation, Ruff, pytest, unittest, Vitest, and SPA build) (~1-2s):
+# Run fast checks (YAML validation, Ruff, pytest, unittest, Vitest, SPA build, and Android unit tests):
 ./scripts/run_ci_locally.py
+
+# Run only Android companion app unit tests:
+./scripts/run_ci_locally.py --android
+
+# Skip Android tests (e.g. if developing only backend/frontend without JDK):
+./scripts/run_ci_locally.py --skip-android
 
 # Run with Full-Stack E2E Integration tests:
 ./scripts/run_ci_locally.py --e2e
@@ -255,14 +261,15 @@ The project includes a hybrid CI runner [`scripts/run_ci_locally.py`](file:///Us
 ```
 
 #### Mode B: Containerized GitHub Actions Simulation (`nektos/act`)
-Simulates the exact GitHub Actions environment inside Docker Ubuntu containers matching the 3 parallel CI jobs (`backend`, `frontend`, `e2e-and-visual`). Requires Docker daemon and [`act`](https://github.com/nektos/act) (`brew install act`):
+Simulates the exact GitHub Actions environment inside Docker Ubuntu containers matching the CI jobs (`backend`, `frontend`, `android`, `e2e-and-visual`). Requires Docker daemon and [`act`](https://github.com/nektos/act) (`brew install act`):
 ```bash
 # Run all CI jobs in Docker
 ./scripts/run_ci_locally.py --act
 
-# Run only a specific job (e.g., backend matrix, frontend, or e2e-and-visual)
+# Run only a specific job (e.g., backend matrix, frontend, android, or e2e-and-visual)
 ./scripts/run_ci_locally.py --act -j backend
 ./scripts/run_ci_locally.py --act -j frontend
+./scripts/run_ci_locally.py --act -j android
 ./scripts/run_ci_locally.py --act -j e2e-and-visual
 
 # Dry-run workflow validation (validates DAG without spinning up containers)

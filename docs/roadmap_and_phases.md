@@ -541,5 +541,26 @@ This document details the architectural phases, delivered features, and evolutio
     - Unit tests in [`backend/tests/test_release_script.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_release_script.py) verifying semver calculations, manifest updates, changelog formatting, and CLI `--dry-run` behavior.
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
 
+---
+
+### Phase 14: Android Companion App CI & Local Verification Pipeline Integration
+
+- **Overview**:
+  Integrated Android unit tests (`./gradlew test`) into both the GitHub Actions CI workflow (`ci.yml`) and the local CI runner (`scripts/run_ci_locally.py`), guaranteeing automated verification of the Android companion application alongside backend and frontend test suites.
+- **Key Enhancements**:
+  - **GitHub Actions CI Workflow (`.github/workflows/ci.yml`)**:
+    - Added dedicated `android` job running on `ubuntu-latest` with JDK 17 (`actions/setup-java@v4` with Gradle caching), Android SDK 36 platform installation, Gradle wrapper permission check, and test execution (`./gradlew test --no-daemon`).
+    - Automated upload of Android unit test reports (`testDebugUnitTest`) as build artifacts.
+    - Extended branch triggers to include feature and fix branches (`push: branches: [main, "feat/**", "fix/**"]`).
+  - **Local CI Runner (`scripts/run_ci_locally.py`)**:
+    - Added Step 6 to execute `./gradlew test` in `android/` directly during native verification.
+    - Added `--android` flag to run Android unit tests independently.
+    - Added `--skip-android` flag for fast backend/frontend-only verification on machines without Java/Android tooling.
+    - Updated `validate_ci_workflow` to mandate the `android` job in `ci.yml`.
+  - **Automated Testing (`backend/tests/test_ci_runner.py`)**:
+    - Added unit test suite covering workflow validation, Android flags parsing, duration formatting, and validation against the real `ci.yml`.
+    - 100% green verification via `./scripts/run_ci_locally.py`.
+
+
 
 

@@ -49,7 +49,7 @@ class SQLiteStorage:
                     dev_data = ensure_local_data_dir()
                     self.db_path = str((dev_data / "jira_dashboard.sqlite3").resolve())
                     Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._conn: sqlite3.Connection | None = None
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -248,12 +248,10 @@ class SQLiteStorage:
                 conn.execute("DROP TABLE IF EXISTS background_images;")
                 conn.execute("DROP TABLE IF EXISTS gemini_daily_usage;")
 
-        # 3. Re-init fresh schema
-        self.init_db()
+            # 3. Re-init fresh schema
+            self.init_db()
 
-        # 4. Restore pending outbox records
-        with self._lock:
-            conn = self._get_connection()
+            # 4. Restore pending outbox records
             with conn:
                 for r in pending_rows:
                     conn.execute(

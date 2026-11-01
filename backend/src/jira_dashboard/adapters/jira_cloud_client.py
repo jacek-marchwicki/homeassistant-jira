@@ -1403,3 +1403,76 @@ class JiraCloudClient(JiraClientProtocol):
             raise JiraAPIError(
                 f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
             ) from exc
+
+    async def register_webhook(
+        self,
+        url: str,
+        events: list[str] | None = None,
+        jql_filter: str | None = None,
+    ) -> dict[str, Any]:
+        """Register a dynamic webhook with Jira REST API."""
+        payload = {
+            "url": url,
+            "webhooks": [
+                {
+                    "events": events
+                    or [
+                        "jira:issue_created",
+                        "jira:issue_updated",
+                        "jira:issue_deleted",
+                    ],
+                    "jqlFilter": jql_filter or "",
+                }
+            ],
+        }
+        try:
+            res = await self._send_request("POST", "/rest/api/3/webhook", json=payload)
+            if res.status_code in (200, 201):
+                return res.json()
+            if res.status_code == 404:
+                res_v2 = await self._send_request("POST", "/rest/api/2/webhook", json=payload)
+                if res_v2.status_code in (200, 201):
+                    return res_v2.json()
+                self._handle_response_errors(res_v2)
+            self._handle_response_errors(res)
+            return {}
+        except httpx.RequestError as exc:
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
+
+    async def get_webhooks(self) -> list[dict[str, Any]]:
+        """List registered dynamic webhooks from Jira REST API."""
+        try:
+            res = await self._send_request("GET", "/rest/api/3/webhook")
+            if res.status_code == 200:
+                data = res.json()
+                return data.get("values", [])
+            if res.status_code == 404:
+                res_v2 = await self._send_request("GET", "/rest/api/2/webhook")
+                if res_v2.status_code == 200:
+                    data = res_v2.json()
+                    return data.get("values", [])
+            return []
+        except httpx.RequestError as exc:
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc
+
+    async def delete_webhook(self, webhook_id: int | str) -> bool:
+        """Delete a dynamic webhook from Jira REST API."""
+        id_val = int(webhook_id) if str(webhook_id).isdigit() else webhook_id
+        payload = {"webhookIds": [id_val]}
+        try:
+            res = await self._send_request("DELETE", "/rest/api/3/webhook", json=payload)
+            if res.status_code in (200, 202, 204):
+                return True
+            if res.status_code == 404:
+                res_v2 = await self._send_request("DELETE", "/rest/api/2/webhook", json=payload)
+                if res_v2.status_code in (200, 202, 204):
+                    return True
+            return False
+        except httpx.RequestError as exc:
+            raise JiraAPIError(
+                f"Failed to connect to Jira: {self._format_request_error(exc)}", status_code=503
+            ) from exc

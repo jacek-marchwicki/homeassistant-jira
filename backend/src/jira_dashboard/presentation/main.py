@@ -47,14 +47,17 @@ from jira_dashboard.adapters import (
     BlobStorageProtocol,
     FakeJiraClient,
     GeminiImageClient,
+    HomeAssistantCloudhookManager,
     JiraAPIError,
     JiraSyncWorker,
+    JiraWebhookProcessor,
     StorageProtocol,
     compute_background_content_hash,
     create_blob_storage,
     create_gemini_client,
     create_jira_client,
     create_storage,
+    register_jira_webhook_if_needed,
 )
 from jira_dashboard.config import JiraDashboardSettings
 from jira_dashboard.domain import (
@@ -200,6 +203,66 @@ sync_worker = JiraSyncWorker(storage, jira_client, ws_broadcast_func=_sync_broad
 # ---------------------------------------------------------------------------
 
 _cached_issue_state: dict[str, str] = {}
+
+
+def _update_board_cache_from_webhook(
+    issue: JiraIssue | None, deleted_key: str | None = None
+) -> None:
+    global _cached_board_response
+    if deleted_key:
+        _cached_issue_state.pop(deleted_key, None)
+        if _cached_board_response is not None:
+            _cached_board_response.issues = [
+                x for x in _cached_board_response.issues if x.key != deleted_key
+            ]
+        return
+
+    if issue:
+        _cached_issue_state[issue.key] = (
+            f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
+        )
+        if _cached_board_response is not None:
+            idx = next(
+                (i for i, x in enumerate(_cached_board_response.issues) if x.key == issue.key),
+                None,
+            )
+            if idx is not None:
+                _cached_board_response.issues[idx] = issue
+            else:
+                _cached_board_response.issues.insert(0, issue)
+
+
+webhook_processor = JiraWebhookProcessor(
+    jira_client=jira_client,
+    storage=storage,
+    ws_hub=ws_hub,
+    board_cache_updater=_update_board_cache_from_webhook,
+)
+
+is_ha_mode = bool(
+    os.environ.get("SUPERVISOR_TOKEN")
+    or settings.ha_supervisor_token
+    or Path("/data/options.json").is_file()
+)
+
+
+async def _on_cloudhook_resolved(cloudhook_url: str) -> None:
+    if settings.auto_register_webhook:
+        await register_jira_webhook_if_needed(
+            jira_client=jira_client,
+            webhook_url=cloudhook_url,
+            secret=settings.webhook_secret,
+        )
+
+
+ha_cloudhook_mgr = HomeAssistantCloudhookManager(
+    ws_url=settings.ha_ws_url,
+    supervisor_token=settings.ha_supervisor_token or os.environ.get("SUPERVISOR_TOKEN"),
+    webhook_id=settings.ha_webhook_id,
+    webhook_secret=settings.webhook_secret,
+    on_payload=webhook_processor.process_payload,
+    on_cloudhook_resolved=_on_cloudhook_resolved,
+)
 
 
 async def poll_board_issues(board_id: str) -> None:
@@ -493,6 +556,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.warning("Failed to prune background image cache: %s", exc)
 
+    ha_cloudhook_task: asyncio.Task[None] | None = None
+    if is_ha_mode and (settings.ha_supervisor_token or os.environ.get("SUPERVISOR_TOKEN")):
+        ha_cloudhook_task = asyncio.create_task(ha_cloudhook_mgr.run(stop_event))
+    elif settings.auto_register_webhook:
+        public_url = settings.jira_webhook_public_url
+        if not public_url and settings.dashboard_url:
+            public_url = f"{settings.dashboard_url.rstrip('/')}/api/webhooks/jira"
+        if public_url:
+            asyncio.create_task(
+                register_jira_webhook_if_needed(
+                    jira_client=jira_client,
+                    webhook_url=public_url,
+                    secret=settings.webhook_secret,
+                )
+            )
+
     if settings.polling_interval_seconds > 0 and settings.has_jira_credentials:
         polling_task = asyncio.create_task(
             fallback_polling_loop(
@@ -514,6 +593,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         polling_task.cancel()
         try:
             await polling_task
+        except asyncio.CancelledError:
+            pass
+    if ha_cloudhook_task is not None:
+        ha_cloudhook_task.cancel()
+        try:
+            await ha_cloudhook_task
         except asyncio.CancelledError:
             pass
     if not cache_warm_task.done():
@@ -2339,41 +2424,7 @@ async def handle_jira_webhook(
         if provided_secret != settings.webhook_secret:
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
-    issue = await jira_client.process_webhook(payload)
-    if not issue:
-        return {"status": "ignored", "message": "No actionable issue delta found in payload"}
-
-    _cached_issue_state[issue.key] = (
-        f"{issue.status.category.value}:{issue.summary}:{issue.updated_at}"
-    )
-    if _cached_board_response is not None:
-        idx = next(
-            (i for i, x in enumerate(_cached_board_response.issues) if x.key == issue.key),
-            None,
-        )
-        if idx is not None:
-            _cached_board_response.issues[idx] = issue
-        else:
-            _cached_board_response.issues.insert(0, issue)
-
-    # Broadcast real-time delta via WebSockets to all connected browsers
-    webhook_event = payload.get("webhookEvent")
-    event_type = "issue_created" if webhook_event == "jira:issue_created" else "issue_transitioned"
-    await ws_hub.broadcast(
-        {
-            "event": event_type,
-            "issue_key": issue.key,
-            "status_category": issue.status.category.value,
-            "status_name": issue.status.name,
-            "issue": issue.model_dump(),
-        }
-    )
-
-    return {
-        "status": "processed",
-        "issue_key": issue.key,
-        "status_category": issue.status.category.value,
-    }
+    return await webhook_processor.process_payload(payload)
 
 
 @app.post("/api/test/simulate-error")

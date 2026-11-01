@@ -18,6 +18,7 @@ from jira_dashboard.adapters.gemini_client import (
     compute_background_content_hash,
     create_gemini_client,
 )
+from jira_dashboard.adapters.ha_cloudhook import HomeAssistantCloudhookManager
 from jira_dashboard.adapters.jira_client import (
     DEFAULT_COLUMNS,
     FakeJiraClient,
@@ -28,6 +29,11 @@ from jira_dashboard.adapters.jira_cloud_client import JiraCloudClient
 from jira_dashboard.adapters.storage import SQLiteStorage
 from jira_dashboard.adapters.storage_protocol import StorageProtocol
 from jira_dashboard.adapters.sync_worker import JiraSyncWorker
+from jira_dashboard.adapters.webhook_processor import JiraWebhookProcessor
+from jira_dashboard.adapters.webhook_registrar import (
+    build_webhook_url_with_secret,
+    register_jira_webhook_if_needed,
+)
 
 __all__ = [
     "BlobStorageProtocol",
@@ -37,17 +43,21 @@ __all__ = [
     "GeminiImageClient",
     "GoogleCloudStorageBlobStorage",
     "GoogleGenAIImageClient",
+    "HomeAssistantCloudhookManager",
     "JiraAPIError",
     "JiraClientProtocol",
     "JiraCloudClient",
     "JiraSyncWorker",
+    "JiraWebhookProcessor",
     "LocalDiskBlobStorage",
     "MockGeminiImageClient",
     "SQLiteStorage",
     "StorageProtocol",
+    "build_webhook_url_with_secret",
     "compute_background_content_hash",
     "create_blob_storage",
     "create_gemini_client",
     "create_jira_client",
     "create_storage",
+    "register_jira_webhook_if_needed",
 ]

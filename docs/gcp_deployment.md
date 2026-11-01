@@ -183,7 +183,52 @@ Once deployed, connect Gemini to your custom Jira MCP server:
 
 ---
 
-## 6. Accessing the Jira Web Dashboard
+## 6. Connecting Google Antigravity (CLI / IDE)
+
+Antigravity connects directly to the Streamable HTTP MCP endpoint (`/mcp`) with OAuth 2.0 authentication.
+
+### Direct JSON Configuration (Recommended for OAuth)
+
+The Antigravity CLI command `agy mcp add` supports `--header`, `--env`, and `--type`, but currently does not provide dedicated command-line flags for configuring an `oauth` block (e.g. `--client-id`). Therefore, the recommended method for configuring an OAuth-protected MCP server in Antigravity is adding it directly to your global MCP configuration file:
+
+Path: [`~/.gemini/config/mcp_config.json`](file:///Users/jacek/.gemini/config/mcp_config.json)
+
+```json
+{
+  "mcpServers": {
+    "home-tasks-manager": {
+      "serverUrl": "https://<your-cloud-run-service-url>/mcp",
+      "oauth": {
+        "clientId": "gemini-mcp-client",
+        "clientSecret": ""
+      }
+    }
+  }
+}
+```
+
+> [!TIP]
+> Replace `<your-cloud-run-service-url>` with your deployed service URL (e.g. `https://home-taskmanager-4ln37ygzvq-ew.a.run.app`). Leave `clientSecret` empty unless a custom secret was configured on the server.
+
+### Verifying Configuration
+
+Check the configured MCP servers using the `agy` CLI:
+
+```bash
+agy mcp list
+```
+
+Expected output:
+```text
+NAME                  TYPE   STATUS   COMMAND/URL
+home-tasks-manager    http   enabled  https://<your-cloud-run-service-url>/mcp
+```
+
+When Antigravity first accesses any `home-tasks-manager` tool, it will automatically initiate the interactive browser OAuth 2.0 authorization flow using the specified `clientId`.
+
+---
+
+## 7. Accessing the Jira Web Dashboard
 
 Open the deployed Cloud Run URL directly in any desktop, tablet, or smartphone browser:
 ```

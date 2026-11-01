@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import {
   BoardColumn,
+  GeminiUsageStats,
   IssueCreatePayload,
   IssueUpdatePayload,
   JiraIssue,
@@ -107,6 +108,7 @@ export interface CachedBoardData {
   issues: JiraIssue[];
   availableUsers?: JiraUser[];
   geminiConfigured?: boolean;
+  geminiStats?: GeminiUsageStats | null;
 }
 
 export function loadCachedView(): DashboardView {
@@ -276,6 +278,7 @@ export interface BoardStoreState {
   showChildren: boolean;
   hideImages: boolean;
   geminiConfigured: boolean;
+  geminiStats: GeminiUsageStats | null;
   isSettingsOpen: boolean;
   errorMessage: string | null;
   rollbackQueue: Record<string, JiraIssue>;
@@ -331,6 +334,7 @@ export interface BoardStoreState {
   moveToBoard: (issueKey: string) => Promise<void>;
   loadBoard: () => Promise<void>;
   fetchUsers: () => Promise<void>;
+  fetchGeminiStats: () => Promise<void>;
   transitionIssueOptimistic: (
     issueKey: string,
     targetCategory: JiraStatusCategory,
@@ -458,6 +462,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   showChildren: false,
   hideImages: loadCachedHideImages(),
   geminiConfigured: initialCache?.geminiConfigured ?? false,
+  geminiStats: initialCache?.geminiStats ?? null,
   isSettingsOpen: initialRoute.kind === 'settings',
   errorMessage: null,
   rollbackQueue: {},
@@ -866,11 +871,13 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           issues: sortIssuesByRank(data.issues || []),
           availableUsers: get().availableUsers,
           geminiConfigured: Boolean(data.gemini_configured),
+          geminiStats: data.gemini_stats ?? null,
         };
         saveCachedBoard(nextState);
         set({
           ...nextState,
           geminiConfigured: Boolean(data.gemini_configured),
+          geminiStats: data.gemini_stats ?? null,
           errorMessage: null,
           isLoading: false,
           isSyncing: false,
@@ -914,6 +921,18 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             saveCachedBoard({ ...cached, availableUsers: users });
           }
         }
+      }
+    } catch {
+      // offline / quiet ignore
+    }
+  },
+
+  fetchGeminiStats: async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/gemini/stats'), { credentials: 'include' });
+      if (res.ok) {
+        const stats: GeminiUsageStats = await res.json();
+        set({ geminiStats: stats });
       }
     } catch {
       // offline / quiet ignore
@@ -1846,6 +1865,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       }
       saveCachedAccountTypes(types);
       set({ accountTypes: types });
+      return;
+    }
+
+    if (msg.event === 'gemini_stats_updated' && msg.gemini_stats) {
+      set({ geminiStats: msg.gemini_stats as GeminiUsageStats });
       return;
     }
 

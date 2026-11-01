@@ -310,6 +310,15 @@ class IssueCreateRequest(BaseModel):
     rank_before_key: str | None = None
 
 
+class GeminiUsageStats(BaseModel):
+    """Daily image generation statistics for Gemini."""
+
+    enabled: bool = False
+    daily_count: int = 0
+    daily_limit: int = 50
+    model: str | None = None
+
+
 class BoardResponse(BaseModel):
     """Response containing board metadata, workflow columns, and issues."""
 
@@ -320,6 +329,27 @@ class BoardResponse(BaseModel):
     columns: list[BoardColumn] = []
     issues: list[JiraIssue]
     gemini_configured: bool = False
+    gemini_stats: GeminiUsageStats | None = None
+
+
+def get_gemini_stats() -> GeminiUsageStats:
+    """Retrieve current Gemini enablement status and daily usage quota."""
+    is_gemini_available = bool(
+        gemini_client is not None
+        and (
+            bool(settings.gemini_api_key and settings.gemini_api_key.strip())
+            or os.environ.get("JIRA_USE_FAKE") == "1"
+            or os.environ.get("TESTING") == "1"
+        )
+    )
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    daily_count = storage.get_daily_generation_count(today_str)
+    return GeminiUsageStats(
+        enabled=is_gemini_available,
+        daily_count=daily_count,
+        daily_limit=settings.gemini_daily_limit,
+        model=settings.gemini_model if is_gemini_available else None,
+    )
 
 
 _cached_board_response: BoardResponse | None = None
@@ -427,6 +457,7 @@ async def fetch_and_cache_board(force: bool = False) -> BoardResponse:
             columns=columns,
             issues=issues,
             gemini_configured=is_gemini_available,
+            gemini_stats=get_gemini_stats(),
         )
         _cached_board_response = cached
         _board_cache_timestamp = time.time()
@@ -1619,13 +1650,19 @@ async def get_board(refresh: bool = Query(default=False)) -> BoardResponse:
     if _cached_board_response is not None:
         if (time.time() - _board_cache_timestamp) >= BOARD_CACHE_TTL_SECONDS:
             asyncio.create_task(fetch_and_cache_board(force=True))
-        return _cached_board_response
+        return _cached_board_response.model_copy(update={"gemini_stats": get_gemini_stats()})
 
     try:
         return await fetch_and_cache_board(force=True)
     except JiraAPIError as exc:
         logger.error("Failed to fetch board issues from Jira: %s", exc)
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@app.get("/api/gemini/stats", response_model=GeminiUsageStats)
+async def get_gemini_usage_stats() -> GeminiUsageStats:
+    """Get Gemini image generation daily usage and limits."""
+    return get_gemini_stats()
 
 
 @app.get("/api/users", response_model=list[JiraUser])
@@ -2237,6 +2274,12 @@ async def get_issue_background(key: str) -> Response:
         issue_key=key,
     )
     storage.increment_daily_generation_count(today_str)
+    await ws_hub.broadcast(
+        {
+            "event": "gemini_stats_updated",
+            "gemini_stats": get_gemini_stats().model_dump(),
+        }
+    )
 
     return Response(
         content=image_bytes,

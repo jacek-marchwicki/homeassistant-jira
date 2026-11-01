@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, ChevronDown, Check, X } from 'lucide-react';
+import { Search, ChevronDown, Check, Sparkles, X } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { AssigneeAvatar } from './AssigneeAvatar.tsx';
 import { getAssigneesFromBoard } from '../utils/boardUtils.ts';
@@ -18,6 +18,7 @@ export function FilterBar() {
     showChildren,
     toggleShowChildren,
     geminiConfigured,
+    geminiStats,
     hideImages,
     toggleHideImages,
   } = useBoardStore();
@@ -294,6 +295,20 @@ export function FilterBar() {
           >
             Hide Images
           </button>
+        )}
+
+        {/* 6. Gemini Daily Usage Stats */}
+        {geminiConfigured && geminiStats && (
+          <span
+            data-testid="gemini-usage-badge"
+            className="h-7 sm:h-8 px-2.5 sm:px-3 rounded-full text-xs font-medium inline-flex items-center gap-1.5 shrink-0 bg-[var(--jira-surface-elevated)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)]"
+            title={`Gemini image generation: ${geminiStats.daily_count} of ${geminiStats.daily_limit} generated today`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+            <span>
+              Gemini images: {geminiStats.daily_count} / {geminiStats.daily_limit}
+            </span>
+          </span>
         )}
 
         <button

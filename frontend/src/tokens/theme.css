@@ -153,9 +153,11 @@
    CSS View Transitions: Smooth animations for task completion & repositioning
    ========================================================================== */
 
-/* Prevent full viewport flashing during card transitions */
-:root {
-  view-transition-name: none;
+/* Retain root view transition snapshot without animation to prevent Android WebView
+   and iframe compositors (such as Home Assistant Ingress) from flashing pitch black. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none !important;
 }
 
 /* Card transition group: smooth position/layout transitions for moving cards */
@@ -164,32 +166,12 @@
   animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* Old card exiting / hiding: smooth fade out without scale distortion */
-::view-transition-old(*) {
-  animation: 300ms cubic-bezier(0.4, 0, 1, 1) both vt-card-fade-out;
-}
-
-/* New card entering: smooth fade in */
+/* Disable cross-fade opacity animation on card snapshots so that background illustrations
+   and card contents stay completely solid (no opacity dip, disappearance, or blinking)
+   while the card morphs and glides between board columns and sections. */
+::view-transition-old(*),
 ::view-transition-new(*) {
-  animation: 350ms cubic-bezier(0, 0, 0.2, 1) both vt-card-fade-in;
-}
-
-@keyframes vt-card-fade-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes vt-card-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  animation: none !important;
 }
 
 /* Accessibility: respect user preferences for reduced motion */

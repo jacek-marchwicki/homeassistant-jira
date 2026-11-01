@@ -64,4 +64,32 @@ describe('viewTransition utility', () => {
       expect(callback).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('theme.css View Transition rules', () => {
+    it('does not disable view-transition-name on :root to protect Android WebView iframe rendering', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const cssPath = path.resolve(__dirname, '../tokens/theme.css');
+      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+
+      // :root { view-transition-name: none; } causes Android WebView iframes to flash pitch black
+      expect(cssContent).not.toMatch(/:root\s*\{\s*view-transition-name:\s*none;?\s*\}/);
+    });
+
+    it('suppresses root animation and card snapshot fade-out animations to prevent blinking', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const cssPath = path.resolve(__dirname, '../tokens/theme.css');
+      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+
+      // Root view transition old and new must have animation: none !important
+      expect(cssContent).toMatch(/::view-transition-old\(root\),\s*::view-transition-new\(root\)\s*\{\s*animation:\s*none\s*!important;\s*\}/);
+
+      // Card view transition old and new must have animation: none !important to prevent disappearing background
+      expect(cssContent).toMatch(/::view-transition-old\(\*\),\s*::view-transition-new\(\*\)\s*\{\s*animation:\s*none\s*!important;\s*\}/);
+
+      // Must not define opacity-zero fade-out keyframes for cards
+      expect(cssContent).not.toContain('vt-card-fade-out');
+    });
+  });
 });

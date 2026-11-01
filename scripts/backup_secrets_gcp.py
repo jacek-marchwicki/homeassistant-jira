@@ -182,13 +182,6 @@ def get_secret_specs(prefix: str = DEFAULT_PREFIX) -> list[SecretSpec]:
             is_optional=False,
         ),
         SecretSpec(
-            relative_path=Path(".env"),
-            secret_id=f"{prefix}env",
-            description="Local development backend environment (.env)",
-            is_binary=False,
-            is_optional=True,
-        ),
-        SecretSpec(
             relative_path=Path("android/keystore.properties"),
             secret_id=f"{prefix}android-keystore-properties",
             description="Android release signing configuration (keystore.properties)",
@@ -202,20 +195,6 @@ def get_secret_specs(prefix: str = DEFAULT_PREFIX) -> list[SecretSpec]:
             description="Android release keystore private certificate (release.jks)",
             is_binary=True,
             is_optional=False,
-        ),
-        SecretSpec(
-            relative_path=Path("secrets.yaml"),
-            secret_id=f"{prefix}secrets-yaml",
-            description="Home Assistant secrets configuration (secrets.yaml)",
-            is_binary=False,
-            is_optional=True,
-        ),
-        SecretSpec(
-            relative_path=Path("options.json"),
-            secret_id=f"{prefix}options-json",
-            description="Home Assistant Add-on runtime configuration (options.json)",
-            is_binary=False,
-            is_optional=True,
         ),
     ]
 

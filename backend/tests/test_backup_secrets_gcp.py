@@ -47,10 +47,13 @@ def test_get_secret_specs_default_prefix() -> None:
     """Verifies default secret specifications mapping relative paths to secret IDs."""
     specs = backup_secrets_gcp.get_secret_specs(prefix="ha-jira-backup-")
     ids = {spec.secret_id: spec.relative_path for spec in specs}
+    assert len(specs) == 3
     assert ids["ha-jira-backup-env-gcp"] == Path(".env.gcp")
-    assert ids["ha-jira-backup-env"] == Path(".env")
     assert ids["ha-jira-backup-android-keystore-properties"] == Path("android/keystore.properties")
     assert ids["ha-jira-backup-android-release-jks"] == Path("android/app/release.jks")
+    assert "ha-jira-backup-env" not in ids
+    assert "ha-jira-backup-secrets-yaml" not in ids
+    assert "ha-jira-backup-options-json" not in ids
 
 
 def test_backup_creates_and_uploads_existing_files(tmp_path: Path) -> None:

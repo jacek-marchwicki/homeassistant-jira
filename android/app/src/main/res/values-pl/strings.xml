@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TestApp Integrator</string>
+
+    <!-- Error Screen Strings (Polish) -->
+    <string name="error_no_internet_title">Brak połączenia z internetem</string>
+    <string name="error_no_internet_desc">Sprawdź połączenie z siecią Wi-Fi lub komórkową urządzenia.</string>
+
+    <string name="error_host_unreachable_title">Adres jest nieosiągalny</string>
+    <string name="error_host_unreachable_desc">Nie można nawiązać połączenia z serwerem. Upewnij się, że adres jest poprawny i serwer działa.</string>
+
+    <string name="error_timeout_title">Przekroczono limit czasu połączenia</string>
+    <string name="error_timeout_desc">Serwer zbyt długo nie odpowiadał. Spróbuj ponownie za chwilę.</string>
+
+    <string name="error_ssl_title">Błąd certyfikatu bezpieczeństwa</string>
+    <string name="error_ssl_desc">Certyfikat SSL tej witryny jest nieprawidłowy lub niezaufany.</string>
+
+    <string name="error_server_title">Błąd serwera (%1$d)</string>
+    <string name="error_server_desc">Serwer napotkał błąd podczas przetwarzania żądania.</string>
+
+    <string name="error_generic_title">Błąd ładowania strony</string>
+    <string name="error_generic_desc">Wystąpił problem podczas ładowania zawartości strony.</string>
+
+    <string name="error_retry_button">Ponów próbę</string>
+    <string name="error_retrying">Odświeżanie…</string>
+    <string name="error_auto_retry_countdown">Automatyczne odświeżenie za %1$d s</string>
+    <string name="error_url_label">Adres: %1$s</string>
+</resources>

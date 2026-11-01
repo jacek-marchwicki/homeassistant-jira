@@ -42,6 +42,11 @@ All future implementations MUST strictly adhere to the standardized stack:
   - State & Optimistic UI: **Zustand** (guaranteeing sub-50ms optimistic mutations with rollback queue).
   - Drag-and-Drop: **@dnd-kit** across mobile, tablet, and PC, complemented by direct non-drag quick actions (one-tap "Mark Done" and status transition menu).
   - Package manager: **pnpm**.
+- **Android Kiosk Companion** ([`android/`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/android/)):
+  - **Kotlin** + **Jetpack Compose** + **AndroidX WebKit**.
+  - Target API 36 (Android 16), Min SDK 26 (Android 8.0).
+  - Dedicated wallboard kiosk WebView with lockscreen persistence (`showWhenLocked`), display zoom scaling, theme auto-detection, and offline error recovery overlays.
+  - Strict security boundaries: signing keystores (`*.jks`) and `keystore.properties` are strictly excluded from source control.
 - **Design System**:
   - Follow tokens and component rules in [`docs/design_system.md`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/docs/design_system.md).
   - Dark-first default with Home Assistant CSS custom property bridge (`--ha-card-background`, `--primary-background-color`, `--primary-text-color`, `--accent-color`).

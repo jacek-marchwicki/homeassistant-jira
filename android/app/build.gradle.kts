@@ -37,16 +37,21 @@ android {
 
     signingConfigs {
         create("release") {
-            val keyStoreRelativePath = keystoreProperties.getProperty("storeFile") ?: "release.jks"
+            val keyStoreRelativePath = keystoreProperties.getProperty("storeFile")
+                ?: System.getenv("ANDROID_KEYSTORE_PATH")
+                ?: "release.jks"
             // Support relative to app module or project root
             storeFile = if (file(keyStoreRelativePath).exists()) {
                 file(keyStoreRelativePath)
             } else {
                 rootProject.file(keyStoreRelativePath)
             }
-            storePassword = keystoreProperties.getProperty("storePassword") ?: "testapp123"
-            keyAlias = keystoreProperties.getProperty("keyAlias") ?: "testapp"
-            keyPassword = keystoreProperties.getProperty("keyPassword") ?: "testapp123"
+            storePassword = keystoreProperties.getProperty("storePassword")
+                ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+                ?: System.getenv("ANDROID_KEY_ALIAS")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+                ?: System.getenv("ANDROID_KEY_PASSWORD")
         }
     }
 

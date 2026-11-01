@@ -108,3 +108,14 @@ Thumbs.db
 # Git Worktrees
 .worktrees/
 
+# Android artifacts & signing
+.gradle/
+android/.gradle/
+android/local.properties
+android/**/build/
+android/*.jks
+android/**/*.jks
+android/keystore.properties
+android/**/keystore.properties
+
+

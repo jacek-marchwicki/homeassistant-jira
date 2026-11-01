@@ -27,6 +27,9 @@ A high-performance, real-time Jira dashboard built for **Home Assistant** and **
   - Installable in browsers on **Android** (Google Chrome, Samsung Internet, Edge, Brave), **iOS** (Safari), and **Desktop**.
   - Includes a Web App Manifest, Service Worker (`sw.js`) with app-shell caching, and adaptive Android maskable icons (192x192 and 512x512).
   - Built-in one-tap "Install App" prompt and touch-friendly mobile installation banner.
+- **Android Kiosk Companion Application** ([`android/`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/android/)):
+  - Dedicated lockscreen kiosk WebView app built with **Kotlin** and **Jetpack Compose** for wall-mounted Android tablets.
+  - Automatic wake/lock monitoring (`showWhenLocked`), CSS viewport compensation, dark/light theme detection, domain whitelisting, and offline retry overlays with countdowns.
 - **Real-Time Bidirectional Event Streaming**:
   - Python backend listens for incoming **Jira Webhooks** to capture external updates instantly.
   - Connected browsers receive delta updates in real time via **WebSockets**.
@@ -51,6 +54,11 @@ See [**ADR-001: Technology Stack Selection**](file:///Users/jacek/Documents/apps
   - **Drag & Drop**: **@dnd-kit** (accessible touch and pointer sensors across mobile, tablet, and PC).
   - **Icons**: **Lucide React**.
   - **Package Manager**: **pnpm**.
+- **Android Kiosk Companion** ([`android/`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/android/)):
+  - **Core**: **Kotlin**, **Jetpack Compose**, **AndroidX WebKit**.
+  - **Target/Compile**: API 36 (Android 16), Min SDK: API 26 (Android 8.0).
+  - **Features**: Dedicated wallboard kiosk WebView, lockscreen persistence, safe-area insets, auto-theme matching, offline auto-recovery.
+  - **Build Tool**: **Gradle 8+** (Gradle Wrapper).
 
 ---
 
@@ -89,8 +97,9 @@ flowchart TD
             HAAddon["Home Assistant Add-on (Ingress)"]
             HAMobile["HA Companion App / Lovelace"]
         end
-        subgraph Standalone ["Standalone Web Clients"]
+        subgraph Standalone ["Standalone Web & Native Clients"]
             WallDisplay["Wallboard / Office Kiosk"]
+            AndroidKiosk["Android Kiosk Companion (Wall Tablet)"]
             DesktopWeb["Desktop Browser"]
             MobileWeb["Mobile Browser"]
         end
@@ -105,6 +114,7 @@ flowchart TD
 
     WSHub <-->|"WebSockets (Live Push)"| HAAddon
     WSHub <-->|"WebSockets (Live Push)"| WallDisplay
+    WSHub <-->|"WebSockets (Live Push)"| AndroidKiosk
     WSHub <-->|"WebSockets (Live Push)"| DesktopWeb
     WSHub <-->|"WebSockets (Live Push)"| MobileWeb
 
@@ -157,6 +167,18 @@ cd frontend
 pnpm install
 ```
 
+### 3. Android Kiosk Setup & Build
+Requires JDK 17+ and Android SDK with API 36:
+```bash
+cd android
+
+# Build debug APK for testing
+./gradlew assembleDebug
+
+# Build release bundle (.aab)
+./gradlew bundleRelease
+```
+
 ---
 
 ## 🧪 Running Tests & Quality Checks
@@ -185,6 +207,14 @@ pnpm test
 
 # Run strict TypeScript typecheck and production build
 pnpm build
+```
+
+### 3. Run Android Unit Tests
+```bash
+cd android
+
+# Run unit tests
+./gradlew test
 ```
 
 ### 3. Run Full-Stack E2E Integration Tests (Fake Jira Test Double)

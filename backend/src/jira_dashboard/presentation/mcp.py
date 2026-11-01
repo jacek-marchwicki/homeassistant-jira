@@ -114,7 +114,7 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
         "name": "home_tasks_create_task",
         "description": (
             "Create a new task on the board with full GUI options and defaults. "
-            "Defaults: task_type='Task', priority='Medium', status='To Do'. "
+            "Defaults: task_type='Task', priority='Medium', status='Ready'. "
             "Returns the created task with direct dashboard task URLs "
             "('url', 'dashboard_url', 'task_url')."
         ),
@@ -152,8 +152,8 @@ AVAILABLE_TOOLS: list[dict[str, Any]] = [
                 },
                 "status": {
                     "type": "string",
-                    "default": "To Do",
-                    "description": "Initial status name (defaults to 'To Do')",
+                    "default": "Ready",
+                    "description": "Initial status name (defaults to 'Ready')",
                 },
                 "start_date": {
                     "type": "string",
@@ -733,7 +733,12 @@ class MCPServerHandler:
                 .strip()
             )
             priority_str = str(arguments.get("priority", "medium")).lower().strip()
-            status_name = str(arguments.get("status", "To Do")).strip()
+            status_arg = arguments.get("status")
+            status_name = (
+                str(status_arg).strip()
+                if status_arg is not None and str(status_arg).strip()
+                else "Ready"
+            )
             start_date = arguments.get("start_date")
             due_date = arguments.get("due_date") or arguments.get("end_date")
             recreate_after = arguments.get("recreate_after")
@@ -783,6 +788,34 @@ class MCPServerHandler:
                 rank=top_rank,
                 rank_before_key=rank_before_key,
             )
+
+            # If Jira created the issue in a default status (e.g. To Do),
+            # transition to requested status
+            if created.status.name.lower() != status_name.lower():
+                clean_status = status_name.strip().lower()
+                clean_cat = clean_status.replace(" ", "").replace("_", "")
+                target_cat = None
+                try:
+                    target_cat = StatusCategory(clean_cat)
+                except ValueError:
+                    pass
+                try:
+                    transitioned = await self.jira_client.transition_issue(
+                        created.key,
+                        target_category=target_cat,
+                        target_status=status_name,
+                    )
+                    if transitioned:
+                        created = transitioned
+                except Exception as exc:
+                    logger.warning(
+                        "Issue %s created in status '%s', but transition to '%s' failed: %s",
+                        created.key,
+                        created.status.name,
+                        status_name,
+                        exc,
+                    )
+
             self.storage.upsert_issue(created)
 
             if self.on_issue_created:

@@ -10,6 +10,7 @@ Tests the full Streamable HTTP lifecycle against the live running FastAPI server
 
 from __future__ import annotations
 
+import json
 import socket
 import threading
 import time
@@ -90,7 +91,7 @@ def test_official_mcp_client_sdk_lifecycle(local_mcp_server: str) -> None:
                 assert not list_res.is_error
                 assert len(list_res.content) > 0
 
-                # 4. call_tool -> home_tasks_create_task
+                # 4. call_tool -> home_tasks_create_task (default status: Ready)
                 create_res = await session.call_tool(
                     "home_tasks_create_task",
                     {"summary": "Created by official MCP client SDK"},
@@ -98,6 +99,17 @@ def test_official_mcp_client_sdk_lifecycle(local_mcp_server: str) -> None:
                 assert not create_res.is_error
                 assert len(create_res.content) > 0
                 assert "Created by official MCP client SDK" in create_res.content[0].text
+                created_dict = json.loads(create_res.content[0].text)
+                assert created_dict.get("status_name") == "Ready"
+
+                # 5. call_tool -> home_tasks_create_task with explicit status
+                create_custom = await session.call_tool(
+                    "home_tasks_create_task",
+                    {"summary": "Explicit Status SDK Task", "status": "In Progress"},
+                )
+                assert not create_custom.is_error
+                custom_dict = json.loads(create_custom.content[0].text)
+                assert custom_dict.get("status_name") == "In Progress"
 
     asyncio.run(_test())
 

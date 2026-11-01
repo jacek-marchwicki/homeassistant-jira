@@ -12,17 +12,25 @@
  * issues appearing in multiple people columns (e.g. unassigned or shared tasks)
  * do not produce duplicate view-transition-name identifiers, which causes the browser
  * to abort the ViewTransition with an InvalidStateError.
+ *
+ * The transition name remains stable regardless of issue status (done vs active)
+ * to ensure that CSS View Transitions smoothly interpolates the card position
+ * without cross-fading to an empty state or causing the card background image to disappear.
  */
 export function getViewTransitionName(
   issueKey: string,
-  isDone = false,
+  columnIdOrIsDone?: string | boolean,
   columnId?: string
 ): string {
-  const scopePrefix = columnId ? `${columnId}-` : '';
+  const resolvedColumnId =
+    typeof columnIdOrIsDone === 'string'
+      ? columnIdOrIsDone
+      : columnId;
+  const scopePrefix = resolvedColumnId ? `${resolvedColumnId}-` : '';
   const sanitized = `${scopePrefix}${issueKey}`
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '-');
-  return isDone ? `issue-done-${sanitized}` : `issue-${sanitized}`;
+  return `issue-${sanitized}`;
 }
 
 import { flushSync } from 'react-dom';

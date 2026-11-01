@@ -16,25 +16,24 @@ export interface TaskBackgroundResult {
  * If the image endpoint returns 204 No Content, 404, or network error,
  * hasBackground is false and backgroundUrl is null, guaranteeing graceful degradation.
  * If hideImages is enabled in useBoardStore, background loading is suppressed.
+ *
+ * Resolved background availability is cached in-memory and evaluated synchronously
+ * on every render so that when tasks are moved, completed, or remounted,
+ * the background image never flashes an empty state or disappears during View Transitions.
  */
 export function useTaskBackground(issueKey?: string): TaskBackgroundResult {
   const hideImages = useBoardStore((state) => state.hideImages);
+  const [, setTick] = useState(0);
 
-  const [hasBackground, setHasBackground] = useState<boolean>(() => {
-    if (!issueKey || hideImages) return false;
-    return backgroundAvailabilityCache.get(issueKey) ?? false;
-  });
-
+  const cached = issueKey && !hideImages ? backgroundAvailabilityCache.get(issueKey) : undefined;
   const url = issueKey ? getApiUrl(`/api/issues/${issueKey}/background`) : null;
 
   useEffect(() => {
     if (!issueKey || !url || hideImages) {
-      setHasBackground(false);
       return;
     }
 
     if (backgroundAvailabilityCache.has(issueKey)) {
-      setHasBackground(backgroundAvailabilityCache.get(issueKey)!);
       return;
     }
 
@@ -42,11 +41,11 @@ export function useTaskBackground(issueKey?: string): TaskBackgroundResult {
     const img = new Image();
     img.onload = () => {
       backgroundAvailabilityCache.set(issueKey, true);
-      if (active) setHasBackground(true);
+      if (active) setTick((t) => t + 1);
     };
     img.onerror = () => {
       backgroundAvailabilityCache.set(issueKey, false);
-      if (active) setHasBackground(false);
+      if (active) setTick((t) => t + 1);
     };
     img.src = url;
 
@@ -55,9 +54,11 @@ export function useTaskBackground(issueKey?: string): TaskBackgroundResult {
     };
   }, [issueKey, url, hideImages]);
 
+  const hasBackground = Boolean(cached && !hideImages);
+
   return {
-    backgroundUrl: hasBackground && !hideImages ? url : null,
-    hasBackground: hasBackground && !hideImages,
+    backgroundUrl: hasBackground ? url : null,
+    hasBackground,
   };
 }
 

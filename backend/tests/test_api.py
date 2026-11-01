@@ -328,6 +328,7 @@ class TestPresentationApi(unittest.TestCase):
             for i in board["issues"]
             if not i["key"].startswith("TEMP-") and "-TEMP-" not in i["key"]
         ]
+        real_issues.sort(key=lambda x: (x.get("rank") or "~", x["key"]))
         top_key = real_issues[0]["key"] if real_issues else None
 
         res = self.client.post(

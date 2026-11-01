@@ -87,6 +87,26 @@ class JiraDashboardSettings(BaseModel):
     webhook_secret: str | None = Field(
         default=None, description="Shared secret for verifying Jira webhooks"
     )
+    ha_ws_url: str = Field(
+        default="ws://supervisor/core/websocket",
+        description="Home Assistant WebSocket API URL",
+    )
+    ha_supervisor_token: str | None = Field(
+        default=None,
+        description="Supervisor token for Home Assistant WebSocket authentication",
+    )
+    ha_webhook_id: str = Field(
+        default="jira_home_tasks_webhook_01",
+        description="Webhook ID used for Home Assistant trigger and Nabu Casa cloudhook",
+    )
+    jira_webhook_public_url: str | None = Field(
+        default=None,
+        description="Publicly accessible webhook URL for Jira Cloud in GCP/Standalone mode",
+    )
+    auto_register_webhook: bool = Field(
+        default=True,
+        description="Whether to automatically register webhooks with Jira REST API on startup",
+    )
     polling_interval_seconds: int = Field(
         default=60, description="Interval in seconds for fallback polling (0 disables polling)"
     )
@@ -212,6 +232,11 @@ class JiraDashboardSettings(BaseModel):
             return dev_candidate
 
     @property
+    def jira_webhook_secret(self) -> str | None:
+        """Alias for webhook_secret."""
+        return self.webhook_secret
+
+    @property
     def has_jira_credentials(self) -> bool:
         """Return True if sufficient credentials exist to connect to a real Jira instance."""
         if not self.jira_url:
@@ -269,6 +294,11 @@ class JiraDashboardSettings(BaseModel):
             "image_storage_backend": "IMAGE_STORAGE_BACKEND",
             "image_storage_bucket": "IMAGE_STORAGE_BUCKET",
             "gcp_project_id": "GCP_PROJECT_ID",
+            "ha_ws_url": "HA_WS_URL",
+            "ha_supervisor_token": "HA_SUPERVISOR_TOKEN",
+            "ha_webhook_id": "HA_WEBHOOK_ID",
+            "jira_webhook_public_url": "JIRA_WEBHOOK_PUBLIC_URL",
+            "auto_register_webhook": "AUTO_REGISTER_WEBHOOK",
         }
 
         int_fields = {
@@ -277,6 +307,9 @@ class JiraDashboardSettings(BaseModel):
             "gemini_debounce_seconds",
             "gemini_cache_retention_seconds",
             "gemini_cooldown_seconds",
+        }
+        bool_fields = {
+            "auto_register_webhook",
         }
 
         for field_name, env_var in env_mappings.items():
@@ -287,8 +320,33 @@ class JiraDashboardSettings(BaseModel):
                         config_data[field_name] = int(val)
                     except ValueError:
                         pass
+                elif field_name in bool_fields:
+                    config_data[field_name] = str(val).lower() not in {"0", "false", "no", "off"}
                 else:
                     config_data[field_name] = val
+
+        # Handle aliases and fallbacks
+        if "webhook_secret" not in config_data or not config_data["webhook_secret"]:
+            alt_secret = (
+                config_data.get("jira_webhook_secret")
+                or os.environ.get("JIRA_WEBHOOK_SECRET")
+                or os.environ.get("WEBHOOK_SECRET")
+            )
+            if alt_secret:
+                config_data["webhook_secret"] = str(alt_secret)
+
+        if "ha_supervisor_token" not in config_data or not config_data["ha_supervisor_token"]:
+            sup_token = os.environ.get("SUPERVISOR_TOKEN")
+            if sup_token:
+                config_data["ha_supervisor_token"] = sup_token
+
+        if (
+            "jira_webhook_public_url" not in config_data
+            or not config_data["jira_webhook_public_url"]
+        ):
+            alt_pub_url = os.environ.get("WEBHOOK_PUBLIC_URL") or os.environ.get("JIRA_WEBHOOK_URL")
+            if alt_pub_url:
+                config_data["jira_webhook_public_url"] = alt_pub_url
 
         if "dashboard_url" not in config_data:
             fallback_dash = os.environ.get("DASHBOARD_BASE_URL") or os.environ.get("PUBLIC_URL")

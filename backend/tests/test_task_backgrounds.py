@@ -41,6 +41,7 @@ class TestTaskBackgroundsEndpoint(unittest.TestCase):
             return_value=self.cache_dir,
         )
         self.settings_patcher.start()
+        self.addCleanup(self.settings_patcher.stop)
 
         # Replace presentation gemini_client and blob_storage with test isolated instances
         self._orig_gemini_client = gemini_client
@@ -48,6 +49,14 @@ class TestTaskBackgroundsEndpoint(unittest.TestCase):
         from jira_dashboard.adapters.blob_storage import LocalDiskBlobStorage
 
         self._orig_blob_storage = main_mod.blob_storage
+
+        def _cleanup_presentation_clients() -> None:
+            main_mod.gemini_client = self._orig_gemini_client
+            main_mod.blob_storage = self._orig_blob_storage
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+        self.addCleanup(_cleanup_presentation_clients)
+
         main_mod.blob_storage = LocalDiskBlobStorage(self.cache_dir)
         main_mod.gemini_client = self.mock_gemini
 
@@ -80,12 +89,7 @@ class TestTaskBackgroundsEndpoint(unittest.TestCase):
         storage.save_issues([self.issue_1, self.issue_2])
 
     def tearDown(self) -> None:
-        self.settings_patcher.stop()
-        import jira_dashboard.presentation.main as main_mod
-
-        main_mod.gemini_client = self._orig_gemini_client
-        main_mod.blob_storage = self._orig_blob_storage
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        pass
 
     def test_nonexistent_issue_returns_404(self) -> None:
         """Verify requesting background for non-existent issue returns 404."""

@@ -79,3 +79,48 @@ def test_webhook_secret_rejection_on_invalid_or_missing(monkeypatch) -> None:
         headers={"X-Webhook-Secret": "incorrect-token"},
     )
     assert res_wrong.status_code == 401
+
+
+def test_webhook_handles_issue_deleted(monkeypatch) -> None:
+    """Verify POST /api/webhooks/jira processes jira:issue_deleted event."""
+    monkeypatch.setattr(main.settings, "webhook_secret", None)
+    client = TestClient(app)
+
+    # First seed or ensure issue exists in storage
+    from jira_dashboard.domain import IssueType, JiraIssue, JiraStatus, Priority, StatusCategory
+
+    seeded = JiraIssue(
+        id="101",
+        key="PROJ-101",
+        summary="Webhook test task",
+        issue_type=IssueType.TASK,
+        priority=Priority.MEDIUM,
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        updated_at="2026-11-01T10:00:00Z",
+    )
+    main.storage.save_issues([seeded])
+    assert main.storage.get_issue("PROJ-101") is not None
+
+    delete_payload = {
+        "webhookEvent": "jira:issue_deleted",
+        "issue": {
+            "id": "101",
+            "key": "PROJ-101",
+        },
+    }
+
+    res = client.post("/api/webhooks/jira", json=delete_payload)
+    assert res.status_code == 200
+    assert res.json()["status"] == "deleted"
+    assert res.json()["issue_key"] == "PROJ-101"
+
+    # Verify deleted from storage
+    assert main.storage.get_issue("PROJ-101") is None
+
+
+def test_jira_webhook_secret_alias_property() -> None:
+    """Verify jira_webhook_secret property provides an alias to webhook_secret."""
+    from jira_dashboard.config import JiraDashboardSettings
+
+    cfg = JiraDashboardSettings(webhook_secret="token-123")
+    assert cfg.jira_webhook_secret == "token-123"

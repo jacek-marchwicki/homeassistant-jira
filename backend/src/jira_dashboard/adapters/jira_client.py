@@ -338,6 +338,23 @@ class JiraClientProtocol(Protocol):
         """Parse and apply an incoming Jira webhook payload."""
         ...
 
+    async def register_webhook(
+        self,
+        url: str,
+        events: list[str] | None = None,
+        jql_filter: str | None = None,
+    ) -> dict[str, Any]:
+        """Register a dynamic webhook with Jira REST API."""
+        ...
+
+    async def get_webhooks(self) -> list[dict[str, Any]]:
+        """List registered dynamic webhooks from Jira REST API."""
+        ...
+
+    async def delete_webhook(self, webhook_id: int | str) -> bool:
+        """Delete a dynamic webhook from Jira REST API."""
+        ...
+
     async def get_assignable_users(
         self, board_id: str | None = None, project_key: str | None = None
     ) -> list[JiraUser]:
@@ -380,6 +397,8 @@ class FakeJiraClient:
             if os.environ.get("JIRA_USE_FAKE") == "1"
             else {}
         )
+        self._webhooks: dict[str, dict[str, Any]] = {}
+        self._webhook_seq: int = 0
         self.simulate_failure: bool = False
         self.simulate_transition_failure: bool = False
         self.simulate_board_failure: bool = False
@@ -401,6 +420,8 @@ class FakeJiraClient:
             if os.environ.get("JIRA_USE_FAKE") == "1"
             else {}
         )
+        self._webhooks.clear()
+        self._webhook_seq = 0
         self.simulate_failure = False
         self.simulate_transition_failure = False
         self.simulate_board_failure = False
@@ -739,6 +760,14 @@ class FakeJiraClient:
         - `jira:issue_created`
         """
         webhook_event = payload.get("webhookEvent")
+        if webhook_event == "jira:issue_deleted":
+            issue_data = payload.get("issue")
+            if isinstance(issue_data, dict):
+                del_key = issue_data.get("key")
+                if del_key:
+                    self._issues.pop(del_key, None)
+            return None
+
         if webhook_event not in {"jira:issue_updated", "jira:issue_created", None}:
             return None
 
@@ -912,3 +941,35 @@ class FakeJiraClient:
         del self._issues[issue_key]
         self._comments.pop(issue_key, None)
         return True
+
+    async def register_webhook(
+        self,
+        url: str,
+        events: list[str] | None = None,
+        jql_filter: str | None = None,
+    ) -> dict[str, Any]:
+        """Register a dynamic webhook in FakeJiraClient."""
+        if self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        self._webhook_seq += 1
+        webhook_id = str(self._webhook_seq)
+        webhook_data = {
+            "id": webhook_id,
+            "url": url,
+            "events": events or ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"],
+            "jqlFilter": jql_filter or "",
+        }
+        self._webhooks[webhook_id] = webhook_data
+        return {"webhookRegistrationResult": [{"createdWebhookId": int(webhook_id)}]}
+
+    async def get_webhooks(self) -> list[dict[str, Any]]:
+        """List registered webhooks in FakeJiraClient."""
+        if self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        return list(self._webhooks.values())
+
+    async def delete_webhook(self, webhook_id: int | str) -> bool:
+        """Delete a registered webhook in FakeJiraClient."""
+        if self.simulate_failure:
+            raise JiraAPIError(self.failure_message, status_code=self.failure_status_code)
+        return self._webhooks.pop(str(webhook_id), None) is not None

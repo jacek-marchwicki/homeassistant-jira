@@ -3,4 +3,28 @@
     <string name="app_name">TestApp Integrator</string>
     <string name="hello_world">Hello World!</string>
     <string name="package_name">com.jacek.test.app</string>
+
+    <!-- Error Screen Strings -->
+    <string name="error_no_internet_title">No Internet Connection</string>
+    <string name="error_no_internet_desc">Check your device\'s Wi-Fi or mobile network settings.</string>
+
+    <string name="error_host_unreachable_title">Address Unreachable</string>
+    <string name="error_host_unreachable_desc">Could not connect to the server. Check if the address is correct and the server is running.</string>
+
+    <string name="error_timeout_title">Connection Timed Out</string>
+    <string name="error_timeout_desc">The server took too long to respond. Please try again.</string>
+
+    <string name="error_ssl_title">Security Certificate Error</string>
+    <string name="error_ssl_desc">The security certificate for this site is invalid or untrusted.</string>
+
+    <string name="error_server_title">Server Error (%1$d)</string>
+    <string name="error_server_desc">The server encountered an error while processing the request.</string>
+
+    <string name="error_generic_title">Unable to Load Page</string>
+    <string name="error_generic_desc">An unexpected error occurred while loading the webpage.</string>
+
+    <string name="error_retry_button">Retry</string>
+    <string name="error_retrying">Retrying…</string>
+    <string name="error_auto_retry_countdown">Auto-refreshing in %1$d s</string>
+    <string name="error_url_label">URL: %1$s</string>
 </resources>

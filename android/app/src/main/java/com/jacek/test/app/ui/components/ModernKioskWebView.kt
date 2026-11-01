@@ -6,6 +6,11 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.http.SslError
 import android.os.Build
 import android.util.Log
 import android.view.ContextThemeWrapper
@@ -13,9 +18,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -30,6 +37,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -38,10 +46,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 private const val TAG = "ModernKioskWebView"
 
@@ -72,11 +83,93 @@ fun ModernKioskWebView(
     onPageTitleChanged: (String?) -> Unit = {},
     onError: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
     var progress by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var lastAppliedZoom by remember { mutableIntStateOf(-1) }
     var lastAppliedDark by remember { mutableStateOf<Boolean?>(null) }
+
+    var currentLoadFailedError by remember { mutableStateOf<WebErrorInfo?>(null) }
+    var displayedError by remember { mutableStateOf<WebErrorInfo?>(null) }
+    var countdownSeconds by remember { mutableIntStateOf(10) }
+    var isRetrying by remember { mutableStateOf(false) }
+    var retryTrigger by remember { mutableIntStateOf(0) }
+
+    fun isNetworkConnected(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return true
+        val activeNet = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(activeNet) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    fun retryLoad() {
+        isRetrying = true
+        currentLoadFailedError = null
+        countdownSeconds = 10
+        webViewRef?.let { wv ->
+            wv.stopLoading()
+            wv.loadUrl(url)
+        }
+    }
+
+    // Auto-retry periodic countdown timer
+    LaunchedEffect(displayedError, retryTrigger) {
+        if (displayedError != null) {
+            countdownSeconds = 10
+            while (isActive && countdownSeconds > 0) {
+                delay(1000L)
+                countdownSeconds -= 1
+            }
+            if (isActive && countdownSeconds == 0) {
+                retryLoad()
+            }
+        }
+    }
+
+    // Network availability listener: immediately trigger reload when internet reconnects
+    DisposableEffect(context) {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                if (displayedError != null) {
+                    webViewRef?.post {
+                        retryLoad()
+                    }
+                }
+            }
+        }
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        try {
+            cm?.registerNetworkCallback(request, callback)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to register network callback: ${t.message}")
+        }
+        onDispose {
+            try {
+                cm?.unregisterNetworkCallback(callback)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to unregister network callback: ${t.message}")
+            }
+        }
+    }
+
+    LaunchedEffect(url) {
+        currentLoadFailedError = null
+        displayedError = null
+        if (!isNetworkConnected()) {
+            val offlineError = WebErrorClassifier.classify(
+                errorCode = WebErrorClassifier.ERROR_HOST_LOOKUP,
+                description = "net::ERR_INTERNET_DISCONNECTED",
+                failingUrl = url,
+                isNetworkConnected = false
+            )
+            currentLoadFailedError = offlineError
+            displayedError = offlineError
+        }
+    }
 
     fun dispatchInsetsToWebView(wv: WebView?) {
         if (wv == null) return
@@ -428,6 +521,7 @@ fun ModernKioskWebView(
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             super.onPageStarted(view, url, favicon)
                             isLoading = true
+                            currentLoadFailedError = null
                             dispatchInsetsToWebView(view)
                             injectStatusBarInsets(view)
                             applyPageZoom(view, pageZoom)
@@ -437,7 +531,14 @@ fun ModernKioskWebView(
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             isLoading = false
-                            onPageTitleChanged(view?.title)
+                            isRetrying = false
+                            if (currentLoadFailedError == null) {
+                                displayedError = null
+                                onPageTitleChanged(view?.title)
+                            } else {
+                                displayedError = currentLoadFailedError
+                                countdownSeconds = 10
+                            }
                             dispatchInsetsToWebView(view)
                             injectStatusBarInsets(view)
                             applyPageZoom(view, pageZoom)
@@ -453,8 +554,56 @@ fun ModernKioskWebView(
                             if (request?.isForMainFrame == true) {
                                 val description = error?.description?.toString() ?: "Unknown error"
                                 Log.e(TAG, "WebView error loading main frame: $description")
+                                val errorInfo = WebErrorClassifier.classify(
+                                    errorCode = error?.errorCode,
+                                    description = description,
+                                    failingUrl = request.url?.toString() ?: url,
+                                    isNetworkConnected = isNetworkConnected()
+                                )
+                                currentLoadFailedError = errorInfo
+                                displayedError = errorInfo
+                                countdownSeconds = 10
                                 onError(description)
                             }
+                        }
+
+                        override fun onReceivedHttpError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            errorResponse: WebResourceResponse?
+                        ) {
+                            super.onReceivedHttpError(view, request, errorResponse)
+                            if (request?.isForMainFrame == true) {
+                                val statusCode = errorResponse?.statusCode ?: 0
+                                if (statusCode >= 400 && statusCode != 401 && statusCode != 403) {
+                                    val errorInfo = WebErrorClassifier.classifyHttpError(
+                                        statusCode = statusCode,
+                                        failingUrl = request.url?.toString() ?: url
+                                    )
+                                    currentLoadFailedError = errorInfo
+                                    displayedError = errorInfo
+                                    countdownSeconds = 10
+                                    onError("HTTP $statusCode: ${errorResponse?.reasonPhrase}")
+                                }
+                            }
+                        }
+
+                        override fun onReceivedSslError(
+                            view: WebView?,
+                            handler: SslErrorHandler?,
+                            error: SslError?
+                        ) {
+                            super.onReceivedSslError(view, handler, error)
+                            val errorInfo = WebErrorInfo(
+                                errorType = WebErrorType.SslError(error?.toString()),
+                                failingUrl = error?.url ?: url,
+                                rawDescription = error?.toString()
+                            )
+                            currentLoadFailedError = errorInfo
+                            displayedError = errorInfo
+                            countdownSeconds = 10
+                            handler?.cancel()
+                            onError("SSL error: $error")
                         }
 
                         override fun onRenderProcessGone(
@@ -498,6 +647,8 @@ fun ModernKioskWebView(
             },
             update = { webView ->
                 if (webView.url != url && url.isNotBlank()) {
+                    currentLoadFailedError = null
+                    displayedError = null
                     webView.loadUrl(url)
                 }
                 if (lastAppliedZoom != pageZoom) {
@@ -528,6 +679,25 @@ fun ModernKioskWebView(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primary
             )
+        }
+
+        AnimatedVisibility(
+            visible = displayedError != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            displayedError?.let { err ->
+                KioskErrorOverlay(
+                    errorInfo = err,
+                    countdownSeconds = countdownSeconds,
+                    isRetrying = isRetrying,
+                    onRetry = {
+                        retryTrigger++
+                        retryLoad()
+                    }
+                )
+            }
         }
     }
 

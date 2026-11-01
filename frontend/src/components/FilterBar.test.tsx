@@ -256,6 +256,56 @@ describe('FilterBar component', () => {
     });
   });
 
+  it('renders Gemini usage badge with generation count when geminiConfigured and geminiStats are present', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({
+        currentUser: 'Jacek Marchwicki',
+        activeFilters: ['active'],
+        geminiConfigured: true,
+        geminiStats: {
+          enabled: true,
+          daily_count: 7,
+          daily_limit: 50,
+          model: 'gemini-3.1-flash-lite-image',
+        },
+      });
+      root.render(<FilterBar />);
+    });
+
+    const badge = container.querySelector('[data-testid="gemini-usage-badge"]');
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent).toContain('Gemini images: 7 / 50');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not render Gemini usage badge when geminiConfigured is false', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      useBoardStore.setState({
+        currentUser: 'Jacek Marchwicki',
+        activeFilters: ['active'],
+        geminiConfigured: false,
+        geminiStats: null,
+      });
+      root.render(<FilterBar />);
+    });
+
+    const badge = container.querySelector('[data-testid="gemini-usage-badge"]');
+    expect(badge).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('renders a mobile search button that expands to search input on click and collapses on close', async () => {
     const container = document.createElement('div');
     const root = createRoot(container);

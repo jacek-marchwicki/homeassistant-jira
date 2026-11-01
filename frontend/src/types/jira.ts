@@ -153,4 +153,23 @@ export interface IssueCreatePayload {
   rank_before_key?: string | null;
 }
 
+export interface GeminiUsageStats {
+  enabled: boolean;
+  daily_count: number;
+  daily_limit: number;
+  model?: string | null;
+}
+
+export interface BoardResponse {
+  board_id: string;
+  board_name: string;
+  sprint_name?: string | null;
+  jira_url?: string | null;
+  columns?: BoardColumn[];
+  issues: JiraIssue[];
+  gemini_configured?: boolean;
+  gemini_stats?: GeminiUsageStats | null;
+}
+
+
 

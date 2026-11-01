@@ -27,6 +27,8 @@ export function SettingsView() {
     errorMessage,
     authStatus,
     logout,
+    geminiConfigured,
+    geminiStats,
   } = useBoardStore();
 
   const [backendVersion, setBackendVersion] = useState<string | null>(null);
@@ -170,6 +172,46 @@ export function SettingsView() {
           </div>
         </section>
       )}
+
+      <section className="mt-6 pt-6 border-t border-[var(--jira-border)]" aria-labelledby="settings-gemini-heading">
+        <h2 id="settings-gemini-heading" className="text-sm font-semibold text-[var(--jira-text-primary)]">
+          AI Image Generation (Gemini)
+        </h2>
+        <p className="text-xs text-[var(--jira-text-secondary)] mt-1">
+          Contextual background illustrations for tasks using Google Gemini.
+        </p>
+        <div className="mt-3 p-3 rounded-xl border border-[var(--jira-border)] bg-[var(--jira-surface)] space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[var(--jira-text-secondary)]">Status</span>
+            <span
+              data-testid="gemini-status"
+              className={`font-semibold ${
+                geminiConfigured || geminiStats?.enabled
+                  ? 'text-emerald-400'
+                  : 'text-[var(--jira-text-secondary)]'
+              }`}
+            >
+              {geminiConfigured || geminiStats?.enabled ? 'Enabled' : 'Not configured'}
+            </span>
+          </div>
+          {geminiStats && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[var(--jira-text-secondary)]">Daily usage</span>
+              <span data-testid="gemini-daily-usage" className="font-medium text-[var(--jira-text-primary)]">
+                {geminiStats.daily_count} / {geminiStats.daily_limit} images generated today
+              </span>
+            </div>
+          )}
+          {geminiStats?.model && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[var(--jira-text-secondary)]">Model</span>
+              <span data-testid="gemini-model" className="font-mono text-2xs text-[var(--jira-text-secondary)]">
+                {geminiStats.model}
+              </span>
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="mt-6 pt-6 border-t border-[var(--jira-border)]" aria-labelledby="settings-about-heading">
         <h2 id="settings-about-heading" className="text-sm font-semibold text-[var(--jira-text-primary)]">

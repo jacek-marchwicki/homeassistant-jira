@@ -171,6 +171,12 @@ describe('Zustand BoardStore', () => {
         columns: customColumns,
         issues: [mockIssue],
         gemini_configured: true,
+        gemini_stats: {
+          enabled: true,
+          daily_count: 5,
+          daily_limit: 50,
+          model: 'gemini-3.1-flash-lite-image',
+        },
       }),
     });
 
@@ -179,6 +185,12 @@ describe('Zustand BoardStore', () => {
     expect(useBoardStore.getState().columns).toEqual(customColumns);
     expect(useBoardStore.getState().boardName).toBe('HOME Board');
     expect(useBoardStore.getState().geminiConfigured).toBe(true);
+    expect(useBoardStore.getState().geminiStats).toEqual({
+      enabled: true,
+      daily_count: 5,
+      daily_limit: 50,
+      model: 'gemini-3.1-flash-lite-image',
+    });
     expect(useBoardStore.getState().isLoading).toBe(false);
   });
 
@@ -1146,6 +1158,30 @@ describe('child account store state', () => {
     expect(useBoardStore.getState().accountTypes).toEqual({ 'kid kim': 'child' });
     useBoardStore.getState().handleWsMessage({ event: 'account_types_updated', account_types: {} });
     expect(useBoardStore.getState().accountTypes).toEqual({});
+  });
+
+  it('updates geminiStats on gemini_stats_updated websocket message and fetchGeminiStats', async () => {
+    const mockStats = {
+      enabled: true,
+      daily_count: 8,
+      daily_limit: 50,
+      model: 'gemini-3.1-flash-lite-image',
+    };
+    useBoardStore.getState().handleWsMessage({
+      event: 'gemini_stats_updated',
+      gemini_stats: mockStats,
+    });
+    expect(useBoardStore.getState().geminiStats).toEqual(mockStats);
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockStats,
+        daily_count: 9,
+      }),
+    });
+    await useBoardStore.getState().fetchGeminiStats();
+    expect(useBoardStore.getState().geminiStats?.daily_count).toBe(9);
   });
 
   it('keeps cached account types when backend is unreachable', async () => {

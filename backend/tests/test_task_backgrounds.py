@@ -328,3 +328,14 @@ class TestTaskBackgroundsEndpoint(unittest.TestCase):
         )
         resp = self.client.get("/api/issues/CHORE-1/background")
         self.assertEqual(resp.status_code, 204)
+
+    def test_gemini_stats_increments_on_generation(self) -> None:
+        """Verify /api/gemini/stats daily_count increments after an image is generated."""
+        init_stats = self.client.get("/api/gemini/stats").json()
+        self.assertEqual(init_stats["daily_count"], 0)
+
+        resp = self.client.get("/api/issues/CHORE-1/background")
+        self.assertEqual(resp.status_code, 200)
+
+        updated_stats = self.client.get("/api/gemini/stats").json()
+        self.assertEqual(updated_stats["daily_count"], 1)

@@ -183,4 +183,56 @@ describe('SettingsView', () => {
 
     act(() => root.unmount());
   });
+
+  it('renders Gemini image generation stats when configured', async () => {
+    act(() => {
+      useBoardStore.setState({
+        geminiConfigured: true,
+        geminiStats: {
+          enabled: true,
+          daily_count: 12,
+          daily_limit: 50,
+          model: 'gemini-3.1-flash-lite-image',
+        },
+      });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<SettingsView />);
+    });
+
+    const statusEl = container.querySelector('[data-testid="gemini-status"]');
+    const usageEl = container.querySelector('[data-testid="gemini-daily-usage"]');
+    const modelEl = container.querySelector('[data-testid="gemini-model"]');
+
+    expect(statusEl?.textContent).toBe('Enabled');
+    expect(usageEl?.textContent).toContain('12 / 50 images generated today');
+    expect(modelEl?.textContent).toBe('gemini-3.1-flash-lite-image');
+
+    act(() => root.unmount());
+  });
+
+  it('renders Gemini status as Not configured when disabled', async () => {
+    act(() => {
+      useBoardStore.setState({
+        geminiConfigured: false,
+        geminiStats: null,
+      });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<SettingsView />);
+    });
+
+    const statusEl = container.querySelector('[data-testid="gemini-status"]');
+    expect(statusEl?.textContent).toBe('Not configured');
+
+    act(() => root.unmount());
+  });
 });

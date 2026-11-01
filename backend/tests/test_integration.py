@@ -53,7 +53,7 @@ def test_board_endpoint_contract(client: TestClient) -> None:
 
 
 def test_board_endpoint_gemini_configured(client: TestClient) -> None:
-    """Verify /api/board reports gemini_configured accurately based on Gemini client status."""
+    """Verify /api/board reports gemini_configured and gemini_stats accurately."""
     import jira_dashboard.presentation.main as main_mod
     from jira_dashboard.adapters.gemini_client import MockGeminiImageClient
 
@@ -64,12 +64,49 @@ def test_board_endpoint_gemini_configured(client: TestClient) -> None:
         main_mod.settings.gemini_api_key = None
         resp_no_gemini = client.get("/api/board?refresh=true")
         assert resp_no_gemini.status_code == 200
-        assert resp_no_gemini.json()["gemini_configured"] is False
+        data_no_gemini = resp_no_gemini.json()
+        assert data_no_gemini["gemini_configured"] is False
+        assert data_no_gemini["gemini_stats"] is not None
+        assert data_no_gemini["gemini_stats"]["enabled"] is False
 
         main_mod.gemini_client = MockGeminiImageClient()
         resp_with_gemini = client.get("/api/board?refresh=true")
         assert resp_with_gemini.status_code == 200
-        assert resp_with_gemini.json()["gemini_configured"] is True
+        data_with_gemini = resp_with_gemini.json()
+        assert data_with_gemini["gemini_configured"] is True
+        assert data_with_gemini["gemini_stats"] is not None
+        assert data_with_gemini["gemini_stats"]["enabled"] is True
+        assert data_with_gemini["gemini_stats"]["daily_count"] >= 0
+        assert data_with_gemini["gemini_stats"]["daily_limit"] > 0
+    finally:
+        main_mod.gemini_client = orig_client
+        main_mod.settings.gemini_api_key = orig_key
+
+
+def test_gemini_stats_endpoint(client: TestClient) -> None:
+    """Verify /api/gemini/stats endpoint returns daily count and limit."""
+    import jira_dashboard.presentation.main as main_mod
+    from jira_dashboard.adapters.gemini_client import MockGeminiImageClient
+
+    orig_client = main_mod.gemini_client
+    orig_key = main_mod.settings.gemini_api_key
+    try:
+        main_mod.gemini_client = None
+        main_mod.settings.gemini_api_key = None
+        resp = client.get("/api/gemini/stats")
+        assert resp.status_code == 200
+        stats = resp.json()
+        assert stats["enabled"] is False
+        assert "daily_count" in stats
+        assert "daily_limit" in stats
+
+        main_mod.gemini_client = MockGeminiImageClient()
+        resp2 = client.get("/api/gemini/stats")
+        assert resp2.status_code == 200
+        stats2 = resp2.json()
+        assert stats2["enabled"] is True
+        assert stats2["daily_limit"] == main_mod.settings.gemini_daily_limit
+        assert stats2["model"] == main_mod.settings.gemini_model
     finally:
         main_mod.gemini_client = orig_client
         main_mod.settings.gemini_api_key = orig_key

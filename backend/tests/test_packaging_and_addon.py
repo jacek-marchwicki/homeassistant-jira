@@ -61,8 +61,7 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
     assert "jira_email" in options and "jira_email" in schema
     assert "jira_api_token" in options and "jira_api_token" in schema
     assert "jira_board_id" in options and "jira_board_id" in schema
-    assert "jira_webhook_secret" in options and "jira_webhook_secret" in schema
-    assert schema["jira_webhook_secret"] == "password?"
+    assert "jira_webhook_secret" not in options and "jira_webhook_secret" not in schema
     assert "polling_interval_seconds" in options and "polling_interval_seconds" in schema
 
     # Gemini AI configuration options & schema
@@ -95,7 +94,6 @@ def test_addon_config_yaml_is_valid_and_complete() -> None:
         "jira_email",
         "jira_api_token",
         "jira_board_id",
-        "jira_webhook_secret",
         "polling_interval_seconds",
         "gemini_api_key",
         "gemini_model",

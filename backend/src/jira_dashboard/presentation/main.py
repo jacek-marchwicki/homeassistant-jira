@@ -259,7 +259,9 @@ ha_cloudhook_mgr = HomeAssistantCloudhookManager(
     ws_url=settings.ha_ws_url,
     supervisor_token=settings.ha_supervisor_token or os.environ.get("SUPERVISOR_TOKEN"),
     webhook_id=settings.ha_webhook_id,
-    webhook_secret=settings.webhook_secret,
+    # Home Assistant Cloudhooks use cryptographically secure bearer URLs managed by Nabu Casa
+    # and strip query parameters; direct endpoint /api/webhooks/jira uses settings.webhook_secret.
+    webhook_secret=None,
     on_payload=webhook_processor.process_payload,
     on_cloudhook_resolved=_on_cloudhook_resolved,
 )

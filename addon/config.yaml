@@ -23,7 +23,6 @@ options:
   jira_email: "user@example.com"
   jira_api_token: ""
   jira_board_id: "engineering-1"
-  jira_webhook_secret: ""
   polling_interval_seconds: 60
   gemini_api_key: ""
   gemini_model: "gemini-3.1-flash-lite-image"
@@ -36,7 +35,6 @@ schema:
   jira_email: "str?"
   jira_api_token: "password?"
   jira_board_id: "str?"
-  jira_webhook_secret: "password?"
   polling_interval_seconds: "int?"
   gemini_api_key: "password?"
   gemini_model: "str?"

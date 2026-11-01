@@ -85,10 +85,10 @@ class HomeAssistantCloudhookManager:
         if trigger.get("webhook_id") != self.webhook_id:
             return
 
-        # 1. Validate Secret Token if configured
+        # 1. Validate Secret Token if configured and query parameter was provided
         query_params = trigger.get("query") or {}
         query_secret = query_params.get("secret")
-        if self.webhook_secret:
+        if self.webhook_secret and query_secret is not None:
             if query_secret != self.webhook_secret:
                 logger.warning(
                     "Home Assistant webhook trigger received with invalid secret token "

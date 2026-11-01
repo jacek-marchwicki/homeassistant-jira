@@ -11,9 +11,6 @@ configuration:
   jira_board_id:
     name: "Jira Board ID"
     description: "Target Jira Agile Board ID or key to display on dashboard startup."
-  jira_webhook_secret:
-    name: "Jira Webhook Secret"
-    description: "Shared secret token to authenticate incoming webhooks and cloudhooks from Jira."
   polling_interval_seconds:
     name: "Polling Interval (Seconds)"
     description: "Interval in seconds to poll Jira for background updates (default: 60). Set to 0 to disable."

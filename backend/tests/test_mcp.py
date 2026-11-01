@@ -128,7 +128,7 @@ def test_mcp_handler_create_issue_calls_jira_client_with_rank_and_broadcasts() -
             summary="New MCP Task",
             priority=Priority.HIGH,
             issue_type=IssueType.TASK,
-            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            status=JiraStatus(id="ready", name="Ready", category=StatusCategory.TODO),
             rank="0|i00000:",
             updated_at="2026-10-21T00:00:00Z",
         )
@@ -154,6 +154,7 @@ def test_mcp_handler_create_issue_calls_jira_client_with_rank_and_broadcasts() -
         # Verify rank and rank_before_key were passed to jira_client.create_issue
         mock_client.create_issue.assert_awaited_once()
         _, kwargs = mock_client.create_issue.call_args
+        assert kwargs.get("status_name") == "Ready"
         assert "rank" in kwargs and kwargs["rank"] is not None
         assert kwargs["rank"] < "0|i00001:"
         assert kwargs.get("rank_before_key") == "PROJ-101"
@@ -163,6 +164,7 @@ def test_mcp_handler_create_issue_calls_jira_client_with_rank_and_broadcasts() -
         event_data = broadcast_mock.call_args[0][0]
         assert event_data["event"] == "issue_created"
         assert event_data["issue"]["key"] == "PROJ-102"
+        assert event_data["status_name"] == "Ready"
 
     asyncio.run(_test())
 
@@ -221,6 +223,13 @@ def test_mcp_handler_create_issue_calls_jira_client_with_rank_and_broadcasts() -
     assert "home_tasks_transition_task" in tool_names
     assert "home_tasks_add_comment" in tool_names
 
+    # Verify home_tasks_create_task status default is "Ready"
+    create_tool = next(t for t in tools if t["name"] == "home_tasks_create_task")
+    status_prop = create_tool["inputSchema"]["properties"]["status"]
+    assert status_prop.get("default") == "Ready"
+    assert "defaults to 'Ready'" in status_prop.get("description", "")
+    assert "status='Ready'" in create_tool.get("description", "")
+
     # Jira must not be mentioned anywhere in tool names or schemas
     for t in tools:
         assert not t["name"].startswith("jira_")
@@ -271,6 +280,7 @@ def test_mcp_handler_create_issue_calls_jira_client_with_rank_and_broadcasts() -
     assert resp.status_code == 200
     create_res = json.loads(resp.json()["result"]["content"][0]["text"])
     assert "key" in create_res
+    assert create_res.get("status_name") == "Ready"
     created_key = create_res["key"]
 
     # Verify newly created issue appears by default at the TOP of the board
@@ -1011,7 +1021,7 @@ def test_mcp_create_task_broadcasts_websocket_and_returns_dashboard_url() -> Non
         ws_msg = ws.receive_json()
         assert ws_msg.get("event") == "issue_created"
         assert ws_msg.get("issue_key") == created_key
-        assert ws_msg.get("status_name") == "To Do"
+        assert ws_msg.get("status_name") == "Ready"
         assert ws_msg.get("status_category") == "todo"
         assert ws_msg.get("dashboard_url") == expected_url
         assert "issue" in ws_msg
@@ -1035,7 +1045,7 @@ def test_mcp_create_task_respects_configured_dashboard_url() -> None:
             summary="Custom Base URL Task",
             priority=Priority.MEDIUM,
             issue_type=IssueType.TASK,
-            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            status=JiraStatus(id="ready", name="Ready", category=StatusCategory.TODO),
             updated_at="2026-10-25T00:00:00Z",
         )
         mock_client.create_issue = AsyncMock(return_value=created_issue)
@@ -1055,5 +1065,194 @@ def test_mcp_create_task_respects_configured_dashboard_url() -> None:
         assert res["url"] == "https://dashboard.home.local/task/HOME-888"
         assert res["task_url"] == "https://dashboard.home.local/task/HOME-888"
         assert res["dashboard_url"] == "https://dashboard.home.local/task/HOME-888"
+
+    asyncio.run(_test())
+
+
+def test_mcp_create_task_transitions_to_ready_when_jira_defaults_to_todo() -> None:
+    """Verify that when Jira creates a task in 'To Do',
+    MCP handler automatically transitions it to 'Ready'.
+    """
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from jira_dashboard.domain import IssueType, JiraIssue, JiraStatus, Priority, StatusCategory
+    from jira_dashboard.presentation.mcp import MCPServerHandler
+
+    async def _test() -> None:
+        mock_client = AsyncMock()
+        # Simulate Jira initial issue creation in default 'To Do'
+        initial_issue = JiraIssue(
+            id="501",
+            key="HOME-501",
+            summary="Default Status Transition Task",
+            priority=Priority.MEDIUM,
+            issue_type=IssueType.TASK,
+            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            updated_at="2026-11-01T00:00:00Z",
+        )
+        ready_issue = initial_issue.model_copy(
+            update={"status": JiraStatus(id="10003", name="Ready", category=StatusCategory.TODO)}
+        )
+        mock_client.create_issue = AsyncMock(return_value=initial_issue)
+        mock_client.transition_issue = AsyncMock(return_value=ready_issue)
+        mock_storage = MagicMock()
+        mock_storage.get_issues = MagicMock(return_value=[])
+
+        handler = MCPServerHandler(jira_client=mock_client, storage=mock_storage)
+
+        result = await handler.execute_tool(
+            "home_tasks_create_task",
+            {"summary": "Default Status Transition Task"},
+        )
+
+        # 1. create_issue must be called with status_name="Ready"
+        mock_client.create_issue.assert_awaited_once()
+        _, create_kwargs = mock_client.create_issue.call_args
+        assert create_kwargs.get("status_name") == "Ready"
+
+        # 2. Since initial status was "To Do", transition_issue must be awaited to move to "Ready"
+        mock_client.transition_issue.assert_awaited_once_with(
+            "HOME-501",
+            target_category=None,
+            target_status="Ready",
+        )
+
+        # 3. Storage should persist the transitioned "Ready" issue
+        mock_storage.upsert_issue.assert_called_with(ready_issue)
+
+        # 4. Result must return "Ready"
+        assert result["status_name"] == "Ready"
+        assert result["status"]["name"] == "Ready"
+
+    asyncio.run(_test())
+
+
+def test_mcp_create_task_transitions_to_explicit_status_when_jira_defaults_to_todo() -> None:
+    """Verify that specifying an explicit status (e.g. In Progress) transitions the task."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from jira_dashboard.domain import IssueType, JiraIssue, JiraStatus, Priority, StatusCategory
+    from jira_dashboard.presentation.mcp import MCPServerHandler
+
+    async def _test() -> None:
+        mock_client = AsyncMock()
+        initial_issue = JiraIssue(
+            id="502",
+            key="HOME-502",
+            summary="Explicit Status Task",
+            priority=Priority.HIGH,
+            issue_type=IssueType.TASK,
+            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            updated_at="2026-11-01T00:00:00Z",
+        )
+        in_progress_issue = initial_issue.model_copy(
+            update={
+                "status": JiraStatus(
+                    id="2", name="In Progress", category=StatusCategory.IN_PROGRESS
+                )
+            }
+        )
+        mock_client.create_issue = AsyncMock(return_value=initial_issue)
+        mock_client.transition_issue = AsyncMock(return_value=in_progress_issue)
+        mock_storage = MagicMock()
+        mock_storage.get_issues = MagicMock(return_value=[])
+
+        handler = MCPServerHandler(jira_client=mock_client, storage=mock_storage)
+
+        result = await handler.execute_tool(
+            "home_tasks_create_task",
+            {"summary": "Explicit Status Task", "status": "In Progress"},
+        )
+
+        mock_client.create_issue.assert_awaited_once()
+        _, create_kwargs = mock_client.create_issue.call_args
+        assert create_kwargs.get("status_name") == "In Progress"
+
+        mock_client.transition_issue.assert_awaited_once_with(
+            "HOME-502",
+            target_category=StatusCategory.IN_PROGRESS,
+            target_status="In Progress",
+        )
+        assert result["status_name"] == "In Progress"
+        assert result["status_category"] == StatusCategory.IN_PROGRESS.value
+
+    asyncio.run(_test())
+
+
+def test_mcp_create_task_no_transition_needed_if_already_in_requested_status() -> None:
+    """Verify transition_issue is skipped if create_issue returns requested status."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from jira_dashboard.domain import IssueType, JiraIssue, JiraStatus, Priority, StatusCategory
+    from jira_dashboard.presentation.mcp import MCPServerHandler
+
+    async def _test() -> None:
+        mock_client = AsyncMock()
+        ready_issue = JiraIssue(
+            id="503",
+            key="HOME-503",
+            summary="Already Ready Task",
+            priority=Priority.LOW,
+            issue_type=IssueType.TASK,
+            status=JiraStatus(id="10003", name="Ready", category=StatusCategory.TODO),
+            updated_at="2026-11-01T00:00:00Z",
+        )
+        mock_client.create_issue = AsyncMock(return_value=ready_issue)
+        mock_client.transition_issue = AsyncMock()
+        mock_storage = MagicMock()
+        mock_storage.get_issues = MagicMock(return_value=[])
+
+        handler = MCPServerHandler(jira_client=mock_client, storage=mock_storage)
+
+        result = await handler.execute_tool(
+            "home_tasks_create_task",
+            {"summary": "Already Ready Task"},
+        )
+
+        mock_client.create_issue.assert_awaited_once()
+        mock_client.transition_issue.assert_not_called()
+        assert result["status_name"] == "Ready"
+
+    asyncio.run(_test())
+
+
+def test_mcp_create_task_gracefully_handles_transition_failure() -> None:
+    """Verify that if Jira transition fails, the created task is still returned without raising."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from jira_dashboard.domain import IssueType, JiraIssue, JiraStatus, Priority, StatusCategory
+    from jira_dashboard.presentation.mcp import MCPServerHandler
+
+    async def _test() -> None:
+        mock_client = AsyncMock()
+        initial_issue = JiraIssue(
+            id="504",
+            key="HOME-504",
+            summary="Transition Failure Task",
+            priority=Priority.MEDIUM,
+            issue_type=IssueType.TASK,
+            status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+            updated_at="2026-11-01T00:00:00Z",
+        )
+        mock_client.create_issue = AsyncMock(return_value=initial_issue)
+        mock_client.transition_issue = AsyncMock(side_effect=RuntimeError("Transition unavailable"))
+        mock_storage = MagicMock()
+        mock_storage.get_issues = MagicMock(return_value=[])
+
+        handler = MCPServerHandler(jira_client=mock_client, storage=mock_storage)
+
+        result = await handler.execute_tool(
+            "home_tasks_create_task",
+            {"summary": "Transition Failure Task"},
+        )
+
+        mock_client.transition_issue.assert_awaited_once()
+        mock_storage.upsert_issue.assert_called_with(initial_issue)
+        assert result["key"] == "HOME-504"
+        assert result["status_name"] == "To Do"
 
     asyncio.run(_test())

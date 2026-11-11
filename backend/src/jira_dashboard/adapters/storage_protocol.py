@@ -112,6 +112,35 @@ class StorageProtocol(Protocol):
         ...
 
     # -------------------------------------------------------------------------
+    # Board Event Stream & Sequence Control
+    # -------------------------------------------------------------------------
+
+    def append_board_event(
+        self,
+        board_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> int:
+        """Atomically increment current_seq for board_id and record event in outbox_events.
+
+        Returns the newly allocated monotonic sequence number.
+        """
+        ...
+
+    def get_board_events_since(
+        self,
+        board_id: str,
+        since_seq: int,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return board events strictly newer than since_seq ordered by seq ASC."""
+        ...
+
+    def get_latest_board_seq(self, board_id: str) -> int:
+        """Return current sequence number for board_id (or 0 if none exist)."""
+        ...
+
+    # -------------------------------------------------------------------------
     # Daily Gemini Image Quotas
     # -------------------------------------------------------------------------
 

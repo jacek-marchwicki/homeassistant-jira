@@ -216,6 +216,72 @@ class FirestoreStorage:
                 col.document(doc.id).delete()
 
     # -------------------------------------------------------------------------
+    # Board Event Stream & Sequence Control
+    # -------------------------------------------------------------------------
+
+    def append_board_event(
+        self,
+        board_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> int:
+        from datetime import datetime, timezone
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            stream_ref = self.client.collection("board_streams").document(board_id)
+            stream_doc = stream_ref.get()
+            current_seq = (
+                int((stream_doc.to_dict() or {}).get("current_seq", 0)) if stream_doc.exists else 0
+            )
+            new_seq = current_seq + 1
+            stream_ref.set({"current_seq": new_seq, "updated_at": now_iso})
+
+            event_doc = stream_ref.collection("events").document(str(new_seq))
+            event_doc.set(
+                {
+                    "seq": new_seq,
+                    "event_type": event_type,
+                    "payload": payload,
+                    "created_at": now_iso,
+                }
+            )
+            return new_seq
+
+    def get_board_events_since(
+        self,
+        board_id: str,
+        since_seq: int,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        stream_ref = self.client.collection("board_streams").document(board_id)
+        events_query = (
+            stream_ref.collection("events")
+            .where("seq", ">", since_seq)
+            .order_by("seq")
+            .limit(limit)
+        )
+        results = []
+        for doc in events_query.stream():
+            data = doc.to_dict() or {}
+            results.append(
+                {
+                    "seq": int(data.get("seq", 0)),
+                    "event_type": data.get("event_type", ""),
+                    "payload": data.get("payload", {}),
+                    "created_at": data.get("created_at", ""),
+                }
+            )
+        return results
+
+    def get_latest_board_seq(self, board_id: str) -> int:
+        stream_ref = self.client.collection("board_streams").document(board_id)
+        doc = stream_ref.get()
+        if not doc.exists:
+            return 0
+        return int((doc.to_dict() or {}).get("current_seq", 0))
+
+    # -------------------------------------------------------------------------
     # Daily Gemini Image Quotas
     # -------------------------------------------------------------------------
 

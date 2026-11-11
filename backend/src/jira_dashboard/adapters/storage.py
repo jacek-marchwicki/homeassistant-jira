@@ -202,6 +202,35 @@ class SQLiteStorage:
 
                 conn.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS board_streams (
+                        board_id TEXT PRIMARY KEY,
+                        current_seq INTEGER NOT NULL DEFAULT 0,
+                        updated_at TEXT NOT NULL
+                    );
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS outbox_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        board_id TEXT NOT NULL,
+                        seq INTEGER NOT NULL,
+                        event_type TEXT NOT NULL,
+                        payload TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        UNIQUE(board_id, seq)
+                    );
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_outbox_events_board_seq
+                    ON outbox_events(board_id, seq);
+                    """
+                )
+
+                conn.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
                         token TEXT PRIMARY KEY,
                         email TEXT NOT NULL,
@@ -624,6 +653,98 @@ class SQLiteStorage:
                         """,
                         (status, error_message, now, outbox_id),
                     )
+
+    # -------------------------------------------------------------------------
+    # Board Event Stream & Sequence Control
+    # -------------------------------------------------------------------------
+
+    def append_board_event(
+        self,
+        board_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> int:
+        """Atomically increment current_seq for board_id and record event in outbox_events."""
+        from datetime import datetime, timezone
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        payload_json = json.dumps(payload)
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO board_streams (board_id, current_seq, updated_at)
+                    VALUES (?, 1, ?)
+                    ON CONFLICT(board_id) DO UPDATE SET
+                        current_seq = current_seq + 1,
+                        updated_at = excluded.updated_at;
+                    """,
+                    (board_id, now_iso),
+                )
+                cur = conn.execute(
+                    "SELECT current_seq FROM board_streams WHERE board_id = ?;",
+                    (board_id,),
+                )
+                row = cur.fetchone()
+                new_seq = int(row["current_seq"] if isinstance(row, sqlite3.Row) else row[0])
+
+                conn.execute(
+                    """
+                    INSERT INTO outbox_events (board_id, seq, event_type, payload, created_at)
+                    VALUES (?, ?, ?, ?, ?);
+                    """,
+                    (board_id, new_seq, event_type, payload_json, now_iso),
+                )
+                return new_seq
+
+    def get_board_events_since(
+        self,
+        board_id: str,
+        since_seq: int,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return board events strictly newer than since_seq ordered by seq ASC."""
+        with self._lock:
+            conn = self._get_connection()
+            cur = conn.execute(
+                """
+                SELECT seq, event_type, payload, created_at
+                FROM outbox_events
+                WHERE board_id = ? AND seq > ?
+                ORDER BY seq ASC
+                LIMIT ?;
+                """,
+                (board_id, since_seq, limit),
+            )
+            rows = cur.fetchall()
+            events = []
+            for r in rows:
+                raw_payload = r["payload"] if isinstance(r, sqlite3.Row) else r[2]
+                events.append(
+                    {
+                        "seq": int(r["seq"] if isinstance(r, sqlite3.Row) else r[0]),
+                        "event_type": r["event_type"] if isinstance(r, sqlite3.Row) else r[1],
+                        "payload": json.loads(raw_payload)
+                        if isinstance(raw_payload, str)
+                        else raw_payload,
+                        "created_at": r["created_at"] if isinstance(r, sqlite3.Row) else r[3],
+                    }
+                )
+            return events
+
+    def get_latest_board_seq(self, board_id: str) -> int:
+        """Return current sequence number for board_id (or 0 if none exist)."""
+        with self._lock:
+            conn = self._get_connection()
+            cur = conn.execute(
+                "SELECT current_seq FROM board_streams WHERE board_id = ?;",
+                (board_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return 0
+            return int(row["current_seq"] if isinstance(row, sqlite3.Row) else row[0])
 
     def get_background_image(self, content_hash: str) -> dict[str, Any] | None:
         """Retrieve background image metadata by content hash."""

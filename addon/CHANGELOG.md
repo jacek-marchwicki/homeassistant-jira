@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.0
+
+- fix(tests): restore both task sync and websocket offline tests in App.test.tsx
+- fix(frontend): auto-flush offline outbox on websocket reconnect and clear pending badge
+- docs: document GCP PubSub and MQTT outbox architecture under Phase 5.36
+- feat(frontend): track lastSeenSeq and process WebSocket outbox_delta catchup
+- feat(backend): add WebSocket outbox sequence catch-up and live streaming
+- feat(backend): implement AsyncioEventRouter and lifespan event bus wiring
+- feat(navigation): enable URL-based anchor navigation and direct backlog task modal access (HOME-15491)
+- feat(backend): implement unified event bus with GCP PubSub and Mosquitto MQTT adapters
+- feat(backend): add board outbox event storage and monotonic sequence control
+- docs: add implementation plan for GCP PubSub and MQTT outbox architecture
+- docs: add design spec for GCP PubSub, HA MQTT, and outbox architecture
+- fix(router): handle loading state and sync delays for direct task URLs (HOME-15484)
+- feat(backend): implement unified DATA_DIR and deterministic path resolution (HOME-15483)
+- fix(ci): route GCP secret describe through run_cmd and add UndoSnackbar test teardown
+
 ## 0.10.2
 
 - fix(addon): remove obsolete jira_webhook_secret from Home Assistant configuration

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.1
+
+- style: format tests with ruff
+- test(backend): isolate issue deletion test from shared fixtures
+- fix(backend): configure basicConfig and jira_dashboard logger level to INFO
+- feat(backend): add logging for outbox event broadcasts and websocket message transmissions
+- test(backend): update all WebSocket test clients to supply last_seq and expect outbox_delta
+- refactor(backend): remove legacy WebSocketHub broadcast and subscribed_connections
+- feat(backend): route MCP tool mutations through monotonic outbox sequence
+- feat(backend): sequence task deletions, comments, account types, and polling via outbox
+- feat(backend): route Jira webhooks through monotonic outbox sequence
+- feat(backend): require valid last_seq on /ws and reject with WS 1008
+
 ## 0.11.0
 
 - fix(tests): restore both task sync and websocket offline tests in App.test.tsx

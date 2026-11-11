@@ -99,7 +99,7 @@ describe('SettingsView', () => {
       if (url.includes('/api/health')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ status: 'ok', app: 'homeassistant-jira', version: '0.11.0' }),
+          json: async () => ({ status: 'ok', app: 'homeassistant-jira', version: '0.11.1' }),
         });
       }
       return Promise.resolve({ ok: true, json: async () => ({}) });
@@ -118,7 +118,7 @@ describe('SettingsView', () => {
 
     const versionBadge = container.querySelector('[data-testid="app-version"]');
     expect(versionBadge).toBeTruthy();
-    expect(versionBadge?.textContent).toContain('0.11.0');
+    expect(versionBadge?.textContent).toContain('0.11.1');
 
     act(() => root.unmount());
   });
@@ -135,7 +135,7 @@ describe('SettingsView', () => {
 
     const versionBadge = container.querySelector('[data-testid="app-version"]');
     expect(versionBadge).toBeTruthy();
-    expect(versionBadge?.textContent).toContain('0.11.0');
+    expect(versionBadge?.textContent).toContain('0.11.1');
 
     // No error message displayed in alert
     expect(container.querySelector('[role="alert"]')).toBeNull();

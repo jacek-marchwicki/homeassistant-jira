@@ -179,10 +179,16 @@ async def broadcast_mutation_event(
     """Record outbox event in storage, publish WAKE_UP via EventBus, and dispatch to WS router."""
     b_id = board_id or settings.jira_board_id
     try:
-        await event_router.record_and_publish_event(
+        new_seq = await event_router.record_and_publish_event(
             board_id=b_id,
             event_type=event_type,
             payload=message,
+        )
+        logger.info(
+            "Broadcast mutation event '%s' sent on board '%s' (seq: %d)",
+            event_type,
+            b_id,
+            new_seq,
         )
     except Exception as exc:
         logger.debug("Could not record outbox event for %s: %s", event_type, exc)
@@ -2663,6 +2669,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     try:
         # Send initial connection acknowledgment
+        logger.info("Sending connected WebSocket event to client on board '%s'", board_id)
         await websocket.send_json(
             {
                 "event": "connected",
@@ -2677,6 +2684,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             board_id=board_id, since_seq=last_seq, limit=1000
         )
         for ev in missed_events:
+            logger.info(
+                "Sending catch-up WebSocket event '%s' (seq: %d) on board '%s'",
+                ev["event_type"],
+                ev["seq"],
+                board_id,
+            )
             await websocket.send_json(
                 {
                     "event": "outbox_delta",
@@ -2689,6 +2702,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             )
 
         latest_seq = storage.get_latest_board_seq(board_id)
+        logger.info(
+            "Sending catchup_complete WebSocket event on board '%s' (synced_seq: %d)",
+            board_id,
+            latest_seq,
+        )
         await websocket.send_json(
             {
                 "event": "catchup_complete",
@@ -2702,6 +2720,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             try:
                 while True:
                     msg = await queue.get()
+                    logger.info(
+                        "Sending live WebSocket event '%s' (seq: %d) on board '%s'",
+                        msg["type"],
+                        msg["seq"],
+                        msg["board_id"],
+                    )
                     await websocket.send_json(
                         {
                             "event": "outbox_delta",

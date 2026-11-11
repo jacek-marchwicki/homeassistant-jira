@@ -100,6 +100,12 @@ class AsyncioEventRouter:
         new_seq = self.storage.append_board_event(
             board_id=board_id, event_type=event_type, payload=payload
         )
+        logger.info(
+            "New broadcast event '%s' recorded on board '%s' (seq: %d)",
+            event_type,
+            board_id,
+            new_seq,
+        )
         await self.event_bus.publish_wake_up(board_id=board_id, seq=new_seq)
         await self.handle_wake_up(board_id=board_id, seq=new_seq)
         return new_seq

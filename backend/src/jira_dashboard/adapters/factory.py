@@ -14,6 +14,7 @@ from jira_dashboard.config import JiraDashboardSettings
 
 if TYPE_CHECKING:
     from jira_dashboard.adapters.blob_storage import BlobStorageProtocol
+    from jira_dashboard.adapters.event_bus import EventBusProtocol
     from jira_dashboard.adapters.storage_protocol import StorageProtocol
 
 logger = logging.getLogger(__name__)
@@ -103,3 +104,43 @@ def create_blob_storage(settings: JiraDashboardSettings | None = None) -> BlobSt
 
     logger.info("Configuring LocalDiskBlobStorage at %s", settings.background_cache_dir)
     return LocalDiskBlobStorage(settings.background_cache_dir)
+
+
+def create_event_bus(settings: JiraDashboardSettings | None = None) -> EventBusProtocol:
+    """Create a configured EventBusProtocol instance.
+
+    Uses GCPPubSubEventBus under GCP OAuth / pubsub backend,
+    MosquittoMQTTEventBus when MQTT is configured,
+    and falls back to InMemoryEventBus for local development and unit tests.
+    """
+    if settings is None:
+        settings = JiraDashboardSettings.load()
+
+    if settings.event_bus_backend == "pubsub" or (
+        settings.event_bus_backend is None and settings.auth_mode == "gcp_oauth"
+    ):
+        from jira_dashboard.adapters.event_bus import GCPPubSubEventBus
+
+        logger.info(
+            "Configuring GCPPubSubEventBus (project=%s, topic=%s)",
+            settings.gcp_project_id,
+            settings.gcp_pubsub_topic,
+        )
+        return GCPPubSubEventBus(settings)
+
+    if settings.event_bus_backend == "mqtt" or (
+        settings.mqtt_broker_url is not None and settings.event_bus_backend != "in_memory"
+    ):
+        from jira_dashboard.adapters.event_bus import MosquittoMQTTEventBus
+
+        logger.info(
+            "Configuring MosquittoMQTTEventBus (broker=%s, topic=%s)",
+            settings.mqtt_broker_url,
+            settings.mqtt_topic,
+        )
+        return MosquittoMQTTEventBus(settings)
+
+    from jira_dashboard.adapters.event_bus import InMemoryEventBus
+
+    logger.info("Configuring InMemoryEventBus")
+    return InMemoryEventBus()

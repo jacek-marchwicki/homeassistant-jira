@@ -18,9 +18,9 @@ def test_poll_board_issues_detects_delta_and_broadcasts(monkeypatch) -> None:
         main._cached_issue_state.clear()
         main._cached_issue_state["PROJ-101"] = "todo:Configure Ingress:2026-10-04T00:00:00Z"
 
-        # Mock ws_hub broadcast
+        # Mock broadcast_mutation_event
         mock_broadcast = AsyncMock()
-        monkeypatch.setattr(main.ws_hub, "broadcast", mock_broadcast)
+        monkeypatch.setattr(main, "broadcast_mutation_event", mock_broadcast)
 
         # Transition PROJ-101 in fake client to Done
         await main.jira_client.transition_issue("PROJ-101", StatusCategory.DONE)
@@ -30,10 +30,14 @@ def test_poll_board_issues_detects_delta_and_broadcasts(monkeypatch) -> None:
 
         # Verify broadcast was called with updated issue
         assert mock_broadcast.called
-        broadcast_payload = mock_broadcast.call_args[0][0]
-        assert broadcast_payload["event"] == "issue_transitioned"
-        assert broadcast_payload["issue_key"] == "PROJ-101"
-        assert broadcast_payload["status_category"] == "done"
+        kwargs = mock_broadcast.call_args[1]
+        args = mock_broadcast.call_args[0]
+        event_type = kwargs.get("event_type") or (args[0] if len(args) > 0 else None)
+        message = kwargs.get("message") or (args[1] if len(args) > 1 else None)
+        assert event_type == "issue_transitioned"
+        assert message["event"] == "issue_transitioned"
+        assert message["issue_key"] == "PROJ-101"
+        assert message["status_category"] == "done"
 
     asyncio.run(_test())
 

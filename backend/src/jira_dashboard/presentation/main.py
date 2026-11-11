@@ -154,32 +154,18 @@ class DynamicIngressMiddleware:
 
 
 class WebSocketHub:
-    """Manages active WebSocket connections and broadcasts state deltas."""
+    """Manages active WebSocket connections."""
 
     def __init__(self) -> None:
         self.active_connections: list[WebSocket] = []
-        self.subscribed_connections: set[WebSocket] = set()
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
         self.active_connections.append(websocket)
 
-    def mark_router_subscribed(self, websocket: WebSocket) -> None:
-        self.subscribed_connections.add(websocket)
-
     def disconnect(self, websocket: WebSocket) -> None:
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        self.subscribed_connections.discard(websocket)
-
-    async def broadcast(self, message: dict[str, Any]) -> None:
-        for connection in list(self.active_connections):
-            if connection in self.subscribed_connections:
-                continue
-            try:
-                await connection.send_json(message)
-            except Exception:
-                self.disconnect(connection)
 
 
 ws_hub = WebSocketHub()
@@ -190,7 +176,7 @@ async def broadcast_mutation_event(
     message: dict[str, Any],
     board_id: str | None = None,
 ) -> None:
-    """Record outbox event in storage, publish WAKE_UP via EventBus, and broadcast via WS."""
+    """Record outbox event in storage, publish WAKE_UP via EventBus, and dispatch to WS router."""
     b_id = board_id or settings.jira_board_id
     try:
         await event_router.record_and_publish_event(
@@ -200,7 +186,6 @@ async def broadcast_mutation_event(
         )
     except Exception as exc:
         logger.debug("Could not record outbox event for %s: %s", event_type, exc)
-    await ws_hub.broadcast(message)
 
 
 async def _sync_broadcast(event_data: dict[str, Any]) -> None:
@@ -2674,10 +2659,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         return
 
     await ws_hub.connect(websocket)
-    queue: asyncio.Queue[dict[str, Any]] | None = None
-    if last_seq_param is not None:
-        ws_hub.mark_router_subscribed(websocket)
-        queue = event_router.subscribe(board_id)
+    queue = event_router.subscribe(board_id)
 
     try:
         # Send initial connection acknowledgment
@@ -2690,41 +2672,33 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             }
         )
 
-        # Catch-up phase: deliver missed outbox events if last_seq is provided
-        if last_seq_param is not None and queue is not None:
-            try:
-                last_seq = int(last_seq_param)
-            except (ValueError, TypeError):
-                last_seq = 0
-
-            missed_events = storage.get_board_events_since(
-                board_id=board_id, since_seq=last_seq, limit=1000
-            )
-            for ev in missed_events:
-                await websocket.send_json(
-                    {
-                        "event": "outbox_delta",
-                        "board_id": board_id,
-                        "seq": ev["seq"],
-                        "type": ev["event_type"],
-                        "payload": ev["payload"],
-                        "created_at": ev.get("created_at"),
-                    }
-                )
-
-            latest_seq = storage.get_latest_board_seq(board_id)
+        # Catch-up phase: deliver missed outbox events
+        missed_events = storage.get_board_events_since(
+            board_id=board_id, since_seq=last_seq, limit=1000
+        )
+        for ev in missed_events:
             await websocket.send_json(
                 {
-                    "event": "catchup_complete",
+                    "event": "outbox_delta",
                     "board_id": board_id,
-                    "synced_seq": latest_seq,
+                    "seq": ev["seq"],
+                    "type": ev["event_type"],
+                    "payload": ev["payload"],
+                    "created_at": ev.get("created_at"),
                 }
             )
 
+        latest_seq = storage.get_latest_board_seq(board_id)
+        await websocket.send_json(
+            {
+                "event": "catchup_complete",
+                "board_id": board_id,
+                "synced_seq": latest_seq,
+            }
+        )
+
         # Concurrently forward router queue events and listen for client incoming text
         async def _forward_router_events() -> None:
-            if queue is None:
-                return
             try:
                 while True:
                     msg = await queue.get()
@@ -2762,9 +2736,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             except (WebSocketDisconnect, asyncio.CancelledError):
                 pass
 
-        tasks = [asyncio.create_task(_receive_client_messages())]
-        if queue is not None:
-            tasks.append(asyncio.create_task(_forward_router_events()))
+        tasks = [
+            asyncio.create_task(_receive_client_messages()),
+            asyncio.create_task(_forward_router_events()),
+        ]
 
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for t in pending:
@@ -2774,8 +2749,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except Exception as exc:
         logger.debug("WebSocket connection terminated: %s", exc)
     finally:
-        if queue is not None:
-            event_router.unsubscribe(board_id, queue)
+        event_router.unsubscribe(board_id, queue)
         ws_hub.disconnect(websocket)
 
 

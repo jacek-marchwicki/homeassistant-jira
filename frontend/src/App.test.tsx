@@ -163,4 +163,54 @@ describe('App component loading indicator & board rendering', () => {
     expect(snackbar?.textContent).toContain('PROJ-101');
     expect(snackbar?.textContent).toContain('Undo');
   });
+
+  it('renders loading state within task details modal on direct task URL, then displays task upon sync', async () => {
+    window.history.replaceState(null, '', '/task/PROJ-101');
+
+    let resolveFetchBoard!: (val: unknown) => void;
+    global.fetch = vi.fn().mockImplementation(() => new Promise((resolve) => {
+      resolveFetchBoard = resolve;
+    }));
+
+    act(() => {
+      useBoardStore.setState({
+        routeTaskKey: 'PROJ-101',
+        routeTaskStatus: 'loading',
+        editingIssue: null,
+        isLoading: true,
+        initialSyncCompleted: false,
+      });
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    // Verify task details modal is open with loading screen
+    const loadingScreen = container.querySelector('[data-testid="task-sync-loading"]');
+    expect(loadingScreen).not.toBeNull();
+    expect(container.textContent).toContain('PROJ-101');
+
+    // Simulate board sync finishing with PROJ-101
+    await act(async () => {
+      resolveFetchBoard({
+        ok: true,
+        json: async () => ({
+          board_name: 'Engineering Sprint Board',
+          sprint_name: 'Active Sprint 42',
+          columns: [],
+          issues: [testIssue],
+        }),
+      });
+    });
+
+    // Flush store update
+    await act(async () => {
+      useBoardStore.getState().resolveRouteTask();
+    });
+
+    expect(container.querySelector('[data-testid="task-sync-loading"]')).toBeNull();
+    const summaryInput = container.querySelector('#edit-summary') as HTMLInputElement;
+    expect(summaryInput?.value).toBe('Setup CI/CD pipeline');
+  });
 });

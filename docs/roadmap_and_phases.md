@@ -594,6 +594,29 @@ This document details the architectural phases, delivered features, and evolutio
     - Comprehensive unit test suite in [`backend/tests/test_data_dir_resolution.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_data_dir_resolution.py).
     - 100% green verification via `./scripts/run_ci_locally.py`.
 
+---
+
+### Phase 16: Direct Task URL Loading State & Synchronization Resilience (HOME-15484)
+
+- **Overview**:
+  Enhanced the application lifecycle and deep-link routing for direct task URLs (`/task/<KEY>`) so that opening newly created tasks (e.g., via MCP or external systems) cleanly displays loading screens while the initial board synchronization is in progress, automatically transitions to the loaded task upon sync completion, handles missing tasks with a dedicated "Task Not Found" state, handles network/sync failures with an actionable "Sync Error" and retry screen, and recovers immediately when background updates or WebSockets deliver the task.
+- **Key Enhancements**:
+  - **In-Modal Loading State**:
+    - When direct task links are opened before or during initial board data synchronization, the task details modal (`EditIssueModal`) opens immediately with `data-testid="task-sync-loading"` and a clean, accessible spinner rather than displaying a blank board or prematurely redirecting to the root URL.
+  - **Automatic Transition on Sync Completion**:
+    - As soon as the initial data sync (`loadBoard`) completes and the requested issue is present in board data or resolved via single-task retrieval (`/api/issues/{key}`), the modal seamlessly transitions from the loading state directly into the fully populated edit task dialog.
+  - **Dedicated "Task Not Found" State**:
+    - If synchronization finishes successfully and the issue key cannot be found in the board data or on the Jira backend, a friendly "Task Not Found" screen (`data-testid="task-not-found"`) is presented with a "Back to board" action.
+  - **Actionable "Sync Error" State & Retry Capability**:
+    - If the initial synchronization fails (e.g. offline, connection error, or backend 500), the task details modal displays a "Sync could not be completed" banner (`data-testid="task-sync-error"`) along with a "Retry Sync" action that re-triggers `loadBoard()`.
+  - **Instant Background Sync Recovery**:
+    - If a subsequent background sync succeeds or a WebSocket event (`issue_created`, `issue_updated`, `issue_transitioned`, `board_synced`) delivers the task while the modal is in loading, not found, or error state, the modal immediately updates and displays the task without user intervention.
+- **Verification & Testing**:
+  - Store unit tests in `frontend/src/store/boardStore.test.ts` verifying URL preservation, loading states, sync resolution, error states, and WebSocket recovery.
+  - Component unit tests in `frontend/src/components/EditIssueModal.test.tsx` and full-app deep link tests in `frontend/src/App.test.tsx`.
+  - Automated visual regression testing snapshot `component-modal-task-not-found.png` in `frontend/tests/visual/screenshots.spec.ts`.
+  - 100% green verification via `./scripts/run_ci_locally.py`.
+
 
 
 

@@ -498,6 +498,18 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await expect(header.getByRole('button', { name: 'Save' })).toBeVisible();
   });
 
+  test('Capture Direct Task URL Not Found Modal Snapshot', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/task/NONEXISTENT-999');
+
+    const modal = page.locator('div[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    const notFoundView = modal.getByTestId('task-not-found');
+    await expect(notFoundView).toBeVisible();
+    await expect(modal.locator('> div')).toHaveScreenshot('component-modal-task-not-found.png');
+  });
+
   test('Capture Create Issue Modal with Assignee Picker Open Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const createButton = page.getByRole('button', { name: 'Create Issue' });

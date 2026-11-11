@@ -63,7 +63,7 @@ export default function App() {
 
   // Resolve /task/KEY deep links once the issue list (cache, load or websocket) is available
   useEffect(() => {
-    resolveRouteTask();
+    void resolveRouteTask();
   }, [resolveRouteTask, routeTaskKey, issues, isLoading]);
 
   // 1. Check Authentication Status & Initial Load of Board State
@@ -139,7 +139,7 @@ export default function App() {
     return <LoginView />;
   }
 
-  if (isLoading && issues.length === 0) {
+  if (isLoading && issues.length === 0 && !routeTaskKey) {
     return (
       <div
         className="flex flex-col items-center justify-center min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]"
@@ -164,7 +164,7 @@ export default function App() {
     );
   }
 
-  if (errorMessage && !boardName && issues.length === 0) {
+  if (errorMessage && !boardName && issues.length === 0 && !routeTaskKey) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)] p-6">
         <div className="flex flex-col items-center gap-4 text-center max-w-md">
@@ -227,7 +227,8 @@ export default function App() {
       {/* Edit Issue Modal */}
       <EditIssueModal
         issue={editingIssue}
-        isOpen={Boolean(editingIssue)}
+        taskKey={routeTaskKey}
+        isOpen={Boolean(editingIssue || routeTaskKey)}
         onClose={() => setEditingIssue(null)}
       />
 

@@ -1311,11 +1311,131 @@ describe('URL navigation', () => {
     expect(useBoardStore.getState().editingIssue?.key).toBe('HOME-123');
   });
 
-  it('unknown task falls back to the view URL', () => {
-    window.history.replaceState(null, '', '/task/NOPE-1');
-    useBoardStore.getState().applyRoute({ kind: 'task', key: 'NOPE-1' });
-    expect(window.location.pathname).toBe('/people');
+  it('direct task URL /task/KEY preserves URL and sets routeTaskStatus to loading while sync is in progress', () => {
+    window.history.replaceState(null, '', '/task/HOME-15483');
+    useBoardStore.setState({ issues: [], editingIssue: null, isLoading: true, initialSyncCompleted: false });
+    useBoardStore.getState().applyRoute({ kind: 'task', key: 'HOME-15483' });
+
+    expect(window.location.pathname).toBe('/task/HOME-15483');
+    expect(useBoardStore.getState().routeTaskKey).toBe('HOME-15483');
+    expect(useBoardStore.getState().routeTaskStatus).toBe('loading');
     expect(useBoardStore.getState().editingIssue).toBeNull();
+  });
+
+  it('successful sync automatically resolves and displays the task for direct URL', () => {
+    const newTask: JiraIssue = {
+      id: '15483',
+      key: 'HOME-15483',
+      summary: 'Task created via MCP',
+      priority: 'medium',
+      issue_type: 'task',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      updated_at: '2026-11-11T00:00:00Z',
+    };
+
+    useBoardStore.setState({
+      issues: [],
+      routeTaskKey: 'HOME-15483',
+      routeTaskStatus: 'loading',
+      editingIssue: null,
+      isLoading: true,
+      initialSyncCompleted: false,
+    });
+
+    // Simulate board sync completion
+    useBoardStore.setState({
+      issues: [newTask],
+      isLoading: false,
+      isSyncing: false,
+      initialSyncCompleted: true,
+      errorMessage: null,
+    });
+    useBoardStore.getState().resolveRouteTask();
+
+    expect(useBoardStore.getState().editingIssue?.key).toBe('HOME-15483');
+    expect(useBoardStore.getState().routeTaskStatus).toBeNull();
+  });
+
+  it('displays not found state when sync completes successfully but task is not found', async () => {
+    window.history.replaceState(null, '', '/task/NOPE-1');
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ detail: 'Issue NOPE-1 not found' }),
+    });
+
+    useBoardStore.setState({
+      issues: [issue],
+      routeTaskKey: 'NOPE-1',
+      routeTaskStatus: 'loading',
+      editingIssue: null,
+      isLoading: false,
+      isSyncing: false,
+      initialSyncCompleted: true,
+      errorMessage: null,
+    });
+
+    await useBoardStore.getState().resolveRouteTask();
+
+    expect(window.location.pathname).toBe('/task/NOPE-1');
+    expect(useBoardStore.getState().routeTaskKey).toBe('NOPE-1');
+    expect(useBoardStore.getState().routeTaskStatus).toBe('not_found');
+    expect(useBoardStore.getState().editingIssue).toBeNull();
+
+    // Closing modal reverts route to current view
+    useBoardStore.getState().setEditingIssue(null);
+    expect(useBoardStore.getState().routeTaskKey).toBeNull();
+    expect(useBoardStore.getState().routeTaskStatus).toBeNull();
+    expect(window.location.pathname).toBe('/people');
+  });
+
+  it('displays sync error state when initial sync fails', async () => {
+    window.history.replaceState(null, '', '/task/HOME-15483');
+
+    useBoardStore.setState({
+      issues: [],
+      routeTaskKey: 'HOME-15483',
+      routeTaskStatus: 'loading',
+      editingIssue: null,
+      isLoading: false,
+      isSyncing: false,
+      initialSyncCompleted: true,
+      errorMessage: 'Network error connecting to Jira',
+    });
+
+    await useBoardStore.getState().resolveRouteTask();
+
+    expect(useBoardStore.getState().routeTaskKey).toBe('HOME-15483');
+    expect(useBoardStore.getState().routeTaskStatus).toBe('error');
+    expect(useBoardStore.getState().routeTaskError).toBe('Network error connecting to Jira');
+  });
+
+  it('recovers and instantly loads task when background sync or websocket delivers the task', () => {
+    const recoveredTask: JiraIssue = {
+      id: '15483',
+      key: 'HOME-15483',
+      summary: 'Recovered task',
+      priority: 'high',
+      issue_type: 'task',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      updated_at: '2026-11-11T00:00:00Z',
+    };
+
+    useBoardStore.setState({
+      issues: [],
+      routeTaskKey: 'HOME-15483',
+      routeTaskStatus: 'not_found',
+      editingIssue: null,
+    });
+
+    // Simulate WebSocket event issue_created
+    useBoardStore.getState().handleWsMessage({
+      event: 'issue_created',
+      issue: recoveredTask,
+    });
+
+    expect(useBoardStore.getState().editingIssue?.key).toBe('HOME-15483');
+    expect(useBoardStore.getState().routeTaskStatus).toBeNull();
   });
 
   it('applyRoute for a view closes overlays (back navigation)', () => {

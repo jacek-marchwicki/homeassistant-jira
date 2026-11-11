@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, X, Save, AlertCircle, ExternalLink, Calendar, Clock, Copy, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  X,
+  Save,
+  AlertCircle,
+  ExternalLink,
+  Calendar,
+  Clock,
+  Copy,
+  Trash2,
+  Loader2,
+  SearchX,
+} from 'lucide-react';
+import clsx from 'clsx';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue, JiraIssueType, JiraPriority } from '../types/jira.ts';
 import { getAvailableStatuses, getJiraIssueUrl } from '../utils/boardUtils.ts';
@@ -34,11 +47,12 @@ function formatDateTime(isoString?: string | null): string | null {
 
 interface EditIssueModalProps {
   issue: JiraIssue | null;
+  taskKey?: string | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) {
+export function EditIssueModal({ issue, taskKey, isOpen, onClose }: EditIssueModalProps) {
   const {
     issues,
     columns,
@@ -48,6 +62,11 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
     openCreateModal,
     setEditingIssue,
     openIssueByKey,
+    routeTaskKey,
+    routeTaskStatus,
+    routeTaskError,
+    errorMessage,
+    loadBoard,
   } = useBoardStore();
 
 
@@ -120,7 +139,131 @@ export function EditIssueModal({ issue, isOpen, onClose }: EditIssueModalProps) 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen || !issue) return null;
+  if (!isOpen) return null;
+
+  if (!issue) {
+    const currentKey = taskKey || routeTaskKey || 'Task';
+    const isError =
+      routeTaskStatus === 'error' ||
+      (!routeTaskStatus && Boolean(routeTaskError || errorMessage));
+    const isNotFound = routeTaskStatus === 'not_found';
+
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="task-dialog-title"
+        style={outerStyle}
+        className={clsx(
+          'fixed inset-0 z-50 flex items-center justify-center',
+          isMobile ? 'p-0' : 'p-4 bg-black/60 backdrop-blur-xs'
+        )}
+      >
+        <div
+          style={dialogStyle}
+          className={clsx(
+            'flex flex-col bg-[var(--jira-surface)] border border-[var(--jira-border)] shadow-2xl text-[var(--jira-text-primary)]',
+            isMobile
+              ? 'w-full h-full max-h-full rounded-none border-0'
+              : 'w-full max-w-lg rounded-2xl overflow-hidden'
+          )}
+        >
+          {/* Header */}
+          <div
+            data-testid="edit-issue-modal-header"
+            className="flex items-center justify-between px-6 py-4 border-b border-[var(--jira-border)] bg-[var(--jira-surface-elevated)]"
+          >
+            <div className="flex items-center gap-3">
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Back to board"
+                  className="p-2 -ml-2 text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
+              <h2 id="task-dialog-title" className="text-base font-semibold text-[var(--jira-text-primary)]">
+                {isError ? 'Sync Error' : isNotFound ? 'Task Not Found' : `Task ${currentKey}`}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close modal"
+              className="p-2 text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Body Content */}
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center min-h-[260px]">
+            {isError ? (
+              <div data-testid="task-sync-error" className="flex flex-col items-center max-w-sm">
+                <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
+                <h3 className="text-lg font-bold text-[var(--jira-text-primary)] mb-1">
+                  Sync could not be completed
+                </h3>
+                <p className="text-sm text-[var(--jira-text-secondary)] mb-6">
+                  {routeTaskError || errorMessage || 'Unable to sync task data. Please check your connection.'}
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    data-testid="retry-sync-button"
+                    onClick={() => {
+                      void loadBoard();
+                    }}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-[var(--jira-primary)] hover:bg-[var(--jira-primary-hover)] rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors cursor-pointer shadow-xs active:scale-95"
+                  >
+                    Retry Sync
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="back-to-board-button"
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm font-semibold text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] border border-[var(--jira-border)] rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    Back to board
+                  </button>
+                </div>
+              </div>
+            ) : isNotFound ? (
+              <div data-testid="task-not-found" className="flex flex-col items-center max-w-sm">
+                <SearchX className="w-12 h-12 text-[var(--jira-text-secondary)] mb-3" />
+                <h3 className="text-lg font-bold text-[var(--jira-text-primary)] mb-1">
+                  Task Not Found
+                </h3>
+                <p className="text-sm text-[var(--jira-text-secondary)] mb-6">
+                  Task <strong className="text-[var(--jira-text-primary)]">{currentKey}</strong> could not be found. It may have been deleted or does not exist.
+                </p>
+                <button
+                  type="button"
+                  data-testid="back-to-board-button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-[var(--jira-primary)] hover:bg-[var(--jira-primary-hover)] rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors cursor-pointer shadow-xs active:scale-95"
+                >
+                  Back to board
+                </button>
+              </div>
+            ) : (
+              <div data-testid="task-sync-loading" className="flex flex-col items-center max-w-sm">
+                <Loader2 className="w-10 h-10 text-[var(--jira-primary)] animate-spin mb-4" />
+                <h3 className="text-base font-semibold text-[var(--jira-text-primary)] mb-1">
+                  Loading task {currentKey}...
+                </h3>
+                <p className="text-xs text-[var(--jira-text-secondary)]">
+                  Syncing task details with Jira...
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

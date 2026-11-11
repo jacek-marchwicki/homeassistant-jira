@@ -769,6 +769,146 @@ function setInputValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
       Object.defineProperty(window, 'visualViewport', { value: originalVisualViewport, writable: true });
     }
   });
+
+  describe('Direct Task URL Loading, Not Found, Error, and Recovery States', () => {
+    it('renders loading state within task details view while initial data sync is in progress', async () => {
+      useBoardStore.setState({
+        routeTaskKey: 'HOME-15483',
+        routeTaskStatus: 'loading',
+      });
+
+      await act(async () => {
+        root.render(
+          <EditIssueModal
+            issue={null}
+            taskKey="HOME-15483"
+            isOpen={true}
+            onClose={vi.fn()}
+          />
+        );
+      });
+
+      const loadingView = container.querySelector('[data-testid="task-sync-loading"]');
+      expect(loadingView).not.toBeNull();
+      expect(container.textContent).toContain('HOME-15483');
+      expect(container.textContent).toMatch(/loading task|syncing/i);
+    });
+
+    it('renders Task Not Found message when sync completes but task is missing', async () => {
+      const handleClose = vi.fn();
+      useBoardStore.setState({
+        routeTaskKey: 'HOME-15483',
+        routeTaskStatus: 'not_found',
+      });
+
+      await act(async () => {
+        root.render(
+          <EditIssueModal
+            issue={null}
+            taskKey="HOME-15483"
+            isOpen={true}
+            onClose={handleClose}
+          />
+        );
+      });
+
+      const notFoundView = container.querySelector('[data-testid="task-not-found"]');
+      expect(notFoundView).not.toBeNull();
+      expect(container.textContent).toContain('Task Not Found');
+      expect(container.textContent).toContain('HOME-15483');
+
+      // Click "Back to board"
+      const backBtn = container.querySelector('button[data-testid="back-to-board-button"]') ||
+        Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Back to board'));
+      expect(backBtn).not.toBeNull();
+
+      await act(async () => {
+        backBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(handleClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders Sync Error state with retry button when sync cannot be completed', async () => {
+      const loadBoardSpy = vi.fn().mockResolvedValue(undefined);
+      useBoardStore.setState({
+        routeTaskKey: 'HOME-15483',
+        routeTaskStatus: 'error',
+        routeTaskError: 'Unable to connect to Jira backend server.',
+        loadBoard: loadBoardSpy,
+      });
+
+      await act(async () => {
+        root.render(
+          <EditIssueModal
+            issue={null}
+            taskKey="HOME-15483"
+            isOpen={true}
+            onClose={vi.fn()}
+          />
+        );
+      });
+
+      const errorView = container.querySelector('[data-testid="task-sync-error"]');
+      expect(errorView).not.toBeNull();
+      expect(container.textContent).toMatch(/sync error|sync could not/i);
+      expect(container.textContent).toContain('Unable to connect to Jira backend server.');
+
+      const retryBtn = container.querySelector('button[data-testid="retry-sync-button"]') ||
+        Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Retry'));
+      expect(retryBtn).not.toBeNull();
+
+      await act(async () => {
+        retryBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(loadBoardSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('automatically transitions from loading state to full task view when issue is loaded', async () => {
+      useBoardStore.setState({
+        routeTaskKey: 'HOME-15483',
+        routeTaskStatus: 'loading',
+      });
+
+      await act(async () => {
+        root.render(
+          <EditIssueModal
+            issue={null}
+            taskKey="HOME-15483"
+            isOpen={true}
+            onClose={vi.fn()}
+          />
+        );
+      });
+
+      expect(container.querySelector('[data-testid="task-sync-loading"]')).not.toBeNull();
+
+      // Issue becomes available (sync complete or recovery)
+      const syncedIssue: JiraIssue = {
+        id: '15483',
+        key: 'HOME-15483',
+        summary: 'Newly synced task from Jira',
+        priority: 'high',
+        issue_type: 'task',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      };
+
+      await act(async () => {
+        root.render(
+          <EditIssueModal
+            issue={syncedIssue}
+            taskKey="HOME-15483"
+            isOpen={true}
+            onClose={vi.fn()}
+          />
+        );
+      });
+
+      expect(container.querySelector('[data-testid="task-sync-loading"]')).toBeNull();
+      const summaryInput = container.querySelector('#edit-summary') as HTMLInputElement;
+      expect(summaryInput?.value).toBe('Newly synced task from Jira');
+      expect(container.textContent).toContain('HOME-15483');
+    });
+  });
 });
 
 

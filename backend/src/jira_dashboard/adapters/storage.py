@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from jira_dashboard.config import ensure_local_data_dir
+from jira_dashboard.config import resolve_data_dir
 from jira_dashboard.domain import (
     BoardColumn,
     IssueType,
@@ -31,24 +31,26 @@ CURRENT_SCHEMA_VERSION = 1
 class SQLiteStorage:
     """Thread-safe SQLite storage adapter for Home Assistant Jira Dashboard."""
 
-    def __init__(self, db_path: Path | str = ":memory:") -> None:
-        self.db_path = str(db_path)
-        if self.db_path != ":memory:":
-            target_path = Path(self.db_path)
-            # If path targets relative data/ directory, ensure worktree symlink is established
-            if not target_path.is_absolute() and (
-                target_path.parts[:1] == ("data",) or target_path.parts[:2] == (".", "data")
-            ):
-                dev_data = ensure_local_data_dir()
-                self.db_path = str((dev_data / target_path.name).resolve())
-                Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, db_path: Path | str | None = None) -> None:
+        if db_path is None:
+            resolved_dir = resolve_data_dir()
+            self.db_path = str((resolved_dir / "jira_dashboard.sqlite3").resolve())
+        elif str(db_path) == ":memory:":
+            self.db_path = ":memory:"
+        else:
+            target_path = Path(db_path)
+            # Resolve relative data directory or path using resolve_data_dir()
+            if not target_path.is_absolute():
+                resolved_dir = resolve_data_dir()
+                if target_path.parts[:1] == ("data",) or target_path.parts[:2] == (".", "data"):
+                    self.db_path = str((resolved_dir / target_path.name).resolve())
+                else:
+                    self.db_path = str((resolved_dir / target_path).resolve())
             else:
-                try:
-                    Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-                except OSError:
-                    dev_data = ensure_local_data_dir()
-                    self.db_path = str((dev_data / "jira_dashboard.sqlite3").resolve())
-                    Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+                self.db_path = str(target_path.resolve())
+
+        if self.db_path != ":memory:":
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._conn: sqlite3.Connection | None = None
 

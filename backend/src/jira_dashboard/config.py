@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +73,54 @@ def ensure_local_data_dir(base_dir: Path | None = None) -> Path:
     return data_dir
 
 
+def _is_writable_directory(path: Path) -> bool:
+    """Check if a directory exists and is writable without relying on mkdir failing."""
+    try:
+        if not path.exists():
+            try:
+                path.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                return False
+        if not path.is_dir():
+            return False
+        test_file = path / f".writable_test_{os.getpid()}_{time.time_ns()}"
+        test_file.touch()
+        test_file.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def resolve_data_dir(base_dir: Path | None = None) -> Path:
+    """Resolve unified application data directory deterministically.
+
+    Resolution Hierarchy:
+    1. Explicit DATA_DIR environment variable.
+    2. Active Home Assistant Environment (/data) - only if SUPERVISOR_TOKEN
+       or options.json exists AND /data is writable.
+    3. Local Development (repo root ./data via ensure_local_data_dir()).
+    """
+    # 1. Explicit DATA_DIR environment variable
+    data_dir_env = os.environ.get("DATA_DIR")
+    if data_dir_env and data_dir_env.strip():
+        data_path = Path(data_dir_env.strip()).resolve()
+        data_path.mkdir(parents=True, exist_ok=True)
+        (data_path / "background_cache").mkdir(parents=True, exist_ok=True)
+        return data_path
+
+    # 2. Active Home Assistant Environment (/data)
+    ha_token = os.environ.get("SUPERVISOR_TOKEN")
+    ha_options = Path("/data/options.json").is_file()
+    if ha_token or ha_options:
+        ha_data = Path("/data")
+        if _is_writable_directory(ha_data):
+            (ha_data / "background_cache").mkdir(parents=True, exist_ok=True)
+            return ha_data
+
+    # 3. Local Development (repo root ./data via ensure_local_data_dir())
+    return ensure_local_data_dir(base_dir)
+
+
 class JiraDashboardSettings(BaseModel):
     """Application settings for Jira Dashboard."""
 
@@ -110,9 +159,13 @@ class JiraDashboardSettings(BaseModel):
     polling_interval_seconds: int = Field(
         default=60, description="Interval in seconds for fallback polling (0 disables polling)"
     )
-    sqlite_db_path: Path | str = Field(
-        default="/data/jira_dashboard.sqlite3",
-        description="Path to SQLite database for offline storage",
+    data_dir: Path = Field(
+        default_factory=resolve_data_dir,
+        description="Unified data directory for SQLite database, cache, and options",
+    )
+    sqlite_db_path: Path | str | None = Field(
+        default=None,
+        description="Path to SQLite database for offline storage (defaults to SQLite in data_dir)",
     )
     gemini_api_key: str | None = Field(
         default=None, description="Google GenAI / Gemini API key for AI background generation"
@@ -196,6 +249,15 @@ class JiraDashboardSettings(BaseModel):
             return set()
         return {email.strip().lower() for email in self.allowed_emails.split(",") if email.strip()}
 
+    @field_validator("data_dir", mode="before")
+    @classmethod
+    def _sanitize_data_dir(cls, v: Any) -> Path:
+        if isinstance(v, str):
+            return Path(v).resolve()
+        if isinstance(v, Path):
+            return v.resolve()
+        return resolve_data_dir()
+
     @field_validator("gemini_api_key", mode="before")
     @classmethod
     def _sanitize_gemini_api_key(cls, v: Any) -> str | None:
@@ -218,18 +280,24 @@ class JiraDashboardSettings(BaseModel):
         return str(v).strip()
 
     @property
+    def effective_sqlite_db_path(self) -> Path | str:
+        """Resolved path to the SQLite database file."""
+        if self.sqlite_db_path is not None:
+            db_str = str(self.sqlite_db_path)
+            if db_str == ":memory:":
+                return ":memory:"
+            p = Path(self.sqlite_db_path)
+            if p.is_absolute():
+                return p
+            return (self.data_dir / p).resolve()
+        return (self.data_dir / "jira_dashboard.sqlite3").resolve()
+
+    @property
     def background_cache_dir(self) -> Path:
         """Directory where generated background images are cached on disk."""
-        candidate = Path(self.sqlite_db_path).parent / "background_cache"
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            return candidate
-        except OSError:
-            # Fallback to local data/background_cache in local development / testing
-            dev_data = ensure_local_data_dir()
-            dev_candidate = (dev_data / "background_cache").resolve()
-            dev_candidate.mkdir(parents=True, exist_ok=True)
-            return dev_candidate
+        candidate = (self.data_dir / "background_cache").resolve()
+        candidate.mkdir(parents=True, exist_ok=True)
+        return candidate
 
     @property
     def jira_webhook_secret(self) -> str | None:
@@ -250,12 +318,18 @@ class JiraDashboardSettings(BaseModel):
         """Load configuration from HA options file or environment variables."""
         config_data: dict[str, str | int] = {}
 
-        # 1. Attempt to load from Home Assistant /data/options.json
-        path = (
-            Path(options_path)
-            if options_path
-            else Path(os.environ.get("HA_OPTIONS_PATH", DEFAULT_OPTIONS_PATH))
-        )
+        # 1. Attempt to load from Home Assistant /data/options.json or DATA_DIR/options.json
+        if options_path:
+            path = Path(options_path)
+        elif "HA_OPTIONS_PATH" in os.environ:
+            path = Path(os.environ["HA_OPTIONS_PATH"])
+        else:
+            resolved_data_dir = resolve_data_dir()
+            candidate_options = resolved_data_dir / "options.json"
+            if candidate_options.is_file():
+                path = candidate_options
+            else:
+                path = DEFAULT_OPTIONS_PATH
         if path.is_file():
             try:
                 with open(path, encoding="utf-8") as f:
@@ -267,6 +341,7 @@ class JiraDashboardSettings(BaseModel):
 
         # 2. Overlay / Fallback to Environment Variables
         env_mappings: dict[str, str] = {
+            "data_dir": "DATA_DIR",
             "jira_url": "JIRA_URL",
             "dashboard_url": "DASHBOARD_URL",
             "jira_email": "JIRA_EMAIL",

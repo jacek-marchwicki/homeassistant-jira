@@ -73,8 +73,8 @@ def create_storage(settings: JiraDashboardSettings | None = None) -> StorageProt
 
     from jira_dashboard.adapters.storage import SQLiteStorage
 
-    logger.info("Configuring SQLiteStorage at %s", settings.sqlite_db_path)
-    return SQLiteStorage(settings.sqlite_db_path)
+    logger.info("Configuring SQLiteStorage at %s", settings.effective_sqlite_db_path)
+    return SQLiteStorage(settings.effective_sqlite_db_path)
 
 
 def create_blob_storage(settings: JiraDashboardSettings | None = None) -> BlobStorageProtocol:

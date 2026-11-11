@@ -5,6 +5,7 @@ import { AssigneeAvatar } from './AssigneeAvatar.tsx';
 import { AccountType, getAccountType, getAssigneesFromBoard } from '../utils/boardUtils.ts';
 import { getApiUrl } from '../utils/paths.ts';
 import { APP_VERSION } from '../utils/version.ts';
+import { buildHref, shouldHandleNavigation } from '../utils/navigation.ts';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'parent', label: 'Parent' },
@@ -24,6 +25,7 @@ export function SettingsView() {
     accountTypes,
     setAccountType,
     closeSettings,
+    currentView,
     errorMessage,
     authStatus,
     logout,
@@ -59,15 +61,21 @@ export function SettingsView() {
     <div className="min-h-screen bg-[var(--jira-canvas)] text-[var(--jira-text-primary)]">
       <main className="p-4 sm:p-6 pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] max-w-3xl w-full mx-auto" aria-label="Settings">
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={closeSettings}
-          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer"
+        <a
+          href={buildHref({ kind: 'view', view: currentView })}
+          role="button"
+          onClick={(e) => {
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              closeSettings();
+            }
+          }}
+          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer select-none no-underline"
           aria-label="Back to board"
           title="Back"
         >
           <ArrowLeft className="w-5 h-5" />
-        </button>
+        </a>
         <h1 className="text-lg font-bold text-[var(--jira-text-primary)]">Settings</h1>
       </div>
       {errorMessage && (

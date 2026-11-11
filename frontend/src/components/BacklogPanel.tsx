@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, ExternalLink, ListTodo } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { JiraIssue } from '../types/jira.ts';
 import { BacklogList } from './BacklogList.tsx';
+import { buildHref, shouldHandleNavigation } from '../utils/navigation.ts';
 
 interface BacklogPanelProps {
   issues: JiraIssue[];
@@ -38,15 +39,22 @@ export function BacklogPanel({ issues, isHighlighted = false }: BacklogPanelProp
 
         <div className="flex items-center gap-2">
           {/* Switch to Dedicated Backlog View */}
-          <button
-            onClick={() => setCurrentView('backlog')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] border border-[var(--jira-border)] transition-colors min-h-[36px] cursor-pointer"
+          <a
+            href={buildHref({ kind: 'view', view: 'backlog' })}
+            role="button"
+            onClick={(e) => {
+              if (shouldHandleNavigation(e)) {
+                e.preventDefault();
+                setCurrentView('backlog');
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] border border-[var(--jira-border)] transition-colors min-h-[36px] cursor-pointer select-none no-underline"
             title="Open Dedicated Full Backlog View"
             aria-label="Open Full Backlog View"
           >
             <span>Open Backlog View</span>
             <ExternalLink className="w-3.5 h-3.5" />
-          </button>
+          </a>
 
           {/* Toggle Expand / Collapse */}
           <button

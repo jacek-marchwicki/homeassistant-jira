@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useBoardStore } from '../store/boardStore.ts';
 import { isDoneIssueWithinDays, splitIssuesByBacklog } from '../utils/boardUtils.ts';
+import { buildHref, shouldHandleNavigation } from '../utils/navigation.ts';
 
 export interface HeaderProps {
   canInstall?: boolean;
@@ -119,9 +120,16 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
         {/* View Switcher: People vs Backlog - Text hidden on mobile in favor of icons */}
         <div className="flex items-center p-0.5 sm:p-1 rounded-lg border border-[var(--jira-border)] bg-[var(--jira-canvas)] shrink-0">
 
-          <button
-            onClick={() => setCurrentView('people')}
-            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs transition-colors cursor-pointer min-h-[32px] sm:min-h-[36px] ${
+          <a
+            href={buildHref({ kind: 'view', view: 'people' })}
+            role="button"
+            onClick={(e) => {
+              if (shouldHandleNavigation(e)) {
+                e.preventDefault();
+                setCurrentView('people');
+              }
+            }}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs transition-colors cursor-pointer select-none no-underline min-h-[32px] sm:min-h-[36px] ${
               currentView === 'people'
                 ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
                 : 'text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
@@ -140,11 +148,18 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
             >
               {peopleIssuesCount}
             </span>
-          </button>
+          </a>
 
-          <button
-            onClick={() => setCurrentView('backlog')}
-            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs transition-colors cursor-pointer min-h-[32px] sm:min-h-[36px] ${
+          <a
+            href={buildHref({ kind: 'view', view: 'backlog' })}
+            role="button"
+            onClick={(e) => {
+              if (shouldHandleNavigation(e)) {
+                e.preventDefault();
+                setCurrentView('backlog');
+              }
+            }}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs transition-colors cursor-pointer select-none no-underline min-h-[32px] sm:min-h-[36px] ${
               currentView === 'backlog'
                 ? 'bg-[var(--jira-primary)] text-white shadow-xs font-semibold'
                 : 'text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)]'
@@ -163,14 +178,20 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
             >
               {backlogIssues.length}
             </span>
-          </button>
+          </a>
         </div>
 
         {/* Sync & Live WebSocket Status */}
-        <button
-          type="button"
-          onClick={() => setConnectionModalOpen(true)}
-          className="flex items-center shrink-0 cursor-pointer rounded-full"
+        <a
+          href={buildHref({ kind: 'status' })}
+          role="button"
+          onClick={(e) => {
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              setConnectionModalOpen(true);
+            }
+          }}
+          className="flex items-center shrink-0 cursor-pointer rounded-full select-none no-underline"
           title="Connection status details"
           aria-haspopup="dialog"
           data-testid="connection-status-button"
@@ -222,18 +243,24 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
               </>
             )}
           </span>
-        </button>
+        </a>
 
-        {/* Settings: icon-only button that opens the full-screen Settings page */}
-        <button
-          type="button"
-          onClick={openSettings}
-          className="flex items-center justify-center min-h-[32px] sm:min-h-[36px] min-w-[32px] sm:min-w-[36px] rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer shrink-0"
+        {/* Settings: icon-only link that opens the full-screen Settings page */}
+        <a
+          href={buildHref({ kind: 'settings' })}
+          role="button"
+          onClick={(e) => {
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              openSettings();
+            }
+          }}
+          className="flex items-center justify-center min-h-[32px] sm:min-h-[36px] min-w-[32px] sm:min-w-[36px] rounded-lg text-[var(--jira-text-secondary)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] cursor-pointer shrink-0 select-none no-underline"
           title="Settings"
           aria-label="Settings"
         >
           <Settings className="w-4 h-4" />
-        </button>
+        </a>
 
         {/* Dark/Light/Kiosk Theme Switcher: Dropdown on Mobile */}
         <div className="sm:hidden relative shrink-0" ref={themeMenuRef}>
@@ -382,15 +409,22 @@ export function Header({ canInstall = false, onInstall }: HeaderProps) {
         )}
 
         {/* Create Issue Button - stuck to top right corner */}
-        <button
-          onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-[var(--jira-primary)] text-white hover:bg-[var(--jira-primary-hover)] transition-colors text-xs font-semibold shadow-xs cursor-pointer min-h-[32px] sm:min-h-[36px] shrink-0"
+        <a
+          href={buildHref({ kind: 'create' })}
+          role="button"
+          onClick={(e) => {
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              setCreateModalOpen(true);
+            }
+          }}
+          className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-[var(--jira-primary)] text-white hover:bg-[var(--jira-primary-hover)] transition-colors text-xs font-semibold shadow-xs cursor-pointer min-h-[32px] sm:min-h-[36px] shrink-0 select-none no-underline"
           title="Create Issue"
           aria-label="Create Issue"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Create</span>
-        </button>
+        </a>
       </div>
     </header>
   );

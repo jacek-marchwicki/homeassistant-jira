@@ -51,12 +51,45 @@ describe('BacklogIssueRow component', () => {
     expect(container.textContent).toContain('Backlog');
     expect(container.textContent).toContain('To Board');
 
-    // Issue key Jira link
-    const link = container.querySelector('a[aria-label="Open PROJ-104 in Jira"]') as HTMLAnchorElement;
+    // Issue key links to internal task description, not external Jira
+    const link = container.querySelector('a[aria-label="Open PROJ-104"]') as HTMLAnchorElement;
     expect(link).not.toBeNull();
-    expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
-    expect(link.getAttribute('href')).toBe('https://jira.example.com/browse/PROJ-104');
+    expect(link.getAttribute('href')).toBe('/task/PROJ-104');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('calls setEditingIssue when issue key link is clicked instead of opening Jira directly', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    const setEditingIssueSpy = vi.fn();
+    act(() => {
+      useBoardStore.setState({
+        setEditingIssue: setEditingIssueSpy,
+      });
+    });
+
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockBacklogIssue.key]}>
+            <BacklogIssueRow issue={mockBacklogIssue} />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const keyLink = container.querySelector('a[aria-label="Open PROJ-104"]') as HTMLAnchorElement;
+    expect(keyLink).not.toBeNull();
+
+    await act(async () => {
+      keyLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(setEditingIssueSpy).toHaveBeenCalledWith(mockBacklogIssue);
 
     await act(async () => {
       root.unmount();

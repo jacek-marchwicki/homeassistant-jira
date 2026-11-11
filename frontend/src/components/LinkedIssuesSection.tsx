@@ -6,6 +6,7 @@ import { PriorityIcon } from './PriorityIcon.tsx';
 import { StatusIcon } from './StatusIcon.tsx';
 import { useBoardStore } from '../store/boardStore.ts';
 import { getJiraIssueUrl } from '../utils/boardUtils.ts';
+import { buildHref, shouldHandleNavigation } from '../utils/navigation.ts';
 
 interface LinkedIssuesSectionProps {
   issue: JiraIssue;
@@ -51,20 +52,20 @@ export function LinkedIssuesSection({ issue, onSelectIssue }: LinkedIssuesSectio
           return (
             <div
               key={link.id || `${link.relationship}-${targetKey}`}
-              role="button"
-              tabIndex={0}
-              data-testid={`linked-issue-${targetKey}`}
-              onClick={() => onSelectIssue?.(targetKey)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelectIssue?.(targetKey);
-                }
-              }}
-              className="group flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-[var(--jira-canvas)] hover:bg-[var(--jira-surface-hover)] border border-[var(--jira-border)] transition-colors cursor-pointer min-h-[44px] text-xs"
-              aria-label={`Open linked task ${targetKey}: ${targetSummary}`}
+              className="group flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-[var(--jira-canvas)] hover:bg-[var(--jira-surface-hover)] border border-[var(--jira-border)] transition-colors min-h-[44px] text-xs"
             >
-              <div className="flex items-center gap-2 min-w-0 flex-1">
+              <a
+                href={buildHref({ kind: 'task', key: targetKey })}
+                data-testid={`linked-issue-${targetKey}`}
+                onClick={(e) => {
+                  if (shouldHandleNavigation(e)) {
+                    e.preventDefault();
+                    onSelectIssue?.(targetKey);
+                  }
+                }}
+                className="flex items-center gap-2 min-w-0 flex-1 no-underline cursor-pointer select-none"
+                aria-label={`Open linked task ${targetKey}: ${targetSummary}`}
+              >
                 {/* Relationship pill */}
                 <span className="shrink-0 px-2 py-0.5 rounded text-2xs font-semibold tracking-wide uppercase bg-[var(--jira-surface)] border border-[var(--jira-border)] text-[var(--jira-text-secondary)]">
                   {link.relationship}
@@ -74,15 +75,15 @@ export function LinkedIssuesSection({ issue, onSelectIssue }: LinkedIssuesSectio
                 <IssueTypeIcon type={targetType} className="w-3.5 h-3.5 shrink-0" />
 
                 {/* Issue Key */}
-                <span className="font-mono text-xs font-semibold text-[var(--jira-primary)] shrink-0 group-hover:underline">
+                <span className="font-mono text-xs font-semibold text-[var(--jira-primary)] shrink-0 hover:underline">
                   {targetKey}
                 </span>
 
                 {/* Issue Summary */}
-                <span className="text-xs text-[var(--jira-text-primary)] truncate" title={targetSummary}>
+                <span className="text-xs text-[var(--jira-text-primary)] truncate hover:underline" title={targetSummary}>
                   {targetSummary}
                 </span>
-              </div>
+              </a>
 
               {/* Status, Priority & External Link */}
               <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
@@ -120,7 +121,7 @@ export function LinkedIssuesSection({ issue, onSelectIssue }: LinkedIssuesSectio
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="p-1 rounded hover:bg-[var(--jira-surface)] text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] transition-colors min-w-[28px] min-h-[28px] inline-flex items-center justify-center"
+                    className="p-1 rounded hover:bg-[var(--jira-surface)] text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] transition-colors min-w-[28px] min-h-[28px] inline-flex items-center justify-center cursor-pointer"
                     title={`Open ${targetKey} in Jira`}
                     aria-label={`Open ${targetKey} in Jira`}
                   >

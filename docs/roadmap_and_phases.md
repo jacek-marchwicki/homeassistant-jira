@@ -573,6 +573,8 @@ This document details the architectural phases, delivered features, and evolutio
 
 ---
 
+---
+
 ### Phase 15: Unified DATA_DIR Environment Variable & Deterministic Path Resolution
 
 - **Overview**:
@@ -616,6 +618,31 @@ This document details the architectural phases, delivered features, and evolutio
   - Component unit tests in `frontend/src/components/EditIssueModal.test.tsx` and full-app deep link tests in `frontend/src/App.test.tsx`.
   - Automated visual regression testing snapshot `component-modal-task-not-found.png` in `frontend/tests/visual/screenshots.spec.ts`.
   - 100% green verification via `./scripts/run_ci_locally.py`.
+
+---
+
+### Phase 17: Universal URL-Based Navigation & Backlog Task Details Direct Access (HOME-15491)
+
+- **Overview**:
+  Enhanced dashboard accessibility and browser interoperability by transitioning all navigational triggers into semantic anchor elements (`<a>`) with dynamic Ingress-aware URLs (`href`), while enabling direct dashboard task description access when clicking issue keys in the Backlog view.
+- **Key Enhancements**:
+  - **Backlog Direct Task Description Access**:
+    - Clicking the issue key (e.g. `HOME-1234`) in the Backlog view opens the internal dashboard task description/edit modal directly, rather than navigating away to external Jira.
+    - External Jira links remain conveniently accessible inside the task edit modal header with dedicated external link affordances.
+  - **Universal URL Navigation & Context Menu Support**:
+    - Converted all primary navigation elements into semantic `<a>` tags supporting native browser right-click context menus ("Copy link address", "Open link in new tab"), middle mouse button clicks, and keyboard modifiers (Cmd/Ctrl+click).
+    - **Header Controls**: View switchers (`/people`, `/backlog`), "Create" modal trigger (`/create`), Settings page trigger (`/settings`), and Live connection status badge (`/status`).
+    - **Backlog View & Panel**: Task keys, summaries, and edit buttons in `BacklogIssueRow`, as well as "Open Backlog View" in `BacklogPanel`.
+    - **People Board**: Issue keys and summaries in `IssueCard`.
+    - **Settings & Linked Issues**: "Back to board" link in `SettingsView` and linked issue rows in `LinkedIssuesSection`.
+  - **Client-Side Routing & Navigation Helpers**:
+    - Added `buildHref(route: Route): string` in [`frontend/src/utils/navigation.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/navigation.ts) combining dynamic Home Assistant Ingress base paths with route paths.
+    - Added `shouldHandleNavigation(event: React.MouseEvent): boolean` ensuring standard left-clicks trigger instant optimistic Zustand store navigation without full-page reloads, while preserving native browser behaviors for right clicks and modified clicks.
+- **Testing & Verification**:
+  - Unit tests in `frontend/src/utils/navigation.test.ts`, `frontend/src/components/BacklogIssueRow.test.tsx`, `frontend/src/components/Header.test.tsx`, `frontend/src/components/BacklogPanel.test.tsx`, `frontend/src/components/IssueCard.test.tsx`, `frontend/src/components/SettingsView.test.tsx`, and `frontend/src/components/LinkedIssuesSection.test.tsx`.
+  - 18 Playwright full-stack E2E tests passing cleanly.
+  - 45 Playwright visual screenshot regression tests passing cleanly.
+  - 100% green local CI verification via `./scripts/run_ci_locally.py`.
 
 
 

@@ -353,8 +353,9 @@ describe('IssueCard component', () => {
 
     // 2. Click on summary
     const summary = container.querySelector('p') as HTMLElement;
+    expect(summary).not.toBeNull();
     await act(async () => {
-      summary.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      summary.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
     expect(setEditingIssueSpy).toHaveBeenCalledTimes(1);
     expect(setEditingIssueSpy).toHaveBeenCalledWith(mockIssueTodo);
@@ -370,6 +371,22 @@ describe('IssueCard component', () => {
     });
     expect(markDoneSpy).toHaveBeenCalledWith('PROJ-101', 'done', 'Done');
     expect(setEditingIssueSpy).not.toHaveBeenCalled();
+  });
+
+  it('renders anchor element with href to /task/:key allowing right-click URL copy and new tab opening', async () => {
+    await act(async () => {
+      root.render(
+        <DndContext>
+          <SortableContext items={[mockIssueTodo.key]}>
+            <IssueCard issue={mockIssueTodo} />
+          </SortableContext>
+        </DndContext>
+      );
+    });
+
+    const taskLink = container.querySelector('a[href="/task/PROJ-101"]') as HTMLAnchorElement;
+    expect(taskLink).not.toBeNull();
+    expect(taskLink.getAttribute('href')).toBe('/task/PROJ-101');
   });
 
   it('renders default surface background styling when no background image is available', async () => {

@@ -20,6 +20,7 @@ import {
 import { triggerDoneCelebration } from '../utils/celebrationEffects.ts';
 import { useTaskBackground, getCardBackgroundStyle } from '../utils/useTaskBackground.ts';
 import { getViewTransitionName, runWithViewTransition } from '../utils/viewTransition.ts';
+import { buildHref, shouldHandleNavigation } from '../utils/navigation.ts';
 
 interface IssueCardProps {
   issue: JiraIssue;
@@ -63,6 +64,7 @@ export function IssueCard({
   const { backgroundUrl, hasBackground } = useTaskBackground(issue.key);
   const cardBackgroundStyle = getCardBackgroundStyle(backgroundUrl);
   const viewTransitionName = isDragOverlay ? undefined : getViewTransitionName(issue.key, isDone, sourceColumnId);
+  const taskHref = buildHref({ kind: 'task', key: issue.key });
 
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
@@ -104,16 +106,27 @@ export function IssueCard({
       } ${isDragOverlay ? 'shadow-xl ring-2 ring-[var(--jira-primary)] cursor-grabbing' : ''}`}
     >
       <div className="flex items-center justify-between mb-1.5 pointer-events-auto">
-        <div className="flex items-center gap-1.5 shrink-0">
+        <a
+          href={taskHref}
+          onClick={(e) => {
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isDragging) setEditingIssue(issue);
+            }
+          }}
+          className="flex items-center gap-1.5 shrink-0 no-underline cursor-pointer group-hover:underline"
+          title={`Open ${issue.key}`}
+        >
           <IssueTypeIcon type={issue.issue_type || issue.issueType} className="w-3.5 h-3.5 shrink-0" />
           <span
-            className={`text-xs font-bold whitespace-nowrap text-[var(--jira-text-secondary)] ${
+            className={`text-xs font-bold whitespace-nowrap text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] ${
               hasBackground ? 'drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]' : ''
             }`}
           >
             {issue.key}
           </span>
-        </div>
+        </a>
 
         <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
           {/* Direct One-Tap Quick Action: Mark as Done */}
@@ -141,7 +154,19 @@ export function IssueCard({
             : 'text-[var(--jira-text-primary)]'
         }`}
       >
-        {issue.summary}
+        <a
+          href={taskHref}
+          onClick={(e) => {
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isDragging) setEditingIssue(issue);
+            }
+          }}
+          className="hover:underline no-underline text-inherit cursor-pointer"
+        >
+          {issue.summary}
+        </a>
       </p>
 
       <div className="flex items-center justify-between text-xs text-[var(--jira-text-secondary)]">

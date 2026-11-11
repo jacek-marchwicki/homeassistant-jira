@@ -79,6 +79,27 @@ function fullPath(route: Route): string {
   return `${getBasePath()}${buildPath(route)}`;
 }
 
+/** Builds the full href (including dynamic Ingress base path if present) for an anchor element. */
+export function buildHref(route: Route): string {
+  return fullPath(route);
+}
+
+/**
+ * Checks whether an anchor click event should be handled via client-side routing.
+ * Returns false if the user requested a new tab/window via modifier keys (Cmd/Ctrl/Shift/Alt),
+ * middle mouse button, right click, or if default behavior was already prevented.
+ */
+export function shouldHandleNavigation(event: React.MouseEvent): boolean {
+  return (
+    !event.defaultPrevented &&
+    event.button === 0 &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
+
 function currentFullPath(): string {
   return typeof window === 'undefined' ? '' : window.location.pathname;
 }

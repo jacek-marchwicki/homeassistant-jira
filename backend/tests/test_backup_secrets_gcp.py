@@ -87,6 +87,11 @@ def test_backup_creates_and_uploads_existing_files(tmp_path: Path) -> None:
 
         # Check create and versions add were called
         calls = [c[0][0] for c in mock_run.call_args_list]
+        describe_calls = [
+            c for c in calls if len(c) > 2 and c[1] == "secrets" and c[2] == "describe"
+        ]
+        assert len(describe_calls) == 2
+
         created_secrets = [
             c[3] for c in calls if len(c) > 3 and c[1] == "secrets" and c[2] == "create"
         ]

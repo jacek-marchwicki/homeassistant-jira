@@ -541,6 +541,16 @@ This document details the architectural phases, delivered features, and evolutio
     - Unit tests in [`backend/tests/test_release_script.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_release_script.py) verifying semver calculations, manifest updates, changelog formatting, and CLI `--dry-run` behavior.
     - 100% green local CI verification via `./scripts/run_ci_locally.py`.
 
+- [x] **Phase 5.36: CI Test Fixes: GCP Secrets Backup Mocking & Frontend Test Teardown Lifecycle**
+  - [x] **Hermetic GCP Secrets Backup Mock Compatibility**:
+    - Replaced direct `subprocess.run` with `run_cmd` in [`scripts/backup_secrets_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/scripts/backup_secrets_gcp.py) wrapped in `try/except (subprocess.CalledProcessError, OSError)`, preventing `FileNotFoundError: [Errno 2] No such file or directory: 'gcloud'` on systems without Google Cloud CLI.
+    - Added unit test assertion in [`backend/tests/test_backup_secrets_gcp.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_backup_secrets_gcp.py) ensuring Secret Manager `describe` commands are routed through mockable `run_cmd`.
+  - [x] **Frontend Component Test Teardown & Timer Lifecycle Cleanup**:
+    - Added `afterEach` hook to [`frontend/src/components/UndoSnackbar.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/UndoSnackbar.test.tsx) unmounting the React DOM root (`root.unmount()`) and resetting Zustand store state (`useBoardStore.setState({ pendingQuickDone: null })`).
+    - Eliminates unhandled `ReferenceError: window is not defined` timer exceptions occurring when component intervals fire after Vitest/happy-dom environment teardown.
+  - [x] **Comprehensive Verification**:
+    - 100% green local CI pipeline verification via `./scripts/run_ci_locally.py`.
+
 ---
 
 ### Phase 14: Android Companion App CI & Local Verification Pipeline Integration

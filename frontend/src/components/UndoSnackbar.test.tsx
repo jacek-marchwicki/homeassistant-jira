@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { UndoSnackbar } from './UndoSnackbar.tsx';
@@ -23,6 +23,14 @@ describe('UndoSnackbar component', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      useBoardStore.setState({ pendingQuickDone: null });
+      root.unmount();
+    });
+    container.remove();
   });
 
   it('renders nothing when pendingQuickDone is null', async () => {

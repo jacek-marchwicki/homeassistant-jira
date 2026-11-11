@@ -290,19 +290,22 @@ def execute_backup(
             continue
 
         # Check if secret exists in GCP
-        exists_check = subprocess.run(
-            [
-                "gcloud",
-                "secrets",
-                "describe",
-                spec.secret_id,
-                f"--project={project_id}",
-            ],
-            capture_output=True,
-            check=False,
-        )
+        secret_exists = False
+        try:
+            run_cmd(
+                [
+                    "gcloud",
+                    "secrets",
+                    "describe",
+                    spec.secret_id,
+                    f"--project={project_id}",
+                ]
+            )
+            secret_exists = True
+        except (subprocess.CalledProcessError, OSError):
+            secret_exists = False
 
-        if exists_check.returncode != 0:
+        if not secret_exists:
             print(f"    Creating secret in GCP Secret Manager: {spec.secret_id}...")
             run_cmd(
                 [

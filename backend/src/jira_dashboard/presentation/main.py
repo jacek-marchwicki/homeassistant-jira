@@ -45,6 +45,7 @@ from jira_dashboard import __version__
 from jira_dashboard.adapters import (
     DEFAULT_COLUMNS,
     BlobStorageProtocol,
+    EventBusProtocol,
     FakeJiraClient,
     GeminiImageClient,
     HomeAssistantCloudhookManager,
@@ -54,6 +55,7 @@ from jira_dashboard.adapters import (
     StorageProtocol,
     compute_background_content_hash,
     create_blob_storage,
+    create_event_bus,
     create_gemini_client,
     create_jira_client,
     create_storage,
@@ -83,6 +85,7 @@ from jira_dashboard.presentation.auth import (
     create_session_token,
     verify_session_token,
 )
+from jira_dashboard.presentation.event_router import AsyncioEventRouter
 from jira_dashboard.presentation.mcp import (
     SERVER_NAME,
     SERVER_VERSION,
@@ -101,6 +104,8 @@ gemini_client: GeminiImageClient | None = create_gemini_client(settings)
 storage: StorageProtocol = create_storage(settings)
 storage.init_db()
 blob_storage: BlobStorageProtocol = create_blob_storage(settings)
+event_bus: EventBusProtocol = create_event_bus(settings)
+event_router = AsyncioEventRouter(storage=storage, event_bus=event_bus)
 
 # Seed SQLite cache from FakeJiraClient only during testing/simulation mode
 if (
@@ -173,6 +178,24 @@ class WebSocketHub:
 ws_hub = WebSocketHub()
 
 
+async def broadcast_mutation_event(
+    event_type: str,
+    message: dict[str, Any],
+    board_id: str | None = None,
+) -> None:
+    """Record outbox event in storage, publish WAKE_UP via EventBus, and broadcast via WS."""
+    b_id = board_id or settings.jira_board_id
+    try:
+        await event_router.record_and_publish_event(
+            board_id=b_id,
+            event_type=event_type,
+            payload=message,
+        )
+    except Exception as exc:
+        logger.debug("Could not record outbox event for %s: %s", event_type, exc)
+    await ws_hub.broadcast(message)
+
+
 async def _sync_broadcast(event_data: dict[str, Any]) -> None:
     global _cached_board_response
     if _cached_board_response is not None:
@@ -192,7 +215,10 @@ async def _sync_broadcast(event_data: dict[str, Any]) -> None:
                     deduped.append(item)
             _cached_board_response.issues = deduped
             _cached_board_response.issues.sort(key=issue_sort_key)
-    await ws_hub.broadcast(event_data)
+    await broadcast_mutation_event(
+        event_type=event_data.get("event", "sync_delta"),
+        message=event_data,
+    )
 
 
 sync_worker = JiraSyncWorker(storage, jira_client, ws_broadcast_func=_sync_broadcast)
@@ -605,6 +631,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 )
             )
 
+    # Start event bus listener for multi-instance WAKE_UP notifications
+    try:
+        await event_bus.start_listening(event_router.handle_wake_up)
+    except Exception as exc:
+        logger.warning("Could not start event bus listener: %s", exc)
+
     if settings.polling_interval_seconds > 0 and settings.has_jira_credentials:
         polling_task = asyncio.create_task(
             fallback_polling_loop(
@@ -636,6 +668,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             pass
     if not cache_warm_task.done():
         cache_warm_task.cancel()
+
+    try:
+        await event_bus.stop_listening()
+    except Exception as exc:
+        logger.debug("Error stopping event bus listener: %s", exc)
 
 
 app = FastAPI(
@@ -1891,15 +1928,16 @@ async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
         base_updated_at=orig_updated_at,
     )
 
-    # 3. Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    # 3. Broadcast real-time delta via WebSockets and record outbox event
+    await broadcast_mutation_event(
+        event_type="issue_transitioned",
+        message={
             "event": "issue_transitioned",
             "issue_key": updated_issue.key,
             "status_category": updated_issue.status.category.value,
             "status_name": updated_issue.status.name,
             "issue": updated_issue.model_dump(),
-        }
+        },
     )
 
     # 4. Trigger async outbox processing without blocking response
@@ -1973,14 +2011,15 @@ async def rank_issue(key: str, request: RankIssueRequest) -> JiraIssue:
         base_updated_at=orig_updated_at,
     )
 
-    # 3. Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    # 3. Broadcast real-time delta via WebSockets and record outbox event
+    await broadcast_mutation_event(
+        event_type="issue_ranked",
+        message={
             "event": "issue_ranked",
             "issue_key": updated_issue.key,
             "rank": updated_issue.rank,
             "issue": updated_issue.model_dump(),
-        }
+        },
     )
 
     # 4. Trigger async outbox processing without blocking response
@@ -2105,15 +2144,16 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
         base_updated_at=orig_updated_at,
     )
 
-    # 3. Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    # 3. Broadcast real-time delta via WebSockets and record outbox event
+    await broadcast_mutation_event(
+        event_type="issue_updated",
+        message={
             "event": "issue_updated",
             "issue_key": updated_issue.key,
             "status_category": updated_issue.status.category.value,
             "status_name": updated_issue.status.name,
             "issue": updated_issue.model_dump(),
-        }
+        },
     )
 
     # 4. Trigger async outbox processing without blocking response
@@ -2221,15 +2261,16 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
         base_updated_at=None,
     )
 
-    # 3. Broadcast delta
-    await ws_hub.broadcast(
-        {
+    # 3. Broadcast delta and record outbox event
+    await broadcast_mutation_event(
+        event_type="issue_created",
+        message={
             "event": "issue_created",
             "issue_key": created_issue.key,
             "status_category": created_issue.status.category.value,
             "status_name": created_issue.status.name,
             "issue": created_issue.model_dump(),
-        }
+        },
     )
 
     # 4. Trigger async outbox processing without blocking response

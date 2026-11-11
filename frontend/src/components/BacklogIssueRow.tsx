@@ -17,11 +17,11 @@ import { StatusSelect } from './StatusSelect.tsx';
 import {
   getAvailableStatuses,
   getCategoryColorVar,
-  getJiraIssueUrl,
   isBacklogIssue,
   isIssueExpedited,
   isIssueOverdue,
 } from '../utils/boardUtils.ts';
+import { buildHref, shouldHandleNavigation } from '../utils/navigation.ts';
 
 interface BacklogIssueRowProps {
   issue: JiraIssue;
@@ -29,12 +29,12 @@ interface BacklogIssueRowProps {
 }
 
 export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRowProps) {
-  const { columns, jiraUrl, transitionIssueOptimistic, moveToBoard, moveToBacklog, setEditingIssue } =
+  const { columns, transitionIssueOptimistic, moveToBoard, moveToBacklog, setEditingIssue } =
     useBoardStore();
   const isBacklog = isBacklogIssue(issue, columns);
   const statusColorVar = getCategoryColorVar(issue.status.category);
   const statusOptions = getAvailableStatuses(columns);
-  const issueUrl = getJiraIssueUrl(issue, jiraUrl);
+  const taskHref = buildHref({ kind: 'task', key: issue.key });
 
   const {
     attributes,
@@ -106,22 +106,30 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
 
         {/* Issue Key */}
         <a
-          href={issueUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
+          href={taskHref}
+          onClick={(e) => {
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditingIssue(issue);
+            }
+          }}
           className="font-mono font-bold text-xs text-[var(--jira-text-secondary)] hover:text-[var(--jira-primary)] hover:underline shrink-0 cursor-pointer"
-          title={`Open ${issue.key} in Jira`}
-          aria-label={`Open ${issue.key} in Jira`}
+          title={`Open ${issue.key}`}
+          aria-label={`Open ${issue.key}`}
         >
           {issue.key}
         </a>
 
         {/* Issue Summary */}
-        <span
+        <a
+          href={taskHref}
           onClick={(e) => {
-            e.stopPropagation();
-            setEditingIssue(issue);
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditingIssue(issue);
+            }
           }}
           title={`Click to edit ${issue.key}`}
           className={`truncate font-medium text-xs cursor-pointer hover:underline ${
@@ -131,7 +139,7 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
           }`}
         >
           {issue.summary}
-        </span>
+        </a>
       </div>
 
       {/* Right side: Priority, Story Points, Status Pill, Assignee, Actions */}
@@ -184,17 +192,22 @@ export function BacklogIssueRow({ issue, isDragOverlay = false }: BacklogIssueRo
         <AssigneeAvatar assignee={issue.assignee} />
 
         {/* Edit Issue Button */}
-        <button
+        <a
+          href={taskHref}
+          role="button"
           onClick={(e) => {
-            e.stopPropagation();
-            setEditingIssue(issue);
+            if (shouldHandleNavigation(e)) {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditingIssue(issue);
+            }
           }}
           className="p-1 rounded text-[var(--jira-text-muted)] hover:text-[var(--jira-text-primary)] hover:bg-[var(--jira-surface-hover)] transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
           title={`Edit ${issue.key}`}
           aria-label={`Edit ${issue.key}`}
         >
           <Pencil className="w-3.5 h-3.5" />
-        </button>
+        </a>
 
         {/* Quick Move Action: One-Click Move to Board / Move to Backlog */}
         <button

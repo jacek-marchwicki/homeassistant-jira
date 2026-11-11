@@ -127,11 +127,13 @@ describe('LinkedIssuesSection component', () => {
 
     const linkItem = container.querySelector(
       '[data-testid="linked-issue-PROJ-102"]'
-    ) as HTMLElement;
+    ) as HTMLAnchorElement;
     expect(linkItem).not.toBeNull();
+    expect(linkItem.tagName.toLowerCase()).toBe('a');
+    expect(linkItem.getAttribute('href')).toBe('/task/PROJ-102');
 
     await act(async () => {
-      linkItem.click();
+      linkItem.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
     expect(handleSelectIssue).toHaveBeenCalledTimes(1);

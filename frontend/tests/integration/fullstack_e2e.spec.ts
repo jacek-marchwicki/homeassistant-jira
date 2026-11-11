@@ -171,7 +171,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(proj101Article.locator('[role="combobox"][aria-label^="Change status"]')).toHaveCount(0);
 
     // 2. Switch to Backlog View and verify status select dropdown is present and functional
-    await page.locator('header button[aria-label="Backlog View"]').click();
+    await page.locator('header [aria-label="Backlog View"]').click();
     const proj104Row = page.locator('[data-testid="backlog-row-PROJ-104"]');
     await expect(proj104Row).toBeVisible();
 
@@ -194,7 +194,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     await expect(backlogStatusSelect).toHaveValue('In Progress');
 
     // 3. Return to People view and verify bottom Backlog panel also retains status dropdown
-    await page.locator('header button[aria-label="People View"]').click();
+    await page.locator('header [aria-label="People View"]').click();
     const expandBacklogBtn = page.locator('button[aria-label="Expand Backlog list"]');
     await expect(expandBacklogBtn).toBeVisible();
     await expandBacklogBtn.click();
@@ -229,7 +229,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     page,
   }) => {
     // Switch to Backlog View to test issue filtering by quick filters
-    await page.locator('header button[aria-label="Backlog View"]').click();
+    await page.locator('header [aria-label="Backlog View"]').click();
 
     // By default: "Assigned to Me" (current user avatar), "Active", and "Hide Epics" are selected
     const myBtn = page.getByRole('button', { name: /Filter by Jacek|Assigned to Me/i });
@@ -655,7 +655,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     expect(savedUser).toBe('Alex Lead');
 
     // 3. Switch to Backlog view
-    const backlogBtn = page.locator('header button[aria-label="Backlog View"]');
+    const backlogBtn = page.locator('header [aria-label="Backlog View"]');
     await expect(backlogBtn).toBeVisible();
     await backlogBtn.click();
     await expect(page.locator('[data-testid^="backlog-row-"]').first()).toBeVisible();

@@ -94,7 +94,7 @@ describe('Header component', () => {
     expect(rightContainer).not.toBeNull();
     expect(rightContainer.className).toContain('shrink-0');
     expect(rightContainer.className).toContain('ml-auto');
-    expect(rightContainer.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
+    expect(rightContainer.querySelector('a[aria-label="Create Issue"]')).not.toBeNull();
   });
 
   it('applies safe-area top inset padding to ensure buttons are displayed below the status bar', async () => {
@@ -126,38 +126,42 @@ describe('Header component', () => {
     });
 
     expect(container.querySelector('button[aria-label="Kanban Board View"]')).toBeNull();
-    expect(container.querySelector('button[aria-label="People View"]')).not.toBeNull();
-    expect(container.querySelector('button[aria-label="Backlog View"]')).not.toBeNull();
-    expect(container.querySelector('button[aria-label="Create Issue"]')).not.toBeNull();
+    expect(container.querySelector('a[aria-label="People View"]')).not.toBeNull();
+    expect(container.querySelector('a[aria-label="Backlog View"]')).not.toBeNull();
+    expect(container.querySelector('a[aria-label="Create Issue"]')).not.toBeNull();
+    expect(container.querySelector('a[aria-label="Settings"]')).not.toBeNull();
+    expect(container.querySelector('a[data-testid="connection-status-button"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Theme Selection"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Dark Mode"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Light Mode"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Kiosk Mode"]')).not.toBeNull();
   });
 
-  it('switches currentView between "people" and "backlog" when view buttons are clicked', async () => {
+  it('switches currentView between "people" and "backlog" when view links are clicked', async () => {
     await act(async () => {
       root.render(<Header />);
     });
 
-    const backlogBtn = container.querySelector(
-      'button[aria-label="Backlog View"]'
-    ) as HTMLButtonElement;
-    expect(backlogBtn).not.toBeNull();
+    const backlogLink = container.querySelector(
+      'a[aria-label="Backlog View"]'
+    ) as HTMLAnchorElement;
+    expect(backlogLink).not.toBeNull();
+    expect(backlogLink.getAttribute('href')).toBe('/backlog');
 
     await act(async () => {
-      backlogBtn.click();
+      backlogLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
     expect(useBoardStore.getState().currentView).toBe('backlog');
 
-    const peopleBtn = container.querySelector(
-      'button[aria-label="People View"]'
-    ) as HTMLButtonElement;
-    expect(peopleBtn).not.toBeNull();
+    const peopleLink = container.querySelector(
+      'a[aria-label="People View"]'
+    ) as HTMLAnchorElement;
+    expect(peopleLink).not.toBeNull();
+    expect(peopleLink.getAttribute('href')).toBe('/people');
 
     await act(async () => {
-      peopleBtn.click();
+      peopleLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
     expect(useBoardStore.getState().currentView).toBe('people');
@@ -241,11 +245,12 @@ describe('Header settings icon', () => {
     await act(async () => {
       root.render(<Header />);
     });
-    const btn = container.querySelector('button[aria-label="Settings"]') as HTMLElement;
-    expect(btn).toBeTruthy();
-    expect(btn.textContent?.trim()).toBe('');
+    const link = container.querySelector('a[aria-label="Settings"]') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('href')).toBe('/settings');
+    expect(link.textContent?.trim()).toBe('');
     await act(async () => {
-      btn.click();
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
     expect(useBoardStore.getState().isSettingsOpen).toBe(true);
     act(() => {

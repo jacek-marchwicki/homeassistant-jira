@@ -556,7 +556,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
   test('Capture Backlog Row with Status Selector Open Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    const backlogBtn = page.locator('header button[aria-label="Backlog View"]');
+    const backlogBtn = page.locator('header [aria-label="Backlog View"]');
     await backlogBtn.click();
     await expect(page.getByRole('heading', { name: /Active Sprint/ })).toBeVisible();
 
@@ -982,7 +982,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
   test('Capture Backlog View Drag-and-Drop Rank Reordering Snapshot', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    const backlogBtn = page.locator('header button[aria-label="Backlog View"]');
+    const backlogBtn = page.locator('header [aria-label="Backlog View"]');
     await backlogBtn.click();
     await expect(page.getByRole('heading', { name: /Active Sprint/ })).toBeVisible();
 
@@ -1129,7 +1129,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     // 1. Desktop 1440x900
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    const peopleBtn = page.locator('header button[aria-label="People View"]');
+    const peopleBtn = page.locator('header [aria-label="People View"]');
     await expect(peopleBtn).toBeVisible();
     await peopleBtn.click();
 
@@ -1196,7 +1196,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
   test('Capture Connection Status Modal (Desktop and Mobile Fullscreen)', async ({ page }) => {
     // 1. Desktop (Centered dialog)
     await page.setViewportSize({ width: 1440, height: 900 });
-    const connBtn = page.locator('button[data-testid="connection-status-button"]');
+    const connBtn = page.locator('[data-testid="connection-status-button"]');
     await expect(connBtn).toBeVisible();
     await connBtn.click();
 
@@ -1244,7 +1244,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
     await page.reload();
     await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
 
-    const connBtn = page.locator('button[data-testid="connection-status-button"]');
+    const connBtn = page.locator('[data-testid="connection-status-button"]');
     await expect(connBtn).toBeVisible();
     await connBtn.click();
 
@@ -1256,7 +1256,7 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
 
   test('Capture Settings View with Version Display (Desktop Dark & Mobile)', async ({ page }) => {
     // Navigate to Settings
-    const settingsButton = page.locator('header button[aria-label="Settings"]');
+    const settingsButton = page.locator('header [aria-label="Settings"]');
     await expect(settingsButton).toBeVisible();
     await settingsButton.click();
 

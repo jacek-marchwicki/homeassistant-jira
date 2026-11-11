@@ -122,11 +122,12 @@ describe('ConnectionStatusModal', () => {
       root.render(<Header />);
     });
     const btn = container.querySelector(
-      'button[data-testid="connection-status-button"]'
-    ) as HTMLButtonElement;
+      '[data-testid="connection-status-button"]'
+    ) as HTMLElement;
     expect(btn).not.toBeNull();
+    expect(btn.getAttribute('href')).toBe('/status');
     await act(async () => {
-      btn.click();
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
     expect(useBoardStore.getState().isConnectionModalOpen).toBe(true);
   });

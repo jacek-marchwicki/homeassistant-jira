@@ -102,11 +102,12 @@ describe('BacklogPanel component', () => {
       );
     });
 
-    const openViewBtn = container.querySelector('button[aria-label="Open Full Backlog View"]');
-    expect(openViewBtn).not.toBeNull();
+    const openViewLink = container.querySelector('a[aria-label="Open Full Backlog View"]') as HTMLAnchorElement;
+    expect(openViewLink).not.toBeNull();
+    expect(openViewLink.getAttribute('href')).toBe('/backlog');
 
     await act(async () => {
-      openViewBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      openViewLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
     expect(setCurrentViewSpy).toHaveBeenCalledWith('backlog');

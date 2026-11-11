@@ -7,6 +7,8 @@ import {
   replaceRoute,
   closeOverlayRoute,
   getCurrentRoute,
+  buildHref,
+  shouldHandleNavigation,
 } from './navigation';
 
 describe('navigation routes', () => {
@@ -75,5 +77,108 @@ describe('navigation history', () => {
     expect(parseRoute('/settings')).toEqual({ kind: 'settings' });
     expect(parseRoute('/settings/extra')).toEqual({ kind: 'root' });
     expect(buildPath({ kind: 'settings' })).toBe('/settings');
+  });
+
+  it('buildHref generates full URLs with or without base path', () => {
+    expect(buildHref({ kind: 'view', view: 'backlog' })).toBe('/backlog');
+    expect(buildHref({ kind: 'task', key: 'HOME-123' })).toBe('/task/HOME-123');
+    expect(buildHref({ kind: 'create' })).toBe('/create');
+    expect(buildHref({ kind: 'status' })).toBe('/status');
+    expect(buildHref({ kind: 'settings' })).toBe('/settings');
+  });
+
+  it('shouldHandleNavigation accurately distinguishes plain left clicks from modified or right clicks', () => {
+    // Normal primary left click
+    expect(
+      shouldHandleNavigation({
+        button: 0,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        defaultPrevented: false,
+      } as unknown as React.MouseEvent)
+    ).toBe(true);
+
+    // Right click (button 2)
+    expect(
+      shouldHandleNavigation({
+        button: 2,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        defaultPrevented: false,
+      } as unknown as React.MouseEvent)
+    ).toBe(false);
+
+    // Middle click (button 1)
+    expect(
+      shouldHandleNavigation({
+        button: 1,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        defaultPrevented: false,
+      } as unknown as React.MouseEvent)
+    ).toBe(false);
+
+    // Left click with Ctrl/Meta/Shift/Alt
+    expect(
+      shouldHandleNavigation({
+        button: 0,
+        ctrlKey: true,
+        altKey: false,
+        metaKey: false,
+        shiftKey: false,
+        defaultPrevented: false,
+      } as unknown as React.MouseEvent)
+    ).toBe(false);
+
+    expect(
+      shouldHandleNavigation({
+        button: 0,
+        metaKey: true,
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false,
+        defaultPrevented: false,
+      } as unknown as React.MouseEvent)
+    ).toBe(false);
+
+    expect(
+      shouldHandleNavigation({
+        button: 0,
+        shiftKey: true,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        defaultPrevented: false,
+      } as unknown as React.MouseEvent)
+    ).toBe(false);
+
+    expect(
+      shouldHandleNavigation({
+        button: 0,
+        altKey: true,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        defaultPrevented: false,
+      } as unknown as React.MouseEvent)
+    ).toBe(false);
+
+    // Already default prevented
+    expect(
+      shouldHandleNavigation({
+        button: 0,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        defaultPrevented: true,
+      } as unknown as React.MouseEvent)
+    ).toBe(false);
   });
 });

@@ -32,15 +32,20 @@ describe('SettingsView', () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
   });
 
-  it('closes via the back button', async () => {
+  it('closes via the back button and provides an anchor href to return to board', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
     await act(async () => {
       root.render(<SettingsView />);
     });
+    const backLink = container.querySelector('[aria-label="Back to board"]') as HTMLAnchorElement;
+    expect(backLink).not.toBeNull();
+    expect(backLink.tagName.toLowerCase()).toBe('a');
+    expect(backLink.getAttribute('href')).toBe('/people');
+
     await act(async () => {
-      (container.querySelector('[aria-label="Back to board"]') as HTMLElement).click();
+      backLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
     expect(useBoardStore.getState().isSettingsOpen).toBe(false);
     act(() => root.unmount());

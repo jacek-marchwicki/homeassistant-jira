@@ -561,6 +561,30 @@ This document details the architectural phases, delivered features, and evolutio
     - Added unit test suite covering workflow validation, Android flags parsing, duration formatting, and validation against the real `ci.yml`.
     - 100% green verification via `./scripts/run_ci_locally.py`.
 
+---
+
+### Phase 15: Unified DATA_DIR Environment Variable & Deterministic Path Resolution
+
+- **Overview**:
+  Introduced a unified `DATA_DIR` environment variable and deterministic path resolution hierarchy across the backend configuration loader (`config.py`) and SQLite storage adapter (`storage.py`), eliminating fragile `mkdir` exception catching that caused failures on platforms like Android/Termux where `/data` exists as an un-writable system directory.
+- **Key Enhancements**:
+  - **Deterministic Path Resolution Hierarchy (`resolve_data_dir`)**:
+    1. Explicit `DATA_DIR` environment variable acts as the single source of truth for SQLite database, AI background cache, and Home Assistant options.
+    2. Active Home Assistant Environment (`/data`) — only selected if `SUPERVISOR_TOKEN` or `/data/options.json` exists AND `/data` is verified writable via canary probe.
+    3. Local Development (`./data`) — seamlessly falls back to `ensure_local_data_dir()` with automatic symlink preservation across Git worktrees.
+  - **Configuration Settings (`JiraDashboardSettings`)**:
+    - `data_dir` defaults using `default_factory=resolve_data_dir`.
+    - Added `effective_sqlite_db_path` resolving custom, in-memory, or default database paths relative to `data_dir`.
+    - Added `background_cache_dir` resolving directly into `data_dir / "background_cache"`.
+    - Unified options file loading: checks `options.json` in resolved `data_dir` when `HA_OPTIONS_PATH` is not explicitly set.
+  - **Simplified SQLite Storage Adapter (`SQLiteStorage`)**:
+    - Simplified initialization to resolve paths directly via `resolve_data_dir()`.
+    - Completely removed brittle `try/except OSError` blocks that previously attempted directory creation to trigger fallback switching.
+  - **Automated Verification**:
+    - Comprehensive unit test suite in [`backend/tests/test_data_dir_resolution.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_data_dir_resolution.py).
+    - 100% green verification via `./scripts/run_ci_locally.py`.
+
+
 
 
 

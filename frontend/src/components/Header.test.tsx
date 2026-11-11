@@ -230,6 +230,55 @@ describe('Header component', () => {
     expect(syncingBadge).not.toBeNull();
     expect(syncingBadge?.textContent).toContain('Syncing');
   });
+
+  it('hides offline badge and displays Live WebSocket after reconnection and queue flush', async () => {
+    act(() => {
+      useBoardStore.setState({
+        wsConnected: false,
+        syncStatus: 'offline',
+        pendingSyncCount: 1,
+        offlineOutbox: [
+          {
+            id: 'item-1',
+            action: 'update_issue',
+            issueKey: 'PROJ-101',
+            payload: { summary: 'New summary' },
+            createdAt: Date.now(),
+          },
+        ],
+      });
+    });
+
+    await act(async () => {
+      root.render(<Header />);
+    });
+
+    // Offline and Reconnecting badges visible
+    expect(container.querySelector('[data-testid="offline-sync-badge"]')?.textContent).toContain('Offline (1 pending)');
+    expect(container.textContent).toContain('Reconnecting');
+
+    // Simulate backend response on reconnection
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: '101',
+        key: 'PROJ-101',
+        summary: 'New summary',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      }),
+    } as Response);
+
+    // Reconnection occurs
+    await act(async () => {
+      useBoardStore.getState().setWsConnected(true);
+    });
+
+    // Offline badge is cleared, Live WebSocket is active
+    expect(container.querySelector('[data-testid="offline-sync-badge"]')).toBeNull();
+    expect(container.textContent).toContain('Live WebSocket');
+    expect(useBoardStore.getState().pendingSyncCount).toBe(0);
+    expect(useBoardStore.getState().syncStatus).toBe('synced');
+  });
 });
 
 

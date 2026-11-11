@@ -102,6 +102,7 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
   const availableUsers = useBoardStore((s) => s.availableUsers);
   const removePendingTransaction = useBoardStore((s) => s.removePendingTransaction);
   const clearLocalDataAndRefetch = useBoardStore((s) => s.clearLocalDataAndRefetch);
+  const flushOfflineQueue = useBoardStore((s) => s.flushOfflineQueue);
 
   const [now, setNow] = useState(() => Date.now());
   const [isClearing, setIsClearing] = useState(false);
@@ -221,6 +222,18 @@ export function ConnectionStatusModal({ isOpen, onClose }: ConnectionStatusModal
           </h3>
           {syncError && (
             <p className="text-xs mt-1.5 text-amber-500">Last sync error: {syncError}</p>
+          )}
+          {outbox.length > 0 && (
+            <button
+              type="button"
+              data-testid="retry-sync-button"
+              onClick={() => void flushOfflineQueue()}
+              disabled={syncStatus === 'syncing'}
+              className="mt-2 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold bg-[var(--jira-surface-hover)] border border-[var(--jira-border)] hover:bg-[var(--jira-border)] transition-colors cursor-pointer disabled:opacity-50 min-h-[36px]"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+              <span>{syncStatus === 'syncing' ? 'Syncing…' : 'Sync pending changes now'}</span>
+            </button>
           )}
           {outbox.length === 0 ? (
             <p className="text-xs mt-1.5 text-[var(--jira-text-secondary)]">

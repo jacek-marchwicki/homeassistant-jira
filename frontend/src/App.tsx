@@ -99,6 +99,7 @@ export default function App() {
           nextRetryAt: null,
           retryAttempt: 0,
         });
+        void useBoardStore.getState().flushOfflineQueue();
       };
 
       socket.onmessage = (event) => {

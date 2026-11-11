@@ -243,4 +243,36 @@ describe('ConnectionStatusModal', () => {
 
     expect(clearLocalDataAndRefetch).toHaveBeenCalled();
   });
+
+  it('provides a button to manually sync pending changes when outbox is non-empty', async () => {
+    const flushOfflineQueue = vi.fn().mockResolvedValue(undefined);
+    (useBoardStore.getState() as any).flushOfflineQueue = flushOfflineQueue;
+
+    await act(async () => {
+      useBoardStore.setState({
+        offlineOutbox: [
+          {
+            id: 'tx-2',
+            action: 'update_issue',
+            issueKey: 'PROJ-31',
+            payload: { summary: 'Pending manual sync' },
+            createdAt: Date.now(),
+          },
+        ],
+      });
+      root.render(<ConnectionStatusModal isOpen={true} onClose={() => {}} />);
+    });
+
+    const syncBtn = container.querySelector(
+      'button[data-testid="retry-sync-button"]'
+    ) as HTMLButtonElement | null;
+    expect(syncBtn).not.toBeNull();
+    expect(syncBtn?.textContent).toContain('Sync pending changes now');
+
+    await act(async () => {
+      syncBtn!.click();
+    });
+
+    expect(flushOfflineQueue).toHaveBeenCalled();
+  });
 });

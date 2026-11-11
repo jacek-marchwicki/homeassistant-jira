@@ -163,4 +163,59 @@ describe('App component loading indicator & board rendering', () => {
     expect(snackbar?.textContent).toContain('PROJ-101');
     expect(snackbar?.textContent).toContain('Undo');
   });
+
+  it('triggers flushOfflineQueue on websocket open when pending offline items exist', async () => {
+    let wsInstance: any = null;
+    class MockWebSocket {
+      onopen: (() => void) | null = null;
+      onmessage: ((event: any) => void) | null = null;
+      onclose: ((event: any) => void) | null = null;
+      onerror: (() => void) | null = null;
+      close = vi.fn();
+      constructor() {
+        wsInstance = this;
+      }
+    }
+    const originalWebSocket = global.WebSocket;
+    global.WebSocket = MockWebSocket as any;
+
+    try {
+      const flushSpy = vi.fn().mockResolvedValue(undefined);
+      (useBoardStore.getState() as any).flushOfflineQueue = flushSpy;
+
+      act(() => {
+        useBoardStore.setState({
+          isLoading: false,
+          boardName: 'Engineering Sprint Board',
+          issues: [testIssue],
+          offlineOutbox: [
+            {
+              id: 'tx-offline-1',
+              action: 'update_issue',
+              issueKey: 'PROJ-101',
+              payload: { summary: 'New summary' },
+              createdAt: Date.now(),
+            },
+          ],
+          syncStatus: 'offline',
+          pendingSyncCount: 1,
+        });
+      });
+
+      await act(async () => {
+        root.render(<App />);
+      });
+
+      expect(wsInstance).not.toBeNull();
+
+      // Trigger socket onopen
+      await act(async () => {
+        wsInstance.onopen?.();
+      });
+
+      expect(flushSpy).toHaveBeenCalled();
+    } finally {
+      global.WebSocket = originalWebSocket;
+    }
+  });
 });

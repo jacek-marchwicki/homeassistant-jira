@@ -811,6 +811,13 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
   setWsConnected: (connected: boolean) => {
     set({ wsConnected: connected });
+    if (connected) {
+      if (get().offlineOutbox.length > 0) {
+        void get().flushOfflineQueue();
+      } else if (get().syncStatus === 'offline') {
+        set({ syncStatus: 'synced', syncError: null });
+      }
+    }
   },
 
   setConnectionDetails: (details: Partial<ConnectionDetails>) => {
@@ -1649,6 +1656,9 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   },
 
   flushOfflineQueue: async () => {
+    if (get().syncStatus === 'syncing') {
+      return;
+    }
     const currentQueue = [...get().offlineOutbox];
     if (currentQueue.length === 0) {
       set({ syncStatus: 'synced', pendingSyncCount: 0 });
@@ -1656,7 +1666,6 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
 
     set({ syncStatus: 'syncing', syncError: null });
-    const remainingOutbox = [...currentQueue];
 
     for (const item of currentQueue) {
       try {
@@ -1695,8 +1704,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             credentials: 'include',
           });
         } else {
-          const idx = remainingOutbox.findIndex((it) => it.id === item.id);
-          if (idx !== -1) remainingOutbox.splice(idx, 1);
+          const nextOutbox = get().offlineOutbox.filter((it) => it.id !== item.id);
+          saveCachedOutbox(nextOutbox);
+          set({
+            offlineOutbox: nextOutbox,
+            pendingSyncCount: nextOutbox.length,
+          });
           continue;
         }
 
@@ -1760,34 +1773,29 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         }
 
         // Successfully drained or skipped conflict: remove from outbox
-        const itemIdx = remainingOutbox.findIndex((it) => it.id === item.id);
-        if (itemIdx !== -1) {
-          remainingOutbox.splice(itemIdx, 1);
-        }
-        saveCachedOutbox(remainingOutbox);
+        const nextOutbox = get().offlineOutbox.filter((it) => it.id !== item.id);
+        saveCachedOutbox(nextOutbox);
         set({
-          offlineOutbox: [...remainingOutbox],
-          pendingSyncCount: remainingOutbox.length,
+          offlineOutbox: nextOutbox,
+          pendingSyncCount: nextOutbox.length,
         });
         persistCurrentBoardState(get);
       } catch (err) {
         // Network fetch error: still offline! Stop draining queue.
-        saveCachedOutbox(remainingOutbox);
         set({
           syncError: err instanceof Error ? err.message : 'Network request failed',
-          offlineOutbox: [...remainingOutbox],
-          pendingSyncCount: remainingOutbox.length,
           syncStatus: 'offline',
         });
         return;
       }
     }
 
-    saveCachedOutbox(remainingOutbox);
+    const finalOutbox = get().offlineOutbox;
+    saveCachedOutbox(finalOutbox);
     set({
-      offlineOutbox: [...remainingOutbox],
-      pendingSyncCount: remainingOutbox.length,
-      syncStatus: remainingOutbox.length === 0 ? 'synced' : 'offline',
+      offlineOutbox: finalOutbox,
+      pendingSyncCount: finalOutbox.length,
+      syncStatus: finalOutbox.length === 0 ? 'synced' : 'offline',
     });
     persistCurrentBoardState(get);
   },

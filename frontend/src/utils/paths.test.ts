@@ -103,5 +103,15 @@ describe('Path and URL Utilities for Home Assistant Ingress and Standalone', () 
       );
       expect(getWsUrl()).toBe('ws://homeassistant.local:8123/api/hassio_ingress/local-token-77/ws');
     });
+
+    it('appends query string when supplied without leading question mark', () => {
+      setMockLocation('/', 'localhost:8000', 'http:');
+      expect(getWsUrl('board_id=HOME&last_seq=5')).toBe('ws://localhost:8000/ws?board_id=HOME&last_seq=5');
+    });
+
+    it('appends query string when supplied with leading question mark', () => {
+      setMockLocation('/', 'localhost:8000', 'http:');
+      expect(getWsUrl('?board_id=HOME&last_seq=5')).toBe('ws://localhost:8000/ws?board_id=HOME&last_seq=5');
+    });
   });
 });

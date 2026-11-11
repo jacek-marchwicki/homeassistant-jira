@@ -41,6 +41,7 @@ export default function App() {
     routeTaskKey,
     isAuthRequired,
     checkAuthStatus,
+    boardId,
   } = useBoardStore();
   const {
     canInstall,
@@ -74,10 +75,19 @@ export default function App() {
 
   // 2. Establish Resilient WebSocket Connection for Real-Time State Sync
   useEffect(() => {
-    const wsUrl = getWsUrl();
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
     const connectWs = () => {
+      const state = useBoardStore.getState();
+      const currentBoardId = boardId || state.boardId;
+      const lastSeq = state.lastSeenSeq ?? 0;
+      const queryParams: string[] = [];
+      if (currentBoardId) {
+        queryParams.push(`board_id=${encodeURIComponent(currentBoardId)}`);
+      }
+      queryParams.push(`last_seq=${lastSeq}`);
+      const wsUrl = getWsUrl(queryParams.join('&'));
+
       const socket = new WebSocket(wsUrl);
       wsRef.current = socket;
 
@@ -133,7 +143,7 @@ export default function App() {
         wsRef.current.close();
       }
     };
-  }, [handleWsMessage, setWsConnected]);
+  }, [boardId, handleWsMessage, setWsConnected]);
 
   if (isAuthRequired) {
     return <LoginView />;

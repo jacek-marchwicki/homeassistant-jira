@@ -101,6 +101,7 @@ export interface AuthStatus {
 }
 
 export interface CachedBoardData {
+  boardId?: string;
   boardName: string;
   sprintName: string;
   jiraUrl: string;
@@ -109,6 +110,7 @@ export interface CachedBoardData {
   availableUsers?: JiraUser[];
   geminiConfigured?: boolean;
   geminiStats?: GeminiUsageStats | null;
+  lastSeenSeq?: number | null;
 }
 
 export function loadCachedView(): DashboardView {
@@ -266,9 +268,11 @@ export interface BoardStoreState {
   isSyncing: boolean;
   issues: JiraIssue[];
   columns: BoardColumn[];
+  boardId: string;
   boardName: string;
   sprintName: string;
   jiraUrl: string;
+  lastSeenSeq: number | null;
   wsConnected: boolean;
   activeFilters: string[];
   activeFilter: string;
@@ -360,6 +364,7 @@ export interface BoardStoreState {
   flushOfflineQueue: () => Promise<void>;
   removePendingTransaction: (id: string) => void;
   clearLocalDataAndRefetch: () => Promise<void>;
+  setLastSeenSeq: (seq: number) => void;
   handleWsMessage: (data: unknown) => void;
 }
 
@@ -450,9 +455,11 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     initialCache?.columns && initialCache.columns.length > 0
       ? initialCache.columns
       : DEFAULT_COLUMNS,
+  boardId: initialCache?.boardId || '',
   boardName: initialCache?.boardName || '',
   sprintName: initialCache?.sprintName || '',
   jiraUrl: initialCache?.jiraUrl || 'https://jira.example.com',
+  lastSeenSeq: initialCache?.lastSeenSeq ?? null,
   wsConnected: false,
   activeFilters: ['my', 'active', 'hide_epics'],
   activeFilter: 'my,active,hide_epics',
@@ -864,6 +871,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         const nextState: CachedBoardData = {
+          boardId: data.board_id || get().boardId || '',
           boardName: data.board_name || 'Engineering Sprint Board',
           sprintName: data.sprint_name || '',
           jiraUrl: data.jira_url || 'https://jira.example.com',
@@ -872,10 +880,12 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           availableUsers: get().availableUsers,
           geminiConfigured: Boolean(data.gemini_configured),
           geminiStats: data.gemini_stats ?? null,
+          lastSeenSeq: get().lastSeenSeq,
         };
         saveCachedBoard(nextState);
         set({
           ...nextState,
+          boardId: data.board_id || get().boardId || '',
           geminiConfigured: Boolean(data.gemini_configured),
           geminiStats: data.gemini_stats ?? null,
           errorMessage: null,
@@ -1850,13 +1860,41 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       rollbackQueue: {},
       syncError: null,
       syncStatus: get().wsConnected ? 'synced' : 'offline',
+      lastSeenSeq: null,
     });
     await get().loadBoard();
+  },
+
+  setLastSeenSeq: (seq: number) => {
+    set((state) => ({
+      lastSeenSeq: Math.max(state.lastSeenSeq ?? 0, seq),
+    }));
   },
 
   handleWsMessage: (data: unknown) => {
     if (!data || typeof data !== 'object') return;
     const msg = data as Record<string, unknown>;
+
+    if (msg.event === 'outbox_delta') {
+      if (typeof msg.seq === 'number') {
+        set((state) => ({
+          lastSeenSeq: Math.max(state.lastSeenSeq ?? 0, msg.seq as number),
+        }));
+      }
+      if (msg.payload && typeof msg.payload === 'object') {
+        get().handleWsMessage(msg.payload);
+      }
+      return;
+    }
+
+    if (msg.event === 'catchup_complete') {
+      if (typeof msg.synced_seq === 'number') {
+        set((state) => ({
+          lastSeenSeq: Math.max(state.lastSeenSeq ?? 0, msg.synced_seq as number),
+        }));
+      }
+      return;
+    }
 
     if (msg.event === 'account_types_updated' && msg.account_types) {
       const types: AccountTypes = {};
@@ -1988,11 +2026,13 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 function persistCurrentBoardState(get: () => BoardStoreState): void {
   const state = get();
   saveCachedBoard({
+    boardId: state.boardId,
     boardName: state.boardName,
     sprintName: state.sprintName,
     jiraUrl: state.jiraUrl,
     columns: state.columns,
     issues: state.issues,
+    lastSeenSeq: state.lastSeenSeq,
   });
 }
 

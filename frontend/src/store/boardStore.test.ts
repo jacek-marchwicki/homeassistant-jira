@@ -1198,6 +1198,57 @@ describe('child account store state', () => {
     useBoardStore.getState().openSettings();
     expect(useBoardStore.getState().isSettingsOpen).toBe(true);
     expect(window.location.pathname).toMatch(/\/settings$/);
+  });
+
+  it('updates lastSeenSeq and delegates payload when receiving outbox_delta message', () => {
+    const existingIssue = {
+      id: '101',
+      key: 'TEST-101',
+      summary: 'Before update',
+      issue_type: 'task',
+      priority: 'medium',
+      status: { id: '1', name: 'To Do', category: 'todo' },
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    useBoardStore.setState({ issues: [existingIssue as any], lastSeenSeq: 2 });
+
+    useBoardStore.getState().handleWsMessage({
+      event: 'outbox_delta',
+      board_id: 'eng-1',
+      seq: 5,
+      type: 'issue_updated',
+      payload: {
+        event: 'issue_updated',
+        issue: {
+          ...existingIssue,
+          summary: 'After outbox delta update',
+          updated_at: '2026-01-01T00:05:00Z',
+        },
+      },
+    });
+
+    expect(useBoardStore.getState().lastSeenSeq).toBe(5);
+    expect(useBoardStore.getState().issues[0].summary).toBe('After outbox delta update');
+  });
+
+  it('updates lastSeenSeq monotonically on catchup_complete message', () => {
+    useBoardStore.setState({ lastSeenSeq: 10 });
+
+    useBoardStore.getState().handleWsMessage({
+      event: 'catchup_complete',
+      board_id: 'eng-1',
+      synced_seq: 42,
+    });
+    expect(useBoardStore.getState().lastSeenSeq).toBe(42);
+
+    // Stale sequence does not decrement lastSeenSeq
+    useBoardStore.getState().handleWsMessage({
+      event: 'catchup_complete',
+      board_id: 'eng-1',
+      synced_seq: 15,
+    });
+    expect(useBoardStore.getState().lastSeenSeq).toBe(42);
     // browser back (popstate -> applyRoute) leaves settings
     useBoardStore.getState().applyRoute({ kind: 'view', view: 'people' });
     expect(useBoardStore.getState().isSettingsOpen).toBe(false);

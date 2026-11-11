@@ -92,6 +92,11 @@ from jira_dashboard.presentation.mcp import (
     MCPServerHandler,
 )
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:     %(message)s",
+)
+logging.getLogger("jira_dashboard").setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------

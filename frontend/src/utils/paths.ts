@@ -26,11 +26,12 @@ export function getApiUrl(endpoint: string): string {
 }
 
 /**
- * Returns a properly prefixed WebSocket URL.
+ * Returns a properly prefixed WebSocket URL with optional query string.
  */
-export function getWsUrl(): string {
+export function getWsUrl(queryString?: string): string {
   if (typeof window === 'undefined') return 'ws://localhost:8000/ws';
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const base = getBasePath();
-  return `${protocol}//${window.location.host}${base}/ws`;
+  const query = queryString ? (queryString.startsWith('?') ? queryString : `?${queryString}`) : '';
+  return `${protocol}//${window.location.host}${base}/ws${query}`;
 }

@@ -551,6 +551,31 @@ This document details the architectural phases, delivered features, and evolutio
   - [x] **Comprehensive Verification**:
     - 100% green local CI pipeline verification via `./scripts/run_ci_locally.py`.
 
+- [x] **Phase 5.37: Outbox Notification Architecture with GCP PubSub & Home Assistant MQTT (HOME-15405)**
+  - [x] **Outbox Pattern & Monotonic Sequence Control**:
+    - Created durable outbox event log (`outbox_events`) and monotonic stream sequence counter (`board_streams`) across SQLite storage ([`storage.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/storage.py)) and Cloud Firestore ([`firestore_storage.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/firestore_storage.py)).
+    - Storage methods `append_board_event`, `get_board_events_since`, and `get_latest_board_seq` guarantee strictly monotonic sequencing ($1, 2, 3, \dots$) per board.
+  - [x] **Pluggable Event Bus Abstraction (`EventBusProtocol`)**:
+    - Pluggable event bus ([`event_bus.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/adapters/event_bus.py)) with `InMemoryEventBus` (local dev & tests), `GCPPubSubEventBus` (Cloud Run multi-instance fanout via ephemeral subscriptions), and `MosquittoMQTTEventBus` (Home Assistant native MQTT broker integration).
+    - Factory function `create_event_bus` dynamically instantiates the bus based on `EVENT_BUS_BACKEND` (`"none"`, `"in_memory"`, `"gcp_pubsub"`, `"mqtt"`).
+  - [x] **Asyncio In-Memory Event Router & Mutation Broadcasting**:
+    - Implemented `AsyncioEventRouter` ([`event_router.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/src/jira_dashboard/presentation/event_router.py)) routing wake-up pulses to in-memory subscription queues.
+    - Integrated event router lifecycle into FastAPI startup/shutdown lifespan.
+    - Added outbox event recording and event bus publication across all issue mutations (`transition_issue`, `rank_issue`, `update_issue`, `create_issue`, and `_sync_broadcast`).
+  - [x] **WebSocket Resilient Outbox Catch-Up & Live Outbox Delta Streaming**:
+    - Upgraded `/ws` endpoint with `board_id` and `last_seq` query parameters.
+    - On connection, replays missed events as `outbox_delta` followed by `catchup_complete` with `synced_seq`, then delivers live outbox deltas.
+    - Preserves 100% backward compatibility for legacy clients without `last_seq`.
+  - [x] **Frontend Sequence Tracking & Automatic Outbox Catchup**:
+    - [`boardStore.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.ts) tracks `lastSeenSeq` monotonically across `outbox_delta` and `catchup_complete` events and persists to local cache.
+    - [`App.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/App.tsx) supplies `board_id` and `last_seq` to `getWsUrl()` on connection and auto-reconnect, ensuring zero missed events across network hiccups or container restarts.
+  - [x] **Reconnection Offline Outbox Auto-Flush**:
+    - Added automatic draining of pending offline changes via `flushOfflineQueue()` on WebSocket reconnection (`socket.onopen` and `setWsConnected(true)`), resetting `syncStatus` from `'offline'` back to `'synced'` once drained.
+  - [x] **Comprehensive Automated Test Coverage & Verification**:
+    - Unit tests in [`test_board_outbox_storage.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_board_outbox_storage.py), [`test_event_bus.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_event_bus.py), [`test_event_router.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_event_router.py), and [`test_websocket_outbox_catchup.py`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/backend/tests/test_websocket_outbox_catchup.py).
+    - Frontend tests in [`boardStore.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/boardStore.test.ts), [`paths.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/utils/paths.test.ts), [`offlineReactivity.test.ts`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/store/offlineReactivity.test.ts), [`Header.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/Header.test.tsx), [`ConnectionStatusModal.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/components/ConnectionStatusModal.test.tsx), and [`App.test.tsx`](file:///Users/jacek/Documents/apps/jacek-marchwicki/homeassistant-jira/frontend/src/App.test.tsx).
+    - 100% green local CI verification via `./scripts/run_ci_locally.py`.
+
 ---
 
 ### Phase 14: Android Companion App CI & Local Verification Pipeline Integration

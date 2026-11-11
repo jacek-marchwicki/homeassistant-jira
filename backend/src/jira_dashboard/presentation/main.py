@@ -45,6 +45,7 @@ from jira_dashboard import __version__
 from jira_dashboard.adapters import (
     DEFAULT_COLUMNS,
     BlobStorageProtocol,
+    EventBusProtocol,
     FakeJiraClient,
     GeminiImageClient,
     HomeAssistantCloudhookManager,
@@ -54,6 +55,7 @@ from jira_dashboard.adapters import (
     StorageProtocol,
     compute_background_content_hash,
     create_blob_storage,
+    create_event_bus,
     create_gemini_client,
     create_jira_client,
     create_storage,
@@ -83,6 +85,7 @@ from jira_dashboard.presentation.auth import (
     create_session_token,
     verify_session_token,
 )
+from jira_dashboard.presentation.event_router import AsyncioEventRouter
 from jira_dashboard.presentation.mcp import (
     SERVER_NAME,
     SERVER_VERSION,
@@ -101,6 +104,8 @@ gemini_client: GeminiImageClient | None = create_gemini_client(settings)
 storage: StorageProtocol = create_storage(settings)
 storage.init_db()
 blob_storage: BlobStorageProtocol = create_blob_storage(settings)
+event_bus: EventBusProtocol = create_event_bus(settings)
+event_router = AsyncioEventRouter(storage=storage, event_bus=event_bus)
 
 # Seed SQLite cache from FakeJiraClient only during testing/simulation mode
 if (
@@ -153,17 +158,24 @@ class WebSocketHub:
 
     def __init__(self) -> None:
         self.active_connections: list[WebSocket] = []
+        self.subscribed_connections: set[WebSocket] = set()
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
         self.active_connections.append(websocket)
 
+    def mark_router_subscribed(self, websocket: WebSocket) -> None:
+        self.subscribed_connections.add(websocket)
+
     def disconnect(self, websocket: WebSocket) -> None:
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
+        self.subscribed_connections.discard(websocket)
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         for connection in list(self.active_connections):
+            if connection in self.subscribed_connections:
+                continue
             try:
                 await connection.send_json(message)
             except Exception:
@@ -171,6 +183,24 @@ class WebSocketHub:
 
 
 ws_hub = WebSocketHub()
+
+
+async def broadcast_mutation_event(
+    event_type: str,
+    message: dict[str, Any],
+    board_id: str | None = None,
+) -> None:
+    """Record outbox event in storage, publish WAKE_UP via EventBus, and broadcast via WS."""
+    b_id = board_id or settings.jira_board_id
+    try:
+        await event_router.record_and_publish_event(
+            board_id=b_id,
+            event_type=event_type,
+            payload=message,
+        )
+    except Exception as exc:
+        logger.debug("Could not record outbox event for %s: %s", event_type, exc)
+    await ws_hub.broadcast(message)
 
 
 async def _sync_broadcast(event_data: dict[str, Any]) -> None:
@@ -192,7 +222,10 @@ async def _sync_broadcast(event_data: dict[str, Any]) -> None:
                     deduped.append(item)
             _cached_board_response.issues = deduped
             _cached_board_response.issues.sort(key=issue_sort_key)
-    await ws_hub.broadcast(event_data)
+    await broadcast_mutation_event(
+        event_type=event_data.get("event", "sync_delta"),
+        message=event_data,
+    )
 
 
 sync_worker = JiraSyncWorker(storage, jira_client, ws_broadcast_func=_sync_broadcast)
@@ -605,6 +638,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 )
             )
 
+    # Start event bus listener for multi-instance WAKE_UP notifications
+    try:
+        await event_bus.start_listening(event_router.handle_wake_up)
+    except Exception as exc:
+        logger.warning("Could not start event bus listener: %s", exc)
+
     if settings.polling_interval_seconds > 0 and settings.has_jira_credentials:
         polling_task = asyncio.create_task(
             fallback_polling_loop(
@@ -636,6 +675,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             pass
     if not cache_warm_task.done():
         cache_warm_task.cancel()
+
+    try:
+        await event_bus.stop_listening()
+    except Exception as exc:
+        logger.debug("Error stopping event bus listener: %s", exc)
 
 
 app = FastAPI(
@@ -1891,15 +1935,16 @@ async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
         base_updated_at=orig_updated_at,
     )
 
-    # 3. Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    # 3. Broadcast real-time delta via WebSockets and record outbox event
+    await broadcast_mutation_event(
+        event_type="issue_transitioned",
+        message={
             "event": "issue_transitioned",
             "issue_key": updated_issue.key,
             "status_category": updated_issue.status.category.value,
             "status_name": updated_issue.status.name,
             "issue": updated_issue.model_dump(),
-        }
+        },
     )
 
     # 4. Trigger async outbox processing without blocking response
@@ -1973,14 +2018,15 @@ async def rank_issue(key: str, request: RankIssueRequest) -> JiraIssue:
         base_updated_at=orig_updated_at,
     )
 
-    # 3. Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    # 3. Broadcast real-time delta via WebSockets and record outbox event
+    await broadcast_mutation_event(
+        event_type="issue_ranked",
+        message={
             "event": "issue_ranked",
             "issue_key": updated_issue.key,
             "rank": updated_issue.rank,
             "issue": updated_issue.model_dump(),
-        }
+        },
     )
 
     # 4. Trigger async outbox processing without blocking response
@@ -2105,15 +2151,16 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
         base_updated_at=orig_updated_at,
     )
 
-    # 3. Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    # 3. Broadcast real-time delta via WebSockets and record outbox event
+    await broadcast_mutation_event(
+        event_type="issue_updated",
+        message={
             "event": "issue_updated",
             "issue_key": updated_issue.key,
             "status_category": updated_issue.status.category.value,
             "status_name": updated_issue.status.name,
             "issue": updated_issue.model_dump(),
-        }
+        },
     )
 
     # 4. Trigger async outbox processing without blocking response
@@ -2221,15 +2268,16 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
         base_updated_at=None,
     )
 
-    # 3. Broadcast delta
-    await ws_hub.broadcast(
-        {
+    # 3. Broadcast delta and record outbox event
+    await broadcast_mutation_event(
+        event_type="issue_created",
+        message={
             "event": "issue_created",
             "issue_key": created_issue.key,
             "status_category": created_issue.status.category.value,
             "status_name": created_issue.status.name,
             "issue": created_issue.model_dump(),
-        }
+        },
     )
 
     # 4. Trigger async outbox processing without blocking response
@@ -2583,7 +2631,7 @@ def reset_test_state() -> dict[str, Any]:
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    """WebSocket endpoint for real-time client state updates and heartbeat."""
+    """WebSocket endpoint for real-time client state updates, catch-up, and heartbeat."""
     current_settings = JiraDashboardSettings.load()
     provider = AuthProvider(current_settings)
     if provider.resolved_mode == AuthMode.GCP_OAUTH:
@@ -2595,6 +2643,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             return
 
     await ws_hub.connect(websocket)
+
+    board_id = websocket.query_params.get("board_id") or settings.jira_board_id
+    last_seq_param = websocket.query_params.get("last_seq")
+    queue: asyncio.Queue[dict[str, Any]] | None = None
+    if last_seq_param is not None:
+        ws_hub.mark_router_subscribed(websocket)
+        queue = event_router.subscribe(board_id)
+
     try:
         # Send initial connection acknowledgment
         await websocket.send_json(
@@ -2602,29 +2658,96 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 "event": "connected",
                 "message": "Connected to Home Assistant Jira Dashboard WebSocket Hub",
                 "active_clients": len(ws_hub.active_connections),
+                "board_id": board_id,
             }
         )
 
-        # Keep connection open and handle incoming client messages/pings/sync requests
-        while True:
-            raw_text = await websocket.receive_text()
-            if raw_text == "ping":
-                await websocket.send_text("pong")
-            elif "sync_request" in raw_text:
-                try:
-                    issues = await jira_client.get_board_issues(settings.jira_board_id)
+        # Catch-up phase: deliver missed outbox events if last_seq is provided
+        if last_seq_param is not None and queue is not None:
+            try:
+                last_seq = int(last_seq_param)
+            except (ValueError, TypeError):
+                last_seq = 0
+
+            missed_events = storage.get_board_events_since(
+                board_id=board_id, since_seq=last_seq, limit=1000
+            )
+            for ev in missed_events:
+                await websocket.send_json(
+                    {
+                        "event": "outbox_delta",
+                        "board_id": board_id,
+                        "seq": ev["seq"],
+                        "type": ev["event_type"],
+                        "payload": ev["payload"],
+                        "created_at": ev.get("created_at"),
+                    }
+                )
+
+            latest_seq = storage.get_latest_board_seq(board_id)
+            await websocket.send_json(
+                {
+                    "event": "catchup_complete",
+                    "board_id": board_id,
+                    "synced_seq": latest_seq,
+                }
+            )
+
+        # Concurrently forward router queue events and listen for client incoming text
+        async def _forward_router_events() -> None:
+            if queue is None:
+                return
+            try:
+                while True:
+                    msg = await queue.get()
                     await websocket.send_json(
                         {
-                            "event": "board_synced",
-                            "board_id": settings.jira_board_id,
-                            "issues": [issue.model_dump() for issue in issues],
+                            "event": "outbox_delta",
+                            "board_id": msg["board_id"],
+                            "seq": msg["seq"],
+                            "type": msg["type"],
+                            "payload": msg["payload"],
+                            "created_at": msg.get("created_at"),
                         }
                     )
-                except Exception as exc:
-                    logger.error("Failed to sync board for websocket: %s", exc)
+            except (WebSocketDisconnect, asyncio.CancelledError):
+                pass
+
+        async def _receive_client_messages() -> None:
+            try:
+                while True:
+                    raw_text = await websocket.receive_text()
+                    if raw_text == "ping":
+                        await websocket.send_text("pong")
+                    elif "sync_request" in raw_text:
+                        try:
+                            issues = await jira_client.get_board_issues(settings.jira_board_id)
+                            await websocket.send_json(
+                                {
+                                    "event": "board_synced",
+                                    "board_id": settings.jira_board_id,
+                                    "issues": [issue.model_dump() for issue in issues],
+                                }
+                            )
+                        except Exception as exc:
+                            logger.error("Failed to sync board for websocket: %s", exc)
+            except (WebSocketDisconnect, asyncio.CancelledError):
+                pass
+
+        tasks = [asyncio.create_task(_receive_client_messages())]
+        if queue is not None:
+            tasks.append(asyncio.create_task(_forward_router_events()))
+
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for t in pending:
+            t.cancel()
     except WebSocketDisconnect:
-        ws_hub.disconnect(websocket)
-    except Exception:
+        pass
+    except Exception as exc:
+        logger.debug("WebSocket connection terminated: %s", exc)
+    finally:
+        if queue is not None:
+            event_router.unsubscribe(board_id, queue)
         ws_hub.disconnect(websocket)
 
 

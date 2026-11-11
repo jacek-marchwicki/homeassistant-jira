@@ -241,6 +241,22 @@ class JiraDashboardSettings(BaseModel):
         default=None,
         description="Google Cloud Project ID",
     )
+    event_bus_backend: str | None = Field(
+        default=None,
+        description="Event bus backend ('in_memory', 'pubsub', or 'mqtt')",
+    )
+    gcp_pubsub_topic: str | None = Field(
+        default=None,
+        description="GCP Pub/Sub topic name for WAKE_UP event broadcasting",
+    )
+    mqtt_broker_url: str | None = Field(
+        default=None,
+        description="MQTT broker URL for Home Assistant Mosquitto (e.g. mqtt://core-mosquitto:1883)",
+    )
+    mqtt_topic: str = Field(
+        default="homeassistant/jira_dashboard/events/wake_up",
+        description="MQTT topic for WAKE_UP notifications",
+    )
 
     @property
     def allowed_emails_set(self) -> set[str]:
@@ -374,6 +390,10 @@ class JiraDashboardSettings(BaseModel):
             "ha_webhook_id": "HA_WEBHOOK_ID",
             "jira_webhook_public_url": "JIRA_WEBHOOK_PUBLIC_URL",
             "auto_register_webhook": "AUTO_REGISTER_WEBHOOK",
+            "event_bus_backend": "EVENT_BUS_BACKEND",
+            "gcp_pubsub_topic": "GCP_PUBSUB_TOPIC",
+            "mqtt_broker_url": "MQTT_URL",
+            "mqtt_topic": "MQTT_TOPIC",
         }
 
         int_fields = {

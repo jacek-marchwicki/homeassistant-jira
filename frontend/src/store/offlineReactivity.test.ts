@@ -591,4 +591,68 @@ describe('Cross-View & Filter Offline Reactivity', () => {
     expect(updated?.issue_links?.[0].relationship).toBe('clones');
     expect(updated?.issue_links?.[0].issue.key).toBe('PROJ-502');
   });
+
+  it('automatically flushes offline queue and transitions syncStatus to synced when websocket reconnects', async () => {
+    const issue: JiraIssue = {
+      id: '601',
+      key: 'PROJ-601',
+      summary: 'Disconnect test task',
+      status: { id: '11', name: 'To Do', category: 'todo' },
+      priority: 'medium',
+      issue_type: 'task',
+      updated_at: '2026-10-07T12:00:00Z',
+    };
+
+    useBoardStore.setState({
+      issues: [issue],
+      columns: testColumns,
+      offlineOutbox: [],
+      syncStatus: 'synced',
+      pendingSyncCount: 0,
+      wsConnected: true,
+    });
+
+    // 1. Web interface disconnects from network
+    useBoardStore.getState().setWsConnected(false);
+    expect(useBoardStore.getState().wsConnected).toBe(false);
+
+    // 2. User makes a change while offline
+    global.fetch = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
+
+    await useBoardStore.getState().updateIssueOptimistic('PROJ-601', {
+      summary: 'Task updated while disconnected',
+    });
+
+    // Marked as offline with 1 pending
+    expect(useBoardStore.getState().syncStatus).toBe('offline');
+    expect(useBoardStore.getState().pendingSyncCount).toBe(1);
+    expect(useBoardStore.getState().offlineOutbox.length).toBe(1);
+
+    // 3. Network connection is restored: backend responds to fetch
+    const syncedIssue: JiraIssue = {
+      ...issue,
+      summary: 'Task updated while disconnected',
+      updated_at: '2026-10-07T12:05:00Z',
+    };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => syncedIssue,
+    } as Response);
+
+    // 4. WebSocket connection is restored
+    useBoardStore.getState().setWsConnected(true);
+
+    // Wait for the async flush triggered by setWsConnected to complete
+    await vi.waitFor(() => {
+      expect(useBoardStore.getState().syncStatus).toBe('synced');
+    });
+
+    expect(useBoardStore.getState().wsConnected).toBe(true);
+    expect(useBoardStore.getState().pendingSyncCount).toBe(0);
+    expect(useBoardStore.getState().offlineOutbox.length).toBe(0);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/issues/PROJ-601'),
+      expect.objectContaining({ method: 'PATCH' })
+    );
+  });
 });

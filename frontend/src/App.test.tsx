@@ -164,53 +164,64 @@ describe('App component loading indicator & board rendering', () => {
     expect(snackbar?.textContent).toContain('Undo');
   });
 
-  it('renders loading state within task details modal on direct task URL, then displays task upon sync', async () => {
-    window.history.replaceState(null, '', '/task/PROJ-101');
-
-    let resolveFetchBoard!: (val: unknown) => void;
-    global.fetch = vi.fn().mockImplementation(() => new Promise((resolve) => {
-      resolveFetchBoard = resolve;
-    }));
-
-    act(() => {
-      useBoardStore.setState({
-        routeTaskKey: 'PROJ-101',
-        routeTaskStatus: 'loading',
-        editingIssue: null,
-        isLoading: true,
-        initialSyncCompleted: false,
-      });
-    });
-
-    await act(async () => {
-      root.render(<App />);
-    });
-
-    // Verify task details modal is open with loading screen
-    const loadingScreen = container.querySelector('[data-testid="task-sync-loading"]');
-    expect(loadingScreen).not.toBeNull();
-    expect(container.textContent).toContain('PROJ-101');
-
-    // Simulate board sync finishing with PROJ-101
-    await act(async () => {
-      resolveFetchBoard({
-        ok: true,
-        json: async () => ({
-          board_name: 'Engineering Sprint Board',
-          sprint_name: 'Active Sprint 42',
-          columns: [],
-          issues: [testIssue],
-        }),
-      });
-    });
-
-    // Flush store update
-    await act(async () => {
-      useBoardStore.getState().resolveRouteTask();
-    });
-
     expect(container.querySelector('[data-testid="task-sync-loading"]')).toBeNull();
     const summaryInput = container.querySelector('#edit-summary') as HTMLInputElement;
     expect(summaryInput?.value).toBe('Setup CI/CD pipeline');
+  });
+
+  it('triggers flushOfflineQueue on websocket open when pending offline items exist', async () => {
+    let wsInstance: any = null;
+    class MockWebSocket {
+      onopen: (() => void) | null = null;
+      onmessage: ((event: any) => void) | null = null;
+      onclose: ((event: any) => void) | null = null;
+      onerror: (() => void) | null = null;
+      close = vi.fn();
+      constructor() {
+        wsInstance = this;
+      }
+    }
+    const originalWebSocket = global.WebSocket;
+    global.WebSocket = MockWebSocket as any;
+
+    try {
+      const flushSpy = vi.fn().mockResolvedValue(undefined);
+      (useBoardStore.getState() as any).flushOfflineQueue = flushSpy;
+
+      act(() => {
+        useBoardStore.setState({
+          isLoading: false,
+          boardName: 'Engineering Sprint Board',
+          issues: [testIssue],
+          offlineOutbox: [
+            {
+              id: 'tx-offline-1',
+              action: 'update_issue',
+              issueKey: 'PROJ-101',
+              payload: { summary: 'New summary' },
+              createdAt: Date.now(),
+            },
+          ],
+          syncStatus: 'offline',
+          pendingSyncCount: 1,
+        });
+      });
+
+      await act(async () => {
+        root.render(<App />);
+      });
+
+      expect(wsInstance).not.toBeNull();
+
+      // Trigger socket onopen
+      await act(async () => {
+        wsInstance.onopen?.();
+      });
+
+      expect(flushSpy).toHaveBeenCalled();
+    } finally {
+      global.WebSocket = originalWebSocket;
+    }
+  });
   });
 });

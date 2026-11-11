@@ -5,8 +5,15 @@ from jira_dashboard.adapters.blob_storage import (
     GoogleCloudStorageBlobStorage,
     LocalDiskBlobStorage,
 )
+from jira_dashboard.adapters.event_bus import (
+    EventBusProtocol,
+    GCPPubSubEventBus,
+    InMemoryEventBus,
+    MosquittoMQTTEventBus,
+)
 from jira_dashboard.adapters.factory import (
     create_blob_storage,
+    create_event_bus,
     create_jira_client,
     create_storage,
 )
@@ -40,12 +47,15 @@ from jira_dashboard.adapters.webhook_registrar import (
 __all__ = [
     "BlobStorageProtocol",
     "DEFAULT_COLUMNS",
+    "EventBusProtocol",
     "FakeJiraClient",
     "FirestoreStorage",
+    "GCPPubSubEventBus",
     "GeminiImageClient",
     "GoogleCloudStorageBlobStorage",
     "GoogleGenAIImageClient",
     "HomeAssistantCloudhookManager",
+    "InMemoryEventBus",
     "JiraAPIError",
     "JiraClientProtocol",
     "JiraCloudClient",
@@ -53,11 +63,13 @@ __all__ = [
     "JiraWebhookProcessor",
     "LocalDiskBlobStorage",
     "MockGeminiImageClient",
+    "MosquittoMQTTEventBus",
     "SQLiteStorage",
     "StorageProtocol",
     "build_webhook_url_with_secret",
     "compute_background_content_hash",
     "create_blob_storage",
+    "create_event_bus",
     "create_gemini_client",
     "create_jira_client",
     "create_storage",

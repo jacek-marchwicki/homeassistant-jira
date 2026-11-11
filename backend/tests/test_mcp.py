@@ -980,15 +980,19 @@ def test_mcp_create_task_broadcasts_websocket_and_returns_dashboard_url() -> Non
     """Verify that creating a task via MCP broadcasts over WebSocket and returns dashboard URL."""
     from fastapi.testclient import TestClient
 
-    from jira_dashboard.presentation.main import app
+    from jira_dashboard.presentation.main import app, settings, storage
 
     client = TestClient(app)
+    board_id = settings.jira_board_id
+    latest_seq = storage.get_latest_board_seq(board_id)
 
     # 1. Establish WebSocket connection as an active dashboard client
-    with client.websocket_connect("/ws") as ws:
+    with client.websocket_connect(f"/ws?last_seq={latest_seq}") as ws:
         # Initial connect message
         init_msg = ws.receive_json()
         assert init_msg.get("event") == "connected"
+        catchup_msg = ws.receive_json()
+        assert catchup_msg.get("event") == "catchup_complete"
 
         # 2. Invoke MCP home_tasks_create_task
         create_payload = {
@@ -1017,16 +1021,19 @@ def test_mcp_create_task_broadcasts_websocket_and_returns_dashboard_url() -> Non
         assert create_res.get("task_url") == expected_url
         assert create_res.get("dashboard_url") == expected_url
 
-        # 4. Verify connected WebSocket client receives issue_created event
+        # 4. Verify connected WebSocket client receives outbox_delta for issue_created
         ws_msg = ws.receive_json()
-        assert ws_msg.get("event") == "issue_created"
-        assert ws_msg.get("issue_key") == created_key
-        assert ws_msg.get("status_name") == "Ready"
-        assert ws_msg.get("status_category") == "todo"
-        assert ws_msg.get("dashboard_url") == expected_url
-        assert "issue" in ws_msg
-        assert ws_msg["issue"]["key"] == created_key
-        assert ws_msg["issue"]["summary"] == "Live WebSocket Update Task"
+        assert ws_msg.get("event") == "outbox_delta"
+        assert ws_msg.get("type") == "issue_created"
+        assert ws_msg.get("seq") is not None
+        payload = ws_msg.get("payload", {})
+        assert payload.get("issue_key") == created_key
+        assert payload.get("status_name") == "Ready"
+        assert payload.get("status_category") == "todo"
+        assert payload.get("dashboard_url") == expected_url
+        assert "issue" in payload
+        assert payload["issue"]["key"] == created_key
+        assert payload["issue"]["summary"] == "Live WebSocket Update Task"
 
 
 def test_mcp_create_task_respects_configured_dashboard_url() -> None:

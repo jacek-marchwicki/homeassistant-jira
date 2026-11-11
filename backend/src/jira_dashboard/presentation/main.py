@@ -715,11 +715,16 @@ async def _mcp_on_issue_created(created: JiraIssue) -> None:
         _cached_board_response.issues.sort(key=issue_sort_key)
 
 
+async def _mcp_broadcast(message: dict[str, Any]) -> None:
+    event_type = message.get("event", "issue_updated")
+    await broadcast_mutation_event(event_type=event_type, message=message)
+
+
 mcp_handler = MCPServerHandler(
     jira_client=jira_client,
     storage=storage,
     base_url=settings.dashboard_url or "",
-    broadcast_func=ws_hub.broadcast,
+    broadcast_func=_mcp_broadcast,
     on_issue_created=_mcp_on_issue_created,
 )
 

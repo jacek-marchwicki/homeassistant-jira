@@ -135,8 +135,21 @@ def test_websocket_receives_sequenced_deletions_comments_and_account_types() -> 
     board_id = settings.jira_board_id
     client = TestClient(app)
 
-    # Seed an issue to delete
-    storage.save_issues(list(jira_client._issues.values()))
+    # Seed a custom issue to delete
+    from jira_dashboard.domain import IssueType, JiraIssue, JiraStatus, Priority, StatusCategory
+
+    temp_issue = JiraIssue(
+        id="999",
+        key="TEST-DEL-1",
+        summary="Delete me",
+        issue_type=IssueType.TASK,
+        priority=Priority.MEDIUM,
+        status=JiraStatus(id="1", name="To Do", category=StatusCategory.TODO),
+        updated_at="2026-11-01T10:00:00Z",
+    )
+    storage.save_issues([temp_issue])
+    if hasattr(jira_client, "_issues"):
+        jira_client._issues["TEST-DEL-1"] = temp_issue
 
     with client.websocket_connect(f"/ws?board_id={board_id}&last_seq=0") as ws:
         init_msg = ws.receive_json()
@@ -144,13 +157,13 @@ def test_websocket_receives_sequenced_deletions_comments_and_account_types() -> 
         complete_msg = ws.receive_json()
         assert complete_msg["event"] == "catchup_complete"
 
-        # 1. DELETE /api/issues/PROJ-101
-        del_resp = client.delete("/api/issues/PROJ-101")
+        # 1. DELETE /api/issues/TEST-DEL-1
+        del_resp = client.delete("/api/issues/TEST-DEL-1")
         assert del_resp.status_code == 200
         del_ws = ws.receive_json()
         assert del_ws["event"] == "outbox_delta"
         assert del_ws["type"] == "issue_deleted"
-        assert del_ws["payload"]["issue_key"] == "PROJ-101"
+        assert del_ws["payload"]["issue_key"] == "TEST-DEL-1"
         assert del_ws["seq"] > 0
 
         # 2. Add comment

@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from jira_dashboard.presentation import main as main_mod
 from jira_dashboard.presentation.main import app
 
 
@@ -114,12 +115,17 @@ def test_gemini_stats_endpoint(client: TestClient) -> None:
 
 def test_websocket_handshake_and_ping(client: TestClient) -> None:
     """Verify WebSocket /ws connection handshake, initial connection event, and ping/pong."""
-    with client.websocket_connect("/ws") as websocket:
+    board_id = main_mod.settings.jira_board_id
+    latest_seq = main_mod.storage.get_latest_board_seq(board_id)
+
+    with client.websocket_connect(f"/ws?last_seq={latest_seq}") as websocket:
         # 1. Connection acknowledgment event
         initial_data = websocket.receive_json()
         assert initial_data.get("event") == "connected"
         assert "message" in initial_data
         assert initial_data.get("active_clients", 0) >= 1
+        catchup_data = websocket.receive_json()
+        assert catchup_data.get("event") == "catchup_complete"
 
         # 2. Ping-pong heartbeat
         websocket.send_text("ping")
@@ -134,11 +140,15 @@ def test_transition_endpoint_and_websocket_broadcast(client: TestClient) -> None
     all connected browser windows receive the updated JiraIssue instantly.
     """
     target_issue_key = "PROJ-101"
+    board_id = main_mod.settings.jira_board_id
+    latest_seq = main_mod.storage.get_latest_board_seq(board_id)
 
-    with client.websocket_connect("/ws") as websocket:
+    with client.websocket_connect(f"/ws?last_seq={latest_seq}") as websocket:
         # Consume initial connection event
         connect_ack = websocket.receive_json()
         assert connect_ack["event"] == "connected"
+        catchup_ack = websocket.receive_json()
+        assert catchup_ack["event"] == "catchup_complete"
 
         # Execute REST transition to "done"
         transition_payload = {"target_category": "done"}
@@ -153,21 +163,27 @@ def test_transition_endpoint_and_websocket_broadcast(client: TestClient) -> None
 
         # Assert that the WebSocket client immediately received the broadcasted delta
         ws_event = websocket.receive_json()
-        assert ws_event.get("event") == "issue_transitioned"
-        assert ws_event.get("issue_key") == target_issue_key
-        assert ws_event.get("status_category") == "done"
-        assert "issue" in ws_event
-        assert ws_event["issue"]["key"] == target_issue_key
-        assert ws_event["issue"]["status"]["category"] == "done"
+        assert ws_event.get("event") == "outbox_delta"
+        assert ws_event.get("type") == "issue_transitioned"
+        payload = ws_event.get("payload", {})
+        assert payload.get("issue_key") == target_issue_key
+        assert payload.get("status_category") == "done"
+        assert "issue" in payload
+        assert payload["issue"]["key"] == target_issue_key
+        assert payload["issue"]["status"]["category"] == "done"
 
 
 def test_transition_with_target_status_and_websocket_broadcast(client: TestClient) -> None:
     """Verify transition with target_status updates issue and broadcasts status_name."""
     target_issue_key = "PROJ-101"
+    board_id = main_mod.settings.jira_board_id
+    latest_seq = main_mod.storage.get_latest_board_seq(board_id)
 
-    with client.websocket_connect("/ws") as websocket:
+    with client.websocket_connect(f"/ws?last_seq={latest_seq}") as websocket:
         connect_ack = websocket.receive_json()
         assert connect_ack["event"] == "connected"
+        catchup_ack = websocket.receive_json()
+        assert catchup_ack["event"] == "catchup_complete"
 
         transition_payload = {"target_status": "In Progress"}
         response = client.post(
@@ -180,10 +196,12 @@ def test_transition_with_target_status_and_websocket_broadcast(client: TestClien
         assert rest_issue["status"]["name"] == "In Progress"
 
         ws_event = websocket.receive_json()
-        assert ws_event.get("event") == "issue_transitioned"
-        assert ws_event.get("issue_key") == target_issue_key
-        assert ws_event.get("status_name") == "In Progress"
-        assert ws_event["issue"]["status"]["name"] == "In Progress"
+        assert ws_event.get("event") == "outbox_delta"
+        assert ws_event.get("type") == "issue_transitioned"
+        payload = ws_event.get("payload", {})
+        assert payload.get("issue_key") == target_issue_key
+        assert payload.get("status_name") == "In Progress"
+        assert payload["issue"]["status"]["name"] == "In Progress"
 
 
 def test_transition_nonexistent_issue_returns_404(client: TestClient) -> None:
@@ -222,10 +240,15 @@ def test_jira_webhook_ingestion_and_broadcast(client: TestClient) -> None:
         },
     }
 
-    with client.websocket_connect("/ws") as websocket:
+    board_id = main_mod.settings.jira_board_id
+    latest_seq = main_mod.storage.get_latest_board_seq(board_id)
+
+    with client.websocket_connect(f"/ws?last_seq={latest_seq}") as websocket:
         # Consume initial connection event
         connect_ack = websocket.receive_json()
         assert connect_ack["event"] == "connected"
+        catchup_ack = websocket.receive_json()
+        assert catchup_ack["event"] == "catchup_complete"
 
         # Ingest webhook
         response = client.post("/api/webhooks/jira", json=webhook_payload)
@@ -235,11 +258,13 @@ def test_jira_webhook_ingestion_and_broadcast(client: TestClient) -> None:
 
         # Assert WebSocket client received real-time broadcast
         ws_event = websocket.receive_json()
-        assert ws_event.get("event") == "issue_transitioned"
-        assert ws_event.get("issue_key") == "PROJ-104"
-        assert ws_event.get("status_category") == "done"
+        assert ws_event.get("event") == "outbox_delta"
+        assert ws_event.get("type") == "issue_transitioned"
+        payload = ws_event.get("payload", {})
+        assert payload.get("issue_key") == "PROJ-104"
+        assert payload.get("status_category") == "done"
         assert (
-            ws_event["issue"]["summary"] == "Setup WebSocket broadcast client (updated via webhook)"
+            payload["issue"]["summary"] == "Setup WebSocket broadcast client (updated via webhook)"
         )
 
 

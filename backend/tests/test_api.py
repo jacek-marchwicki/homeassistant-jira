@@ -210,14 +210,19 @@ class TestPresentationApi(unittest.TestCase):
 
     def test_account_types_broadcast_over_websocket(self) -> None:
         """Changing an account type notifies connected clients."""
-        with self.client.websocket_connect("/ws") as ws:
+        from jira_dashboard.presentation.main import settings, storage
+
+        latest_seq = storage.get_latest_board_seq(settings.jira_board_id)
+        with self.client.websocket_connect(f"/ws?last_seq={latest_seq}") as ws:
             self.assertEqual(ws.receive_json()["event"], "connected")
+            self.assertEqual(ws.receive_json()["event"], "catchup_complete")
             self.client.put(
                 "/api/account-types", json={"display_name": "Kid", "account_type": "child"}
             )
             msg = ws.receive_json()
-            self.assertEqual(msg["event"], "account_types_updated")
-            self.assertEqual(msg["account_types"], {"kid": "child"})
+            self.assertEqual(msg["event"], "outbox_delta")
+            self.assertEqual(msg["type"], "account_types_updated")
+            self.assertEqual(msg["payload"]["account_types"], {"kid": "child"})
 
     def test_comments_crud_lifecycle(self) -> None:
         """Verify viewing, adding, updating, and deleting comments on an issue."""

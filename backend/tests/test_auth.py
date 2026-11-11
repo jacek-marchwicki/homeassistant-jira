@@ -310,7 +310,7 @@ def test_websocket_auth_in_gcp_oauth_mode(monkeypatch: pytest.MonkeyPatch) -> No
 
     # 1. Unauthenticated connection rejected with 1008
     with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect("/ws"):
+        with client.websocket_connect("/ws?last_seq=0"):
             pass
     assert exc_info.value.code == 1008
 
@@ -318,7 +318,7 @@ def test_websocket_auth_in_gcp_oauth_mode(monkeypatch: pytest.MonkeyPatch) -> No
     user = GoogleAuthUser(email="family@example.com", name="Family Member")
     token = create_session_token(user, secret="secret-key-123")
     client.cookies.set("ha_jira_session", token)
-    with client.websocket_connect("/ws") as ws:
+    with client.websocket_connect("/ws?last_seq=0") as ws:
         data = ws.receive_json()
         assert data["event"] == "connected"
 

@@ -99,7 +99,9 @@ export default function App() {
           nextRetryAt: null,
           retryAttempt: 0,
         });
-        void useBoardStore.getState().flushOfflineQueue();
+        if (typeof window === 'undefined' || !(window as any).__DISABLE_AUTO_FLUSH__) {
+          void useBoardStore.getState().flushOfflineQueue();
+        }
       };
 
       socket.onmessage = (event) => {

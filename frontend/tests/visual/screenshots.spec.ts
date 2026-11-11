@@ -1253,6 +1253,11 @@ test.describe('Visual Screenshot Tests across Viewports & Themes', () => {
       );
     });
 
+    // Prevent auto-draining the outbox during this pending transaction snapshot test
+    await page.addInitScript(() => {
+      (window as any).__DISABLE_AUTO_FLUSH__ = true;
+    });
+
     await page.reload();
     await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
 

@@ -955,7 +955,9 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     set({ wsConnected: connected });
     if (connected) {
       if (get().offlineOutbox.length > 0) {
-        void get().flushOfflineQueue();
+        if (typeof window === 'undefined' || !(window as any).__DISABLE_AUTO_FLUSH__) {
+          void get().flushOfflineQueue();
+        }
       } else if (get().syncStatus === 'offline') {
         set({ syncStatus: 'synced', syncError: null });
       }
@@ -2233,6 +2235,8 @@ function persistCurrentBoardState(get: () => BoardStoreState): void {
 
 if (typeof window !== 'undefined' && window.addEventListener) {
   window.addEventListener('online', () => {
-    void useBoardStore.getState().flushOfflineQueue();
+    if (!(window as any).__DISABLE_AUTO_FLUSH__) {
+      void useBoardStore.getState().flushOfflineQueue();
+    }
   });
 }

@@ -28,13 +28,24 @@ class JiraWebhookProcessor:
         self,
         jira_client: JiraClientProtocol,
         storage: StorageProtocol,
-        ws_hub: EventBroadcaster,
-        board_cache_updater: Callable[[JiraIssue | None, str | None], None],
+        broadcast_func: Callable[..., Any] | None = None,
+        board_cache_updater: Callable[[JiraIssue | None, str | None], None] = lambda *_: None,
+        ws_hub: Any = None,
     ) -> None:
         self.jira_client = jira_client
         self.storage = storage
+        self.broadcast_func = broadcast_func
         self.ws_hub = ws_hub
         self.board_cache_updater = board_cache_updater
+
+    async def _emit_event(self, event_type: str, message: dict[str, Any]) -> None:
+        if self.broadcast_func:
+            await self.broadcast_func(event_type=event_type, message=message)
+        elif self.ws_hub:
+            if hasattr(self.ws_hub, "broadcast"):
+                await self.ws_hub.broadcast(message)
+            elif callable(self.ws_hub):
+                await self.ws_hub(event_type, message)
 
     async def process_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Parse incoming Jira Cloud webhook payload, update storage, and notify clients."""
@@ -55,11 +66,12 @@ class JiraWebhookProcessor:
 
             self.board_cache_updater(None, del_key)
 
-            await self.ws_hub.broadcast(
+            await self._emit_event(
+                "issue_deleted",
                 {
                     "event": "issue_deleted",
                     "issue_key": del_key,
-                }
+                },
             )
             return {"status": "deleted", "issue_key": del_key}
 
@@ -85,14 +97,15 @@ class JiraWebhookProcessor:
         event_type = (
             "issue_created" if webhook_event == "jira:issue_created" else "issue_transitioned"
         )
-        await self.ws_hub.broadcast(
+        await self._emit_event(
+            event_type,
             {
                 "event": event_type,
                 "issue_key": issue.key,
                 "status_category": issue.status.category.value,
                 "status_name": issue.status.name,
                 "issue": issue.model_dump(),
-            }
+            },
         )
 
         return {

@@ -268,7 +268,7 @@ def _update_board_cache_from_webhook(
 webhook_processor = JiraWebhookProcessor(
     jira_client=jira_client,
     storage=storage,
-    ws_hub=ws_hub,
+    broadcast_func=broadcast_mutation_event,
     board_cache_updater=_update_board_cache_from_webhook,
 )
 

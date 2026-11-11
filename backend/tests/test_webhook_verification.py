@@ -211,3 +211,30 @@ def test_jira_webhook_secret_alias_property() -> None:
 
     cfg = JiraDashboardSettings(webhook_secret="token-123")
     assert cfg.jira_webhook_secret == "token-123"
+
+
+def test_webhook_triggers_outbox_sequence_and_websocket_delta() -> None:
+    """Verify incoming Jira webhook increments board sequence and emits outbox_delta over WebSocket."""
+    from jira_dashboard.presentation.main import settings, storage
+
+    board_id = settings.jira_board_id
+    init_seq = storage.get_latest_board_seq(board_id)
+    client = TestClient(app)
+
+    with client.websocket_connect(f"/ws?board_id={board_id}&last_seq={init_seq}") as ws:
+        connected_msg = ws.receive_json()
+        assert connected_msg["event"] == "connected"
+        catchup_msg = ws.receive_json()
+        assert catchup_msg["event"] == "catchup_complete"
+
+        # Post update webhook
+        res = client.post("/api/webhooks/jira", json=SAMPLE_PAYLOAD)
+        assert res.status_code == 200
+
+        # Verify WebSocket received outbox_delta
+        ws_msg = ws.receive_json()
+        assert ws_msg["event"] == "outbox_delta"
+        assert ws_msg["seq"] > init_seq
+        assert ws_msg["type"] == "issue_transitioned"
+        assert ws_msg["payload"]["issue_key"] == "PROJ-101"
+

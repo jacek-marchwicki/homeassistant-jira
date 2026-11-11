@@ -104,3 +104,29 @@ def test_websocket_disconnect_cleans_up_queue() -> None:
 
     # After exit, queue is removed
     assert len(event_router._subscribers.get(board_id, set())) == 0
+
+
+def test_websocket_rejects_missing_last_seq() -> None:
+    from starlette.websockets import WebSocketDisconnect
+
+    client = TestClient(app)
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect("/ws"):
+            pass
+    assert exc_info.value.code == 1008
+
+
+def test_websocket_rejects_invalid_last_seq() -> None:
+    from starlette.websockets import WebSocketDisconnect
+
+    client = TestClient(app)
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect("/ws?last_seq=invalid"):
+            pass
+    assert exc_info.value.code == 1008
+
+    with pytest.raises(WebSocketDisconnect) as exc_info_neg:
+        with client.websocket_connect("/ws?last_seq=-5"):
+            pass
+    assert exc_info_neg.value.code == 1008
+

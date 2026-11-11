@@ -2642,10 +2642,24 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.close(code=1008, reason="Authentication required")
             return
 
-    await ws_hub.connect(websocket)
-
     board_id = websocket.query_params.get("board_id") or settings.jira_board_id
     last_seq_param = websocket.query_params.get("last_seq")
+    if last_seq_param is None:
+        await websocket.close(code=1008, reason="Missing required query parameter: last_seq")
+        return
+
+    try:
+        last_seq = int(last_seq_param)
+        if last_seq < 0:
+            raise ValueError("last_seq must be non-negative")
+    except (ValueError, TypeError):
+        await websocket.close(
+            code=1008,
+            reason="Invalid query parameter: last_seq must be a non-negative integer",
+        )
+        return
+
+    await ws_hub.connect(websocket)
     queue: asyncio.Queue[dict[str, Any]] | None = None
     if last_seq_param is not None:
         ws_hub.mark_router_subscribed(websocket)

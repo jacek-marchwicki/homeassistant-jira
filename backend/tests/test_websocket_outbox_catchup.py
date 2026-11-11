@@ -188,5 +188,3 @@ def test_websocket_receives_sequenced_deletions_comments_and_account_types() -> 
         assert acc_ws["event"] == "outbox_delta"
         assert acc_ws["type"] == "account_types_updated"
         assert acc_ws["seq"] > comment_ws["seq"]
-
-

@@ -214,7 +214,7 @@ def test_jira_webhook_secret_alias_property() -> None:
 
 
 def test_webhook_triggers_outbox_sequence_and_websocket_delta() -> None:
-    """Verify incoming Jira webhook increments board sequence and emits outbox_delta over WebSocket."""
+    """Verify incoming Jira webhook increments sequence and emits outbox_delta."""
     from jira_dashboard.presentation.main import settings, storage
 
     board_id = settings.jira_board_id
@@ -237,4 +237,3 @@ def test_webhook_triggers_outbox_sequence_and_websocket_delta() -> None:
         assert ws_msg["seq"] > init_seq
         assert ws_msg["type"] == "issue_transitioned"
         assert ws_msg["payload"]["issue_key"] == "PROJ-101"
-

@@ -130,3 +130,50 @@ def test_websocket_rejects_invalid_last_seq() -> None:
             pass
     assert exc_info_neg.value.code == 1008
 
+
+def test_websocket_receives_sequenced_deletions_comments_and_account_types() -> None:
+    board_id = settings.jira_board_id
+    client = TestClient(app)
+
+    # Seed an issue to delete
+    storage.save_issues(list(jira_client._issues.values()))
+
+    with client.websocket_connect(f"/ws?board_id={board_id}&last_seq=0") as ws:
+        init_msg = ws.receive_json()
+        assert init_msg["event"] == "connected"
+        complete_msg = ws.receive_json()
+        assert complete_msg["event"] == "catchup_complete"
+
+        # 1. DELETE /api/issues/PROJ-101
+        del_resp = client.delete("/api/issues/PROJ-101")
+        assert del_resp.status_code == 200
+        del_ws = ws.receive_json()
+        assert del_ws["event"] == "outbox_delta"
+        assert del_ws["type"] == "issue_deleted"
+        assert del_ws["payload"]["issue_key"] == "PROJ-101"
+        assert del_ws["seq"] > 0
+
+        # 2. Add comment
+        comment_resp = client.post(
+            "/api/issues/PROJ-104/comments",
+            json={"body": "Sequenced comment test", "author_name": "Alice"},
+        )
+        assert comment_resp.status_code == 201
+        comment_ws = ws.receive_json()
+        assert comment_ws["event"] == "outbox_delta"
+        assert comment_ws["type"] == "comment_created"
+        assert comment_ws["payload"]["issue_key"] == "PROJ-104"
+        assert comment_ws["seq"] > del_ws["seq"]
+
+        # 3. Account types
+        acc_resp = client.put(
+            "/api/account-types",
+            json={"display_name": "Bob", "account_type": "child"},
+        )
+        assert acc_resp.status_code == 200
+        acc_ws = ws.receive_json()
+        assert acc_ws["event"] == "outbox_delta"
+        assert acc_ws["type"] == "account_types_updated"
+        assert acc_ws["seq"] > comment_ws["seq"]
+
+

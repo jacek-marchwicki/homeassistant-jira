@@ -312,14 +312,15 @@ async def poll_board_issues(board_id: str) -> None:
         prev_signature = _cached_issue_state.get(issue.key)
         if prev_signature is not None and prev_signature != state_signature:
             logger.info("Polling detected update on issue %s", issue.key)
-            await ws_hub.broadcast(
-                {
+            await broadcast_mutation_event(
+                event_type="issue_transitioned",
+                message={
                     "event": "issue_transitioned",
                     "issue_key": issue.key,
                     "status_category": issue.status.category.value,
                     "status_name": issue.status.name,
                     "issue": issue.model_dump(),
-                }
+                },
             )
         _cached_issue_state[issue.key] = state_signature
 
@@ -1836,7 +1837,10 @@ async def set_account_type(request: AccountTypeRequest) -> AccountTypesResponse:
         updated = storage.set_account_type(request.display_name, request.account_type)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    await ws_hub.broadcast({"event": "account_types_updated", "account_types": updated})
+    await broadcast_mutation_event(
+        event_type="account_types_updated",
+        message={"event": "account_types_updated", "account_types": updated},
+    )
     return AccountTypesResponse(account_types=updated)
 
 
@@ -2300,11 +2304,12 @@ async def delete_issue(key: str) -> dict[str, Any]:
         _cached_board_response.issues = [i for i in _cached_board_response.issues if i.key != key]
 
     # Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    await broadcast_mutation_event(
+        event_type="issue_deleted",
+        message={
             "event": "issue_deleted",
             "issue_key": key,
-        }
+        },
     )
 
     return {"status": "deleted", "key": key}
@@ -2424,11 +2429,12 @@ async def get_issue_background(key: str) -> Response:
         issue_key=key,
     )
     storage.increment_daily_generation_count(today_str)
-    await ws_hub.broadcast(
-        {
+    await broadcast_mutation_event(
+        event_type="gemini_stats_updated",
+        message={
             "event": "gemini_stats_updated",
             "gemini_stats": get_gemini_stats().model_dump(),
-        }
+        },
     )
 
     return Response(
@@ -2460,12 +2466,13 @@ async def add_issue_comment(key: str, request: CommentCreateRequest) -> JiraComm
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     # Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    await broadcast_mutation_event(
+        event_type="comment_created",
+        message={
             "event": "comment_created",
             "issue_key": key,
             "comment": comment.model_dump(),
-        }
+        },
     )
 
     return comment
@@ -2484,12 +2491,13 @@ async def update_issue_comment(
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     # Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    await broadcast_mutation_event(
+        event_type="comment_updated",
+        message={
             "event": "comment_updated",
             "issue_key": key,
             "comment": comment.model_dump(),
-        }
+        },
     )
 
     return comment
@@ -2504,12 +2512,13 @@ async def delete_issue_comment(key: str, comment_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     # Broadcast real-time delta via WebSockets
-    await ws_hub.broadcast(
-        {
+    await broadcast_mutation_event(
+        event_type="comment_deleted",
+        message={
             "event": "comment_deleted",
             "issue_key": key,
             "comment_id": comment_id,
-        }
+        },
     )
 
     return {"status": "deleted", "comment_id": comment_id}

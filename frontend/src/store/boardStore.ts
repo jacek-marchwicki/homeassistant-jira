@@ -291,6 +291,12 @@ export interface BoardStoreState {
   pendingQuickDone: PendingQuickDone | null;
   /** Task key requested by the URL (/task/KEY) that is not yet resolved to an issue. */
   routeTaskKey: string | null;
+  /** Status of resolving a direct task route: loading, not_found, error, or null when resolved/inactive. */
+  routeTaskStatus: 'loading' | 'not_found' | 'error' | null;
+  /** Error message if direct task sync/fetch failed. */
+  routeTaskError: string | null;
+  /** Whether the initial board sync has finished (either ok or error). */
+  initialSyncCompleted: boolean;
   offlineOutbox: OfflineOutboxItem[];
   syncStatus: 'synced' | 'syncing' | 'offline';
   pendingSyncCount: number;
@@ -468,12 +474,23 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   rollbackQueue: {},
   currentView: initialRoute.kind === 'view' ? initialRoute.view : loadCachedView(),
   isBacklogExpandedOnBoard: false,
-  editingIssue: null,
+  editingIssue:
+    initialRoute.kind === 'task'
+      ? initialCache?.issues?.find((i) => i.key === initialRoute.key) || null
+      : null,
   isCreateModalOpen: initialRoute.kind === 'create',
   createInitialValues: null,
   isConnectionModalOpen: initialRoute.kind === 'status',
   pendingQuickDone: null,
   routeTaskKey: initialRoute.kind === 'task' ? initialRoute.key : null,
+  routeTaskStatus:
+    initialRoute.kind === 'task'
+      ? initialCache?.issues?.some((i) => i.key === initialRoute.key)
+        ? null
+        : 'loading'
+      : null,
+  routeTaskError: null,
+  initialSyncCompleted: false,
   offlineOutbox: initialOutbox,
   syncStatus: initialOutbox.length > 0 ? 'offline' : 'synced',
   pendingSyncCount: initialOutbox.length,
@@ -583,7 +600,14 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
 
   openSettings: () => {
     pushRoute({ kind: 'settings' });
-    set({ isSettingsOpen: true, editingIssue: null, routeTaskKey: null, isCreateModalOpen: false });
+    set({
+      isSettingsOpen: true,
+      editingIssue: null,
+      routeTaskKey: null,
+      routeTaskStatus: null,
+      routeTaskError: null,
+      isCreateModalOpen: false,
+    });
   },
 
   closeSettings: () => {
@@ -615,12 +639,19 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       set({
         editingIssue: issue,
         routeTaskKey: issue.key,
+        routeTaskStatus: null,
+        routeTaskError: null,
         isCreateModalOpen: false,
         isConnectionModalOpen: false,
       });
     } else {
       const wasOpen = Boolean(get().editingIssue) || get().routeTaskKey !== null;
-      set({ editingIssue: null, routeTaskKey: null });
+      set({
+        editingIssue: null,
+        routeTaskKey: null,
+        routeTaskStatus: null,
+        routeTaskError: null,
+      });
       if (wasOpen) closeOverlayRoute({ kind: 'view', view: get().currentView });
     }
   },
@@ -633,19 +664,46 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       return;
     }
     pushRoute({ kind: 'task', key });
-    set({ routeTaskKey: key });
+    set({
+      routeTaskKey: key,
+      editingIssue: null,
+      routeTaskStatus: 'loading',
+      routeTaskError: null,
+      isCreateModalOpen: false,
+      isConnectionModalOpen: false,
+      isSettingsOpen: false,
+    });
     try {
       const res = await fetch(getApiUrl(`/api/issues/${encodeURIComponent(key)}`), {
         credentials: 'include',
       });
       if (res.ok) {
         const fetched: JiraIssue = await res.json();
-        get().setEditingIssue(fetched);
+        set((state) => {
+          const exists = state.issues.some((i) => i.key === fetched.key);
+          return {
+            issues: exists ? state.issues : sortIssuesByRank([fetched, ...state.issues]),
+            editingIssue: fetched,
+            routeTaskKey: fetched.key,
+            routeTaskStatus: null,
+            routeTaskError: null,
+          };
+        });
+      } else if (res.status === 404) {
+        set({ routeTaskStatus: 'not_found', routeTaskError: null });
       } else {
-        get().resolveRouteTask();
+        const err = await res.json().catch(() => ({}));
+        set({
+          routeTaskStatus: 'error',
+          routeTaskError: err.detail || `Failed to fetch issue (HTTP ${res.status})`,
+        });
       }
-    } catch {
-      get().resolveRouteTask();
+    } catch (err) {
+      set({
+        routeTaskStatus: 'error',
+        routeTaskError:
+          err instanceof Error ? err.message : 'Unable to connect to Jira backend server.',
+      });
     }
   },
 
@@ -656,6 +714,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       createInitialValues: initialValues || null,
       editingIssue: null,
       routeTaskKey: null,
+      routeTaskStatus: null,
+      routeTaskError: null,
       isConnectionModalOpen: false,
     });
   },
@@ -668,6 +728,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         createInitialValues: null,
         editingIssue: null,
         routeTaskKey: null,
+        routeTaskStatus: null,
+        routeTaskError: null,
         isConnectionModalOpen: false,
       });
     } else {
@@ -684,6 +746,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         isConnectionModalOpen: true,
         editingIssue: null,
         routeTaskKey: null,
+        routeTaskStatus: null,
+        routeTaskError: null,
         isCreateModalOpen: false,
       });
     } else {
@@ -700,6 +764,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       currentView: view,
       editingIssue: null,
       routeTaskKey: null,
+      routeTaskStatus: null,
+      routeTaskError: null,
       isCreateModalOpen: false,
       isConnectionModalOpen: false,
       isSettingsOpen: false,
@@ -713,6 +779,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         isConnectionModalOpen: false,
         editingIssue: null,
         routeTaskKey: null,
+        routeTaskStatus: null,
+        routeTaskError: null,
         isCreateModalOpen: false,
       });
     } else if (route.kind === 'status') {
@@ -722,16 +790,21 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         isCreateModalOpen: false,
         editingIssue: null,
         routeTaskKey: null,
+        routeTaskStatus: null,
+        routeTaskError: null,
       });
     } else if (route.kind === 'task') {
+      const existing = get().issues.find((i) => i.key === route.key);
       set({
         routeTaskKey: route.key,
+        routeTaskStatus: existing ? null : 'loading',
+        routeTaskError: null,
         isCreateModalOpen: false,
         isConnectionModalOpen: false,
         isSettingsOpen: false,
-        editingIssue: null,
+        editingIssue: existing || null,
       });
-      get().resolveRouteTask();
+      void get().resolveRouteTask();
     } else if (route.kind === 'create') {
       set({
         isCreateModalOpen: true,
@@ -739,6 +812,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         isSettingsOpen: false,
         editingIssue: null,
         routeTaskKey: null,
+        routeTaskStatus: null,
+        routeTaskError: null,
       });
     } else if (route.kind === 'view') {
       saveCachedView(route.view);
@@ -746,6 +821,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         currentView: route.view,
         editingIssue: null,
         routeTaskKey: null,
+        routeTaskStatus: null,
+        routeTaskError: null,
         isCreateModalOpen: false,
         isConnectionModalOpen: false,
         isSettingsOpen: false,
@@ -758,6 +835,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         currentView: view,
         editingIssue: null,
         routeTaskKey: null,
+        routeTaskStatus: null,
+        routeTaskError: null,
         isCreateModalOpen: false,
         isConnectionModalOpen: false,
         isSettingsOpen: false,
@@ -765,16 +844,79 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     }
   },
 
-  resolveRouteTask: () => {
-    const { routeTaskKey, editingIssue, issues, isLoading, currentView } = get();
-    if (!routeTaskKey || editingIssue?.key === routeTaskKey) return;
+  resolveRouteTask: async () => {
+    const {
+      routeTaskKey,
+      editingIssue,
+      issues,
+      isLoading,
+      isSyncing,
+      initialSyncCompleted,
+      errorMessage,
+    } = get();
+    if (!routeTaskKey) return;
+    if (editingIssue?.key === routeTaskKey) {
+      if (get().routeTaskStatus !== null) {
+        set({ routeTaskStatus: null, routeTaskError: null });
+      }
+      return;
+    }
     const found = issues.find((i) => i.key === routeTaskKey);
     if (found) {
-      set({ editingIssue: found });
-    } else if (!isLoading && issues.length > 0) {
-      // Unknown task: fall back to the current view instead of leaving a dead URL.
-      set({ routeTaskKey: null });
-      replaceRoute({ kind: 'view', view: currentView });
+      set({ editingIssue: found, routeTaskStatus: null, routeTaskError: null });
+      return;
+    }
+
+    // Still in the process of initial board sync or background sync
+    if (!initialSyncCompleted || isLoading || isSyncing) {
+      if (get().routeTaskStatus !== 'loading') {
+        set({ routeTaskStatus: 'loading', routeTaskError: null });
+      }
+      return;
+    }
+
+    // Initial sync ended in a failure
+    if (errorMessage) {
+      set({
+        routeTaskStatus: 'error',
+        routeTaskError: errorMessage,
+      });
+      return;
+    }
+
+    // Initial sync is completed and the task was not in the board list.
+    // Query single issue endpoint to verify if it exists outside board or was freshly created.
+    try {
+      const res = await fetch(getApiUrl(`/api/issues/${encodeURIComponent(routeTaskKey)}`), {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const fetched: JiraIssue = await res.json();
+        set((state) => {
+          const exists = state.issues.some((i) => i.key === fetched.key);
+          return {
+            issues: exists ? state.issues : sortIssuesByRank([fetched, ...state.issues]),
+            editingIssue: fetched,
+            routeTaskKey: fetched.key,
+            routeTaskStatus: null,
+            routeTaskError: null,
+          };
+        });
+      } else if (res.status === 404) {
+        set({ routeTaskStatus: 'not_found', routeTaskError: null });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        set({
+          routeTaskStatus: 'error',
+          routeTaskError: err.detail || `Failed to fetch issue (HTTP ${res.status})`,
+        });
+      }
+    } catch (err) {
+      set({
+        routeTaskStatus: 'error',
+        routeTaskError:
+          err instanceof Error ? err.message : 'Unable to connect to Jira backend server.',
+      });
     }
   },
 
@@ -881,8 +1023,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
           errorMessage: null,
           isLoading: false,
           isSyncing: false,
+          initialSyncCompleted: true,
           isAuthRequired: false,
         });
+        void get().resolveRouteTask();
       } else {
         const err = await res.json().catch(() => ({}));
         if (res.status === 401) {
@@ -891,21 +1035,27 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             errorMessage: null,
             isLoading: false,
             isSyncing: false,
+            initialSyncCompleted: true,
           });
+          void get().resolveRouteTask();
           return;
         }
         set({
           errorMessage: err.detail || `Failed to load board (HTTP ${res.status})`,
           isLoading: false,
           isSyncing: false,
+          initialSyncCompleted: true,
         });
+        void get().resolveRouteTask();
       }
     } catch {
       set({
         errorMessage: 'Unable to connect to Jira backend server.',
         isLoading: false,
         isSyncing: false,
+        initialSyncCompleted: true,
       });
+      void get().resolveRouteTask();
     }
   },
 
@@ -1905,8 +2055,10 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         }
 
         let newEditingIssue = state.editingIssue;
+        let nextRouteStatus = state.routeTaskStatus;
         if (state.routeTaskKey && state.routeTaskKey === incomingIssue.key) {
           newEditingIssue = incomingIssue;
+          nextRouteStatus = null;
         }
 
         if (tempIndex !== -1) {
@@ -1928,6 +2080,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             issues: sortIssuesByRank(deduped),
             availableUsers: nextUsers,
             editingIssue: newEditingIssue,
+            routeTaskStatus: nextRouteStatus,
           };
         }
 
@@ -1941,12 +2094,14 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
             ),
             availableUsers: nextUsers,
             editingIssue: newEditingIssue,
+            routeTaskStatus: nextRouteStatus,
           };
         }
         return {
           issues: sortIssuesByRank([incomingIssue, ...state.issues]),
           availableUsers: nextUsers,
           editingIssue: newEditingIssue,
+          routeTaskStatus: nextRouteStatus,
         };
       });
       persistCurrentBoardState(get);
@@ -1958,9 +2113,22 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
     ) {
       const incomingIssue = msg.issue as JiraIssue;
       set((state) => {
+        let newEditing = state.editingIssue;
+        let nextRouteStatus = state.routeTaskStatus;
+        if (state.routeTaskKey && state.routeTaskKey === incomingIssue.key) {
+          newEditing = incomingIssue;
+          nextRouteStatus = null;
+        } else if (state.editingIssue?.key === incomingIssue.key) {
+          newEditing = { ...incomingIssue, _optimisticState: 'synced' };
+        }
+
         const exists = state.issues.some((item) => item.key === incomingIssue.key);
         if (!exists) {
-          return { issues: sortIssuesByRank([incomingIssue, ...state.issues]) };
+          return {
+            issues: sortIssuesByRank([incomingIssue, ...state.issues]),
+            editingIssue: newEditing,
+            routeTaskStatus: nextRouteStatus,
+          };
         }
         return {
           issues: sortIssuesByRank(
@@ -1968,6 +2136,8 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
               item.key === incomingIssue.key ? { ...incomingIssue, _optimisticState: 'synced' } : item
             )
           ),
+          editingIssue: newEditing,
+          routeTaskStatus: nextRouteStatus,
         };
       });
       persistCurrentBoardState(get);
@@ -1976,10 +2146,27 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         issues: state.issues.filter((item) => item.key !== msg.issue_key),
         editingIssue: state.editingIssue?.key === msg.issue_key ? null : state.editingIssue,
         routeTaskKey: state.routeTaskKey === msg.issue_key ? null : state.routeTaskKey,
+        routeTaskStatus: state.routeTaskKey === msg.issue_key ? null : state.routeTaskStatus,
       }));
       persistCurrentBoardState(get);
     } else if (msg.event === 'board_synced' && Array.isArray(msg.issues)) {
-      set({ issues: sortIssuesByRank(msg.issues as JiraIssue[]) });
+      const nextIssues = sortIssuesByRank(msg.issues as JiraIssue[]);
+      set((state) => {
+        let newEditing = state.editingIssue;
+        let nextRouteStatus = state.routeTaskStatus;
+        if (state.routeTaskKey && (!newEditing || newEditing.key !== state.routeTaskKey)) {
+          const found = nextIssues.find((i) => i.key === state.routeTaskKey);
+          if (found) {
+            newEditing = found;
+            nextRouteStatus = null;
+          }
+        }
+        return {
+          issues: nextIssues,
+          editingIssue: newEditing,
+          routeTaskStatus: nextRouteStatus,
+        };
+      });
       persistCurrentBoardState(get);
     }
   },

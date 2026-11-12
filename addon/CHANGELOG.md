@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.2
+
+- test: enhance full-stack integration tests with fake jira and playwright (HOME-15508)
+- fix: resolve temporary issue keys promptly after task creation (HOME-15503)
+- perf: enable instant PWA cache loading with background sync (HOME-15502)
+- fix(ci): align visual regression screenshots with Ubuntu CI and prevent auto-flush during test
+
 ## 0.11.1
 
 - style: format tests with ruff

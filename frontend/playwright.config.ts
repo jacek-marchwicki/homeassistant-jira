@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -8,6 +9,10 @@ const projectRoot = path.resolve(__dirname, '..');
 
 const testPort = process.env.PLAYWRIGHT_PORT || '8001';
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || `http://127.0.0.1:${testPort}`;
+
+const venvPython = path.resolve(projectRoot, '.venv/bin/python3');
+const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3';
+const testDbPath = process.env.SQLITE_DB_PATH || path.resolve(projectRoot, 'data/test_playwright_e2e.sqlite3');
 
 /**
  * Playwright configuration for Jira Dashboard visual screenshot and integration tests.
@@ -49,7 +54,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: `JIRA_USE_FAKE=1 JIRA_BOARD_ID=engineering-1 PYTHONPATH=backend/src python3 -m uvicorn jira_dashboard.presentation.main:app --port ${testPort}`,
+    command: `JIRA_USE_FAKE=1 JIRA_BOARD_ID=engineering-1 SQLITE_DB_PATH=${testDbPath} PLAYWRIGHT_PORT=${testPort} PYTHONPATH=backend/src ${pythonCmd} -m uvicorn jira_dashboard.presentation.main:app --port ${testPort}`,
     url: `${baseURL}/health`,
     reuseExistingServer: false,
     cwd: projectRoot,

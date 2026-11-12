@@ -27,6 +27,10 @@ class StorageProtocol(Protocol):
         """Return the current schema migration version."""
         ...
 
+    def clear_all_data(self) -> None:
+        """Clear all stored data tables/collections for test isolation."""
+        ...
+
     # -------------------------------------------------------------------------
     # Board Metadata
     # -------------------------------------------------------------------------

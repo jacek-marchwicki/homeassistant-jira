@@ -252,6 +252,27 @@ class SQLiteStorage:
             row = cur.fetchone()
             return int(row[0]) if row else 0
 
+    def clear_all_data(self) -> None:
+        """Clear all tables in the SQLite database for a clean test slate."""
+        with self._lock:
+            conn = self._get_connection()
+            with conn:
+                for table in [
+                    "cached_board_meta",
+                    "cached_issues",
+                    "sync_outbox",
+                    "issue_background_links",
+                    "background_images",
+                    "gemini_daily_usage",
+                    "account_types",
+                    "board_streams",
+                    "outbox_events",
+                    "oauth_codes",
+                    "oauth_refresh_tokens",
+                ]:
+                    conn.execute(f"DROP TABLE IF EXISTS {table};")
+            self.init_db()
+
     def rebuild_schema_preserving_outbox(self) -> None:
         """Recreate issue cache tables while preserving pending outbox records."""
         with self._lock:

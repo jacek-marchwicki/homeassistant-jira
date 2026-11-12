@@ -9,10 +9,19 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake Jira)', () => {
   test.beforeEach(async ({ page }) => {
-    // Reset test state and errors before each test to guarantee determinism
+    // Reset test state and wipe database cleanly before each test to guarantee test isolation
     await page.request.post('/api/test/reset');
     await page.goto('/');
     await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+  });
+
+  test.afterEach(async ({ page }) => {
+    // Clean SQLite database and in-memory Fake Jira state after each test
+    try {
+      await page.request.post('/api/test/reset');
+    } catch {
+      // Ignore if server or page context is already terminated
+    }
   });
 
   test('1. Full-Stack Data Loading: renders board, sprint, and issues from backend', async ({ page }) => {
@@ -92,12 +101,13 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
   test('4. Optimistic Rollback: simulated Jira API rejection gracefully reverts UI and shows error banner', async ({
     page,
   }) => {
-    // 1. Enable simulated Jira failure on backend
+    // 1. Enable simulated Jira failure on backend (target: 'reject' rejects the transition on the Python backend)
     await page.request.post('/api/test/simulate-error', {
       data: {
         enable: true,
         status_code: 503,
         message: 'Jira Cloud service unavailable',
+        target: 'reject',
       },
     });
 
@@ -107,16 +117,7 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     const proj98Article = page.locator('article', { hasText: 'PROJ-98' });
     await expect(proj98Article).toBeVisible();
 
-    // Intercept transition request to simulate Jira rejection
-    await page.route(/\/api\/issues\/PROJ-98\/transition/, async (route) => {
-      await route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({ detail: 'Jira Cloud service unavailable' }),
-      });
-    });
-
-    // Attempt to transition PROJ-98 to "Done"
+    // Attempt to transition PROJ-98 to "Done" (backend will reject with 503)
     const doneButton = proj98Article.getByTitle('Quick Action: Mark as Done');
     await doneButton.click();
 
@@ -126,8 +127,6 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
 
     // PROJ-98 should NOT be struck through (reverted back to In Progress)
     await expect(proj98Article.locator('p')).not.toHaveClass(/line-through/);
-
-    await page.unroute(/\/api\/issues\/PROJ-98\/transition/);
 
     // Reset error simulation
     await page.request.post('/api/test/simulate-error', {
@@ -730,6 +729,273 @@ test.describe('Full-Stack Dashboard Integration (Frontend <-> FastAPI <-> Fake J
     // Modal switches to PROJ-98
     await expect(modal.locator('#edit-summary')).toHaveValue(/Design system tokens/);
     await expect(page).toHaveURL(/\/task\/PROJ-98/);
+  });
+
+  test('19. Seeding Fake Jira: pre-seeds issues before page load and verifies user interactions are registered in Fake Jira', async ({
+    page,
+  }) => {
+    // 1. Seed a brand new task directly into Fake Jira before loading page
+    const seedRes = await page.request.post('/api/test/jira/issues', {
+      data: {
+        summary: 'Pre-seeded Task for Fake Jira Verification',
+        status_name: 'To Do',
+        status_category: 'todo',
+        priority: 'high',
+        assignee_name: 'Jacek Marchwicki',
+        assignee_account_id: 'usr-1',
+      },
+      params: { trigger_webhook: 'false' },
+    });
+    expect(seedRes.ok()).toBeTruthy();
+    const seeded = await seedRes.json();
+    const seededKey = seeded.key;
+
+    // 2. Open the page and verify the pre-seeded task is present
+    await page.goto('/');
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+
+    const card = page.locator('article', { hasText: seededKey }).first();
+    await expect(card).toBeVisible();
+    await expect(card.getByText('Pre-seeded Task for Fake Jira Verification')).toBeVisible();
+
+    // 3. User interaction 1: Quick Action: Mark as Done
+    const doneBtn = card.getByTitle('Quick Action: Mark as Done');
+    await doneBtn.click();
+    await expect(card.locator('p')).toHaveClass(/line-through/);
+
+    // Verify change is registered on the Fake Jira backend!
+    await expect.poll(async () => {
+      const res = await page.request.get(`/api/test/jira/issues/${seededKey}`);
+      if (!res.ok()) return null;
+      const jiraIssue = await res.json();
+      return jiraIssue.status.name;
+    }, { timeout: 10000 }).toBe('Done');
+
+    // 4. User interaction 2: Edit issue summary in modal
+    await card.click();
+    const dialog = page.getByRole('dialog', { name: new RegExp(`Edit Issue ${seededKey}`) });
+    await expect(dialog).toBeVisible();
+
+    const summaryInput = dialog.locator('#edit-summary');
+    await summaryInput.fill('Pre-seeded Task (Edited via UI)');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).not.toBeVisible();
+
+    await expect(card.getByText('Pre-seeded Task (Edited via UI)')).toBeVisible();
+
+    // Verify summary change is registered on Fake Jira backend!
+    await expect.poll(async () => {
+      const res = await page.request.get(`/api/test/jira/issues/${seededKey}`);
+      if (!res.ok()) return null;
+      const jiraIssue = await res.json();
+      return jiraIssue.summary;
+    }, { timeout: 10000 }).toBe('Pre-seeded Task (Edited via UI)');
+  });
+
+  test('20. Fake Jira Webhooks: adding and updating task in Fake Jira automatically syncs to browser UI via WebSockets', async ({
+    page,
+  }) => {
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+    await expect(page.getByText('Live WebSocket')).toBeVisible();
+
+    // 1. Add a task to Fake Jira with webhook dispatch enabled (simulates external Jira webhook creation)
+    const addRes = await page.request.post('/api/test/jira/issues', {
+      data: {
+        summary: 'Task Dispatched from Fake Jira Webhook Engine',
+        status_name: 'To Do',
+        status_category: 'todo',
+        priority: 'medium',
+        assignee_name: 'Jacek Marchwicki',
+        assignee_account_id: 'usr-1',
+      },
+      params: { trigger_webhook: 'true' },
+    });
+    expect(addRes.ok()).toBeTruthy();
+    const created = await addRes.json();
+    const newKey = created.key;
+
+    // 2. Without refreshing the page, verify new task appears in UI via WebSocket broadcast
+    const newCard = page.locator('article', { hasText: newKey }).first();
+    await expect(newCard).toBeVisible({ timeout: 10000 });
+    await expect(newCard.getByText('Task Dispatched from Fake Jira Webhook Engine')).toBeVisible();
+
+    // 3. Update this task in Fake Jira using simulated Jira webhook event
+    await page.request.post('/api/test/jira/webhooks/dispatch', {
+      data: {
+        event: 'jira:issue_updated',
+        issue_key: newKey,
+        fields: {
+          summary: 'Task Dispatched from Fake Jira (Updated externally)',
+          status_name: 'Done',
+          status_category: 'done',
+        },
+      },
+    });
+
+    // 4. Verify browser UI updates automatically without refresh
+    await expect(newCard.getByText('Task Dispatched from Fake Jira (Updated externally)')).toBeVisible({ timeout: 10000 });
+    await expect(newCard.locator('p')).toHaveClass(/line-through/);
+  });
+
+  test('21. Cross-Browser Synchronization: simultaneous browser contexts synchronize updates in real time', async ({
+    browser,
+  }) => {
+    // Open two distinct browser contexts simulating two open browsers/devices simultaneously
+    const contextA = await browser.newContext();
+    const contextB = await browser.newContext();
+    const pageA = await contextA.newPage();
+    const pageB = await contextB.newPage();
+
+    try {
+      await pageA.goto('/');
+      await pageB.goto('/');
+
+      await expect(pageA.locator('h1')).toHaveText('Engineering Sprint Board');
+      await expect(pageB.locator('h1')).toHaveText('Engineering Sprint Board');
+
+      await expect(pageA.getByText('Live WebSocket')).toBeVisible();
+      await expect(pageB.getByText('Live WebSocket')).toBeVisible();
+
+      // Ensure both have PROJ-101 in To Do
+      const cardA = pageA.locator('article', { hasText: 'PROJ-101' }).first();
+      const cardB = pageB.locator('article', { hasText: 'PROJ-101' }).first();
+      await expect(cardA).toBeVisible();
+      await expect(cardB).toBeVisible();
+      await expect(cardA.locator('p')).not.toHaveClass(/line-through/);
+      await expect(cardB.locator('p')).not.toHaveClass(/line-through/);
+
+      // In Browser A: user clicks "Done" on PROJ-101
+      const doneBtnA = cardA.getByTitle('Quick Action: Mark as Done');
+      await doneBtnA.click();
+      await expect(cardA.locator('p')).toHaveClass(/line-through/);
+
+      // In Browser B: WITHOUT ANY RELOAD, Browser B receives WebSocket broadcast and updates
+      await expect(cardB.locator('p')).toHaveClass(/line-through/, { timeout: 10000 });
+
+      // In Browser B: user edits summary of PROJ-85
+      const cardB_85 = pageB.locator('article', { hasText: 'PROJ-85' }).first();
+      await cardB_85.click();
+
+      const dialogB = pageB.getByRole('dialog', { name: /Edit Issue PROJ-85/ });
+      await expect(dialogB).toBeVisible();
+      const summaryInputB = dialogB.locator('#edit-summary');
+      await summaryInputB.fill('Jira webhook ingestion engine (Edited from Browser B)');
+      await dialogB.getByRole('button', { name: 'Save' }).click();
+      await expect(dialogB).not.toBeVisible();
+
+      // In Browser A: verify the edited summary appears live via WebSockets
+      const cardA_85 = pageA.locator('article', { hasText: 'PROJ-85' }).first();
+      await expect(
+        cardA_85.getByText('Jira webhook ingestion engine (Edited from Browser B)')
+      ).toBeVisible({ timeout: 10000 });
+    } finally {
+      await contextA.close();
+      await contextB.close();
+    }
+  });
+
+  test('22. Connection Resilience: browser recovers when network connection to Python server drops and reconnects', async ({
+    page,
+    context,
+  }) => {
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+    await expect(page.getByText('Live WebSocket')).toBeVisible();
+
+    // 1. Simulate browser losing connection to Python server
+    await context.setOffline(true);
+
+    // Header badge indicates Reconnecting / offline
+    await expect(page.getByText('Reconnecting')).toBeVisible({ timeout: 5000 });
+
+    // 2. Perform an optimistic action while disconnected
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' }).first();
+    const doneBtn = proj101Article.getByTitle('Quick Action: Mark as Done');
+    await doneBtn.click();
+
+    // UI updates optimistically locally
+    await expect(proj101Article.locator('p')).toHaveClass(/line-through/);
+
+    // 3. Restore network connection to Python server
+    await context.setOffline(false);
+
+    // WebSocket reconnects successfully
+    await expect(page.getByText('Live WebSocket')).toBeVisible({ timeout: 10000 });
+
+    // Queued outbox mutation is synced to Python server and applied in Fake Jira
+    await expect.poll(async () => {
+      const res = await page.request.get('/api/test/jira/issues/PROJ-101');
+      if (!res.ok()) return null;
+      const issue = await res.json();
+      return issue.status.name;
+    }, { timeout: 10000 }).toBe('Done');
+  });
+
+  test('23. Connection Resilience: Python server handles Jira connectivity outage gracefully via outbox queue', async ({
+    page,
+  }) => {
+    await expect(page.locator('h1')).toHaveText('Engineering Sprint Board');
+    await expect(page.getByText('Live WebSocket')).toBeVisible();
+
+    // 1. Simulate Jira API becoming unreachable (503 Service Unavailable)
+    await page.request.post('/api/test/simulate-error', {
+      data: {
+        enable: true,
+        status_code: 503,
+        message: 'Jira Cloud connection timeout',
+        target: 'all',
+      },
+    });
+
+    // 2. User transitions PROJ-101 to Done
+    // Python server saves change locally to SQLite and queues it in sync_outbox
+    const proj101Article = page.locator('article', { hasText: 'PROJ-101' }).first();
+    const transitionPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/issues/PROJ-101/transition') && res.status() === 200
+    );
+    const doneBtn = proj101Article.getByTitle('Quick Action: Mark as Done');
+    await doneBtn.click();
+
+    // UI maintains optimistic Done state immediately
+    await expect(proj101Article.locator('p')).toHaveClass(/line-through/);
+
+    // Wait for transition sync request to reach the server
+    await transitionPromise;
+
+    // Verify backend outbox has the queued item
+    await expect.poll(async () => {
+      const res = await page.request.get('/api/test/outbox');
+      if (!res.ok()) return [];
+      return await res.json();
+    }, { timeout: 5000 }).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          issue_key: 'PROJ-101',
+          action_type: 'transition_issue',
+          status: 'pending',
+        }),
+      ])
+    );
+
+    // 3. Jira comes back online
+    await page.request.post('/api/test/simulate-error', {
+      data: { enable: false },
+    });
+
+    // Drain outbox queue
+    await page.request.post('/api/test/sync-drain');
+
+    // Verify outbox is drained
+    await expect.poll(async () => {
+      const res = await page.request.get('/api/test/outbox');
+      if (!res.ok()) return [{}];
+      return await res.json();
+    }, { timeout: 10000 }).toHaveLength(0);
+
+    // Verify Jira received and recorded the transition to Done
+    const jiraRes = await page.request.get('/api/test/jira/issues/PROJ-101');
+    expect(jiraRes.ok()).toBeTruthy();
+    const jiraIssue = await jiraRes.json();
+    expect(jiraIssue.status.name).toBe('Done');
   });
 });
 

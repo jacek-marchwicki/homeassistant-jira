@@ -57,6 +57,11 @@ class FirestoreStorage:
         """Schema version identifier (aligned with current SQLite schema)."""
         return 7
 
+    def clear_all_data(self) -> None:
+        """Clear all outbox and account type records for test isolation."""
+        self.clear_outbox()
+        self.clear_account_types()
+
     # -------------------------------------------------------------------------
     # Board Metadata
     # -------------------------------------------------------------------------

@@ -25,7 +25,7 @@ export function CreateIssueModal({
   defaultStatusName,
   defaultStatusCategory,
 }: CreateIssueModalProps) {
-  const { columns, createIssueOptimistic, createInitialValues } = useBoardStore();
+  const { columns, createIssueOptimistic, createInitialValues, boardId } = useBoardStore();
 
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
@@ -133,6 +133,7 @@ export function CreateIssueModal({
       due_date: dueDate.trim() || null,
       start_date: startDate.trim() || null,
       recreate_after: recreateAfter.trim() || null,
+      board_id: boardId || undefined,
     });
 
     onClose();

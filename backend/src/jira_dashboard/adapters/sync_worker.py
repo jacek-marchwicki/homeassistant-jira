@@ -178,11 +178,13 @@ class JiraSyncWorker:
         self.storage.upsert_issue(real_issue)
         self.storage.update_outbox_status(outbox_id, "completed")
 
+        board_id = payload.get("board_id")
         await self._broadcast(
             {
                 "event": "issue_created",
                 "issue_key": real_issue.key,
                 "temp_key": temp_key,
+                "board_id": board_id,
                 "status_category": real_issue.status.category.value,
                 "status_name": real_issue.status.name,
                 "issue": real_issue.model_dump(),
@@ -196,6 +198,7 @@ class JiraSyncWorker:
         payload: dict[str, Any],
         base_updated_at: str | None,
     ) -> None:
+        board_id = payload.get("board_id")
         remote = await self.jira_client.get_issue(issue_key)
         if remote is None:
             self.storage.update_outbox_status(
@@ -225,6 +228,7 @@ class JiraSyncWorker:
                 {
                     "event": "issue_updated",
                     "issue_key": remote.key,
+                    "board_id": board_id,
                     "status_category": remote.status.category.value,
                     "status_name": remote.status.name,
                     "issue": remote.model_dump(),
@@ -250,6 +254,7 @@ class JiraSyncWorker:
             {
                 "event": "issue_transitioned",
                 "issue_key": updated.key,
+                "board_id": board_id,
                 "status_category": updated.status.category.value,
                 "status_name": updated.status.name,
                 "issue": updated.model_dump(),
@@ -263,6 +268,7 @@ class JiraSyncWorker:
         payload: dict[str, Any],
         base_updated_at: str | None,
     ) -> None:
+        board_id = payload.get("board_id")
         remote = await self.jira_client.get_issue(issue_key)
         if remote is None:
             self.storage.update_outbox_status(
@@ -292,6 +298,7 @@ class JiraSyncWorker:
                 {
                     "event": "issue_updated",
                     "issue_key": remote.key,
+                    "board_id": board_id,
                     "status_category": remote.status.category.value,
                     "status_name": remote.status.name,
                     "issue": remote.model_dump(),
@@ -329,6 +336,7 @@ class JiraSyncWorker:
             {
                 "event": "issue_updated",
                 "issue_key": updated.key,
+                "board_id": board_id,
                 "status_category": updated.status.category.value,
                 "status_name": updated.status.name,
                 "issue": updated.model_dump(),
@@ -342,6 +350,7 @@ class JiraSyncWorker:
         payload: dict[str, Any],
         base_updated_at: str | None = None,
     ) -> None:
+        board_id = payload.get("board_id")
         ranked = await self.jira_client.rank_issue(
             issue_key=issue_key,
             rank_before_key=payload.get("rank_before_key"),
@@ -355,6 +364,7 @@ class JiraSyncWorker:
             {
                 "event": "issue_ranked",
                 "issue_key": ranked.key,
+                "board_id": board_id,
                 "rank": ranked.rank,
                 "issue": ranked.model_dump(),
             }

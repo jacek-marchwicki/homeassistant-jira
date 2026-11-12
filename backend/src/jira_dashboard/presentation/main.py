@@ -182,7 +182,7 @@ async def broadcast_mutation_event(
     board_id: str | None = None,
 ) -> None:
     """Record outbox event in storage, publish WAKE_UP via EventBus, and dispatch to WS router."""
-    b_id = board_id or settings.jira_board_id
+    b_id = board_id or message.get("board_id") or settings.jira_board_id
     try:
         new_seq = await event_router.record_and_publish_event(
             board_id=b_id,
@@ -221,6 +221,7 @@ async def _sync_broadcast(event_data: dict[str, Any]) -> None:
     await broadcast_mutation_event(
         event_type=event_data.get("event", "sync_delta"),
         message=event_data,
+        board_id=event_data.get("board_id"),
     )
 
 
@@ -2223,11 +2224,28 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
 @app.post("/api/issues", response_model=JiraIssue, status_code=201)
 async def create_issue(request: IssueCreateRequest) -> JiraIssue:
     """Create a new issue locally immediately, enqueue outbox sync to Jira, and broadcast delta."""
+    target_board_id = request.board_id or settings.jira_board_id
     proj_prefix = request.project_key
     if not proj_prefix and request.board_id and not request.board_id.isdigit():
         proj_prefix = request.board_id.split("-")[0].upper()
     if not proj_prefix:
+        # Check existing issues to match board's project prefix (e.g. HOME-1 -> HOME)
+        if _cached_board_response and _cached_board_response.issues:
+            for ex in _cached_board_response.issues:
+                if "-" in ex.key and "-TEMP-" not in ex.key:
+                    proj_prefix = ex.key.split("-")[0].upper()
+                    break
+        if not proj_prefix:
+            existing_issues = storage.get_issues()
+            for ex in existing_issues:
+                if "-" in ex.key and "-TEMP-" not in ex.key:
+                    proj_prefix = ex.key.split("-")[0].upper()
+                    break
+    if not proj_prefix and settings.jira_board_id and not settings.jira_board_id.isdigit():
+        proj_prefix = settings.jira_board_id.split("-")[0].upper()
+    if not proj_prefix:
         proj_prefix = "PROJ"
+
     temp_key = f"{proj_prefix}-TEMP-{int(time.time() * 1000)}"
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -2296,9 +2314,11 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
         ]
         _cached_board_response.issues.sort(key=issue_sort_key)
 
-    # 2. Enqueue outbox action
+    # 2. Enqueue outbox action with target_board_id and project_key
     mutation_id = str(uuid.uuid4())
     payload = request.model_dump(exclude_unset=True)
+    payload["board_id"] = target_board_id
+    payload["project_key"] = proj_prefix
     payload["rank"] = new_rank
     payload["target_rank"] = new_rank
     payload["status_id"] = target_id
@@ -2319,19 +2339,21 @@ async def create_issue(request: IssueCreateRequest) -> JiraIssue:
         base_updated_at=None,
     )
 
-    # 3. Broadcast delta and record outbox event
+    # 3. Broadcast delta and record outbox event matching target_board_id
     await broadcast_mutation_event(
         event_type="issue_created",
         message={
             "event": "issue_created",
             "issue_key": created_issue.key,
+            "board_id": target_board_id,
             "status_category": created_issue.status.category.value,
             "status_name": created_issue.status.name,
             "issue": created_issue.model_dump(),
         },
+        board_id=target_board_id,
     )
 
-    # 4. Trigger async outbox processing without blocking response
+    # 4. Trigger async outbox processing immediately without blocking response
     asyncio.create_task(sync_worker.process_next_pending())
 
     return created_issue

@@ -483,6 +483,95 @@ describe('Zustand BoardStore', () => {
     expect(useBoardStore.getState().errorMessage).toContain('Failed to create issue');
   });
 
+  it('createIssueOptimistic passes board_id and project_key to backend payload (HOME-15503)', async () => {
+    useBoardStore.setState({
+      boardId: 'HOME',
+      issues: [
+        {
+          id: '1',
+          key: 'HOME-10',
+          summary: 'Existing Issue',
+          priority: 'medium',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          updated_at: '2026-10-01T00:00:00Z',
+        },
+      ],
+    });
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: '11',
+        key: 'HOME-11',
+        summary: 'New Home Task',
+        priority: 'high',
+        status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+        updated_at: '2026-10-05T00:00:00Z',
+      }),
+    });
+
+    await useBoardStore.getState().createIssueOptimistic({
+      summary: 'New Home Task',
+      priority: 'high',
+    });
+
+    const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+    expect(callBody.board_id).toBe('HOME');
+    expect(callBody.project_key).toBe('HOME');
+
+    const issues = useBoardStore.getState().issues;
+    expect(issues.some((i) => i.key === 'HOME-11')).toBe(true);
+    expect(issues.some((i) => i.key.startsWith('TEMP-'))).toBe(false);
+  });
+
+  it('handleWsMessage issue_created promptly resolves temporary key and updates editingIssue (HOME-15503)', () => {
+    const tempIssue: JiraIssue = {
+      id: 'HOME-TEMP-12345',
+      key: 'HOME-TEMP-12345',
+      summary: 'Task Waiting For Jira',
+      priority: 'medium',
+      status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+      _optimisticState: 'pending',
+    };
+
+    useBoardStore.setState({
+      issues: [tempIssue],
+      editingIssue: tempIssue,
+    });
+
+    // Simulate WebSocket issue_created event broadcast from sync_worker
+    useBoardStore.getState().handleWsMessage({
+      event: 'outbox_delta',
+      board_id: 'HOME',
+      seq: 10,
+      payload: {
+        event: 'issue_created',
+        issue_key: 'HOME-42',
+        temp_key: 'HOME-TEMP-12345',
+        board_id: 'HOME',
+        issue: {
+          id: '42',
+          key: 'HOME-42',
+          summary: 'Task Waiting For Jira',
+          priority: 'medium',
+          status: { id: 'col-todo', name: 'To Do', category: 'todo' },
+          updated_at: '2026-10-05T01:00:00Z',
+        },
+      },
+    });
+
+    const issues = useBoardStore.getState().issues;
+    expect(issues.some((i) => i.key === 'HOME-TEMP-12345')).toBe(false);
+    const resolved = issues.find((i) => i.key === 'HOME-42');
+    expect(resolved).toBeDefined();
+    expect(resolved?._optimisticState).toBe('synced');
+
+    // Also verify active modal editingIssue is updated to real key
+    const editing = useBoardStore.getState().editingIssue;
+    expect(editing?.key).toBe('HOME-42');
+    expect(editing?._optimisticState).toBe('synced');
+  });
+
   it('deleteIssueOptimistic removes issue optimistically and syncs with DELETE endpoint', async () => {
     const issueToDelete: JiraIssue = {
       id: '201',

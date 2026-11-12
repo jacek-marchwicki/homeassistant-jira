@@ -7,6 +7,7 @@ and local simulation.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -24,6 +25,8 @@ from jira_dashboard.domain import (
     compute_top_rank_and_before_key,
     issue_sort_key,
 )
+
+logger = logging.getLogger(__name__)
 
 # Canonical status definitions
 STATUS_MAP: dict[StatusCategory, JiraStatus] = {
@@ -399,9 +402,11 @@ class FakeJiraClient:
         )
         self._webhooks: dict[str, dict[str, Any]] = {}
         self._webhook_seq: int = 0
+        self.auto_dispatch_webhooks: bool = True
         self.simulate_failure: bool = False
         self.simulate_transition_failure: bool = False
         self.simulate_board_failure: bool = False
+        self.simulate_rejection: bool = False
         self.failure_status_code: int = 500
         self.failure_message: str = "Simulated Jira API failure"
 
@@ -422,9 +427,11 @@ class FakeJiraClient:
         )
         self._webhooks.clear()
         self._webhook_seq = 0
+        self.auto_dispatch_webhooks = True
         self.simulate_failure = False
         self.simulate_transition_failure = False
         self.simulate_board_failure = False
+        self.simulate_rejection = False
         self.failure_status_code = 500
         self.failure_message = "Simulated Jira API failure"
 
@@ -439,6 +446,7 @@ class FakeJiraClient:
         self.simulate_failure = enable
         self.simulate_transition_failure = enable if target in {"all", "transition"} else False
         self.simulate_board_failure = enable if target in {"all", "board"} else False
+        self.simulate_rejection = enable if target in {"reject", "transition_reject"} else False
         self.failure_status_code = status_code
         self.failure_message = message
 
@@ -505,6 +513,7 @@ class FakeJiraClient:
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         updated_issue = issue.model_copy(update={"status": new_status, "updated_at": now_iso})
         self._issues[issue_key] = updated_issue
+        self._trigger_webhook_safely("jira:issue_updated", updated_issue)
         return updated_issue
 
     async def rank_issue(
@@ -640,6 +649,7 @@ class FakeJiraClient:
             updated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         )
         self._issues[issue_key] = updated_issue
+        self._trigger_webhook_safely("jira:issue_updated", updated_issue)
         return updated_issue
 
     async def create_issue(
@@ -737,6 +747,7 @@ class FakeJiraClient:
                 key=lambda kv: issue_sort_key(kv[1]),
             )
         }
+        self._trigger_webhook_safely("jira:issue_created", new_issue)
         return new_issue
 
     async def get_assignable_users(
@@ -783,18 +794,44 @@ class FakeJiraClient:
 
         # Extract or default status category
         status_info = fields.get("status", {})
+        status_name = status_info.get("name")
+        status_id = status_info.get("id") or "status-1"
         status_cat_info = status_info.get("statusCategory", {})
-        cat_key = status_cat_info.get("key", "new")
+        cat_key = (status_cat_info.get("key") or "").lower()
+        lowered_name = (status_name or "").lower()
 
-        # Map Jira Cloud statusCategory keys to domain StatusCategory
+        # Map Jira Cloud statusCategory keys and names to domain StatusCategory
         category_mapping: dict[str, StatusCategory] = {
             "new": StatusCategory.TODO,
+            "todo": StatusCategory.TODO,
+            "to do": StatusCategory.TODO,
             "indeterminate": StatusCategory.IN_PROGRESS,
+            "inprogress": StatusCategory.IN_PROGRESS,
+            "in_progress": StatusCategory.IN_PROGRESS,
+            "in review": StatusCategory.IN_REVIEW,
+            "inreview": StatusCategory.IN_REVIEW,
             "done": StatusCategory.DONE,
+            "complete": StatusCategory.DONE,
             "blocked": StatusCategory.BLOCKED,
         }
-        category = category_mapping.get(cat_key, StatusCategory.TODO)
-        status = STATUS_MAP.get(category, STATUS_MAP[StatusCategory.TODO])
+        category = category_mapping.get(cat_key)
+        if not category:
+            if "block" in lowered_name:
+                category = StatusCategory.BLOCKED
+            elif "review" in lowered_name:
+                category = StatusCategory.IN_REVIEW
+            elif "progress" in lowered_name:
+                category = StatusCategory.IN_PROGRESS
+            elif "done" in lowered_name:
+                category = StatusCategory.DONE
+            else:
+                category = StatusCategory.TODO
+
+        status = JiraStatus(
+            id=str(status_id),
+            name=status_name or STATUS_MAP[category].name,
+            category=category,
+        )
 
         # Extract due date, start date & updated at
         raw_due_date = fields.get("duedate") or fields.get("due_date")
@@ -938,9 +975,92 @@ class FakeJiraClient:
         if issue_key not in self._issues:
             raise JiraAPIError(f"Issue {issue_key} not found", status_code=404)
 
+        deleted = self._issues[issue_key]
         del self._issues[issue_key]
         self._comments.pop(issue_key, None)
+        self._trigger_webhook_safely("jira:issue_deleted", deleted)
         return True
+
+    def _trigger_webhook_safely(self, event: str, issue: JiraIssue) -> None:
+        """Schedule webhook dispatch in running asyncio loop if webhooks are registered."""
+        if not self.auto_dispatch_webhooks or not self._webhooks:
+            return
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.dispatch_webhook(event, issue))
+        except RuntimeError:
+            pass
+
+    async def dispatch_webhook(
+        self,
+        event: str,
+        issue: JiraIssue,
+        webhook_url: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Dispatch a Jira Cloud webhook payload to registered webhooks (or specific URL)."""
+        import httpx
+
+        payload = {
+            "webhookEvent": event,
+            "issue": {
+                "id": str(issue.id or "999"),
+                "key": issue.key,
+                "fields": {
+                    "summary": issue.summary,
+                    "description": issue.description,
+                    "status": {
+                        "id": str(issue.status.id),
+                        "name": issue.status.name,
+                        "statusCategory": {
+                            "id": 1,
+                            "key": issue.status.category.value,
+                            "name": issue.status.name,
+                        },
+                    },
+                    "issuetype": {"id": "1", "name": issue.issue_type.value},
+                    "priority": {"id": "1", "name": issue.priority.value},
+                    "assignee": (
+                        {
+                            "accountId": issue.assignee.account_id,
+                            "displayName": issue.assignee.display_name,
+                        }
+                        if issue.assignee
+                        else None
+                    ),
+                    "customfield_10015": issue.start_date,
+                    "customfield_10027": issue.recreate_after,
+                    "duedate": issue.due_date,
+                    "updated": issue.updated_at,
+                    "created": issue.created_at,
+                },
+            },
+        }
+
+        targets = (
+            [webhook_url]
+            if webhook_url
+            else [
+                wh["url"]
+                for wh in self._webhooks.values()
+                if not wh.get("events") or event in wh.get("events", [])
+            ]
+        )
+        results: list[dict[str, Any]] = []
+        for target in targets:
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.post(
+                        target,
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                    )
+                    results.append({"url": target, "status_code": resp.status_code})
+            except Exception as exc:
+                logger.warning("FakeJiraClient failed delivering webhook to %s: %s", target, exc)
+                results.append({"url": target, "error": str(exc)})
+        return results
 
     async def register_webhook(
         self,

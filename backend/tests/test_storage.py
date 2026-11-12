@@ -477,3 +477,29 @@ def test_storage_issue_links_roundtrip(temp_db_path: Path) -> None:
     assert found.issue_links[0].issue.key == "TEST-202"
 
     storage.close()
+
+
+def test_sqlite_clear_all_data(temp_db_path: Path, sample_issue: JiraIssue) -> None:
+    """Verify clear_all_data wipes all tables and leaves a fresh clean database."""
+    storage = SQLiteStorage(temp_db_path)
+    storage.init_db()
+    storage.save_issues([sample_issue])
+    storage.enqueue_outbox(
+        client_mutation_id="mut-1",
+        action_type="create_issue",
+        issue_key="TEST-101",
+        payload={"summary": "New Issue"},
+    )
+    storage.set_account_type("Jacek Marchwicki", "child")
+
+    assert len(storage.get_issues()) == 1
+    assert len(storage.get_pending_outbox()) == 1
+    assert storage.get_account_types() == {"jacek marchwicki": "child"}
+
+    storage.clear_all_data()
+
+    assert len(storage.get_issues()) == 0
+    assert len(storage.get_pending_outbox()) == 0
+    assert storage.get_account_types() == {}
+
+    storage.close()

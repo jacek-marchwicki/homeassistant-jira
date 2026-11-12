@@ -277,3 +277,33 @@ def test_fake_jira_client_delete_nonexistent_issue(monkeypatch: pytest.MonkeyPat
         assert exc_info.value.status_code == 404
 
     asyncio.run(_test())
+
+
+def test_fake_jira_client_webhook_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify FakeJiraClient registers webhooks and dispatches payloads."""
+    monkeypatch.setenv("JIRA_USE_FAKE", "1")
+
+    async def _test() -> None:
+        client = FakeJiraClient()
+        reg_res = await client.register_webhook("http://127.0.0.1:9999/api/webhooks/jira")
+        assert "webhookRegistrationResult" in reg_res
+
+        hooks = await client.get_webhooks()
+        assert len(hooks) == 1
+        assert hooks[0]["url"] == "http://127.0.0.1:9999/api/webhooks/jira"
+
+        # Dispatch to mock target
+        issue = await client.get_issue("PROJ-101")
+        assert issue is not None
+        # Dispatches without crashing even if network endpoint is offline
+        results = await client.dispatch_webhook("jira:issue_updated", issue)
+        assert len(results) == 1
+        assert results[0]["url"] == "http://127.0.0.1:9999/api/webhooks/jira"
+
+        # Delete webhook
+        wh_id = hooks[0]["id"]
+        del_res = await client.delete_webhook(wh_id)
+        assert del_res is True
+        assert len(await client.get_webhooks()) == 0
+
+    asyncio.run(_test())

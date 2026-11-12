@@ -594,6 +594,21 @@ class SimulateErrorRequest(BaseModel):
     target: str = "transition"
 
 
+class TestResetRequest(BaseModel):
+    """Configuration for resetting integration test state."""
+
+    initial_issues: list[dict[str, Any]] | None = None
+    seed_default: bool = True
+
+
+class WebhookDispatchRequest(BaseModel):
+    """Payload to trigger a simulated Jira webhook from FakeJiraClient."""
+
+    event: str = "jira:issue_updated"
+    issue_key: str
+    fields: dict[str, Any] | None = None
+
+
 # ---------------------------------------------------------------------------
 # FastAPI App Lifecycle & Creation
 # ---------------------------------------------------------------------------
@@ -634,6 +649,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     secret=settings.webhook_secret,
                 )
             )
+    elif isinstance(jira_client, FakeJiraClient):
+        port = int(os.environ.get("PLAYWRIGHT_PORT") or os.environ.get("PORT") or "8001")
+        local_wh_url = f"http://127.0.0.1:{port}/api/webhooks/jira"
+        asyncio.create_task(
+            register_jira_webhook_if_needed(
+                jira_client=jira_client,
+                webhook_url=local_wh_url,
+                secret=settings.webhook_secret,
+            )
+        )
 
     # Start event bus listener for multi-instance WAKE_UP notifications
     try:
@@ -1890,6 +1915,13 @@ async def transition_issue(key: str, request: TransitionRequest) -> JiraIssue:
     if current_issue is None:
         raise HTTPException(status_code=404, detail=f"Issue {key} not found")
 
+    if isinstance(jira_client, FakeJiraClient) and getattr(
+        jira_client, "simulate_rejection", False
+    ):
+        raise HTTPException(
+            status_code=jira_client.failure_status_code, detail=jira_client.failure_message
+        )
+
     orig_updated_at = current_issue.updated_at
     target_cat = request.target_category
     target_name = request.target_status
@@ -1969,6 +2001,13 @@ async def rank_issue(key: str, request: RankIssueRequest) -> JiraIssue:
         current_issue = jira_client._issues.get(key)
     if current_issue is None:
         raise HTTPException(status_code=404, detail=f"Issue {key} not found")
+
+    if isinstance(jira_client, FakeJiraClient) and getattr(
+        jira_client, "simulate_rejection", False
+    ):
+        raise HTTPException(
+            status_code=jira_client.failure_status_code, detail=jira_client.failure_message
+        )
 
     orig_updated_at = current_issue.updated_at
 
@@ -2051,6 +2090,13 @@ async def update_issue(key: str, request: IssueUpdateRequest) -> JiraIssue:
         current_issue = jira_client._issues.get(key)
     if current_issue is None:
         raise HTTPException(status_code=404, detail=f"Issue {key} not found")
+
+    if isinstance(jira_client, FakeJiraClient) and getattr(
+        jira_client, "simulate_rejection", False
+    ):
+        raise HTTPException(
+            status_code=jira_client.failure_status_code, detail=jira_client.failure_message
+        )
 
     orig_updated_at = current_issue.updated_at
     payload = request.model_dump(exclude_unset=True)
@@ -2611,17 +2657,28 @@ def simulate_error(request: SimulateErrorRequest) -> dict[str, Any]:
 
 
 @app.post("/api/test/reset")
-def reset_test_state() -> dict[str, Any]:
-    """Reset FakeJiraClient state back to initial seed issues and clear caches."""
+async def reset_test_state(request: TestResetRequest | None = None) -> dict[str, Any]:
+    """Reset FakeJiraClient state back to initial seed issues, clear SQLite tables,
+    and re-register webhooks."""
     global _cached_board_response, _board_cache_timestamp
     if isinstance(jira_client, FakeJiraClient):
         jira_client.reset()
         _cached_issue_state.clear()
         _cached_board_response = None
         _board_cache_timestamp = 0.0
-        storage.rebuild_schema_preserving_outbox()
-        storage.clear_outbox()
-        storage.clear_account_types()
+        storage.clear_all_data()
+
+        # Re-register local webhook so FakeJiraClient dispatches webhooks to running server
+        port = int(os.environ.get("PLAYWRIGHT_PORT") or os.environ.get("PORT") or "8001")
+        local_wh_url = f"http://127.0.0.1:{port}/api/webhooks/jira"
+        await jira_client.register_webhook(url=local_wh_url)
+
+        if request and request.initial_issues is not None:
+            parsed_issues = [JiraIssue.model_validate(item) for item in request.initial_issues]
+            jira_client._issues = {issue.key: issue for issue in parsed_issues}
+        elif request and not request.seed_default:
+            jira_client._issues = {}
+
         storage.save_issues(list(jira_client._issues.values()))
         storage.save_board_meta(
             board_id=settings.jira_board_id,
@@ -2632,6 +2689,117 @@ def reset_test_state() -> dict[str, Any]:
         )
         return {"status": "reset", "message": "Test state reset to initial seed"}
     return {"status": "ignored", "message": "Client is not FakeJiraClient"}
+
+
+@app.post("/api/test/jira/issues", response_model=JiraIssue)
+async def seed_jira_issue(
+    request: IssueCreateRequest,
+    trigger_webhook: bool = Query(default=True),
+) -> JiraIssue:
+    """Add a task directly to FakeJiraClient, optionally triggering webhooks to the server."""
+    if not isinstance(jira_client, FakeJiraClient):
+        raise HTTPException(status_code=400, detail="Client is not FakeJiraClient")
+
+    target_cat = request.status_category or StatusCategory.TODO
+    target_name = request.status_name or target_cat.value.replace("_", " ").title()
+
+    issue = await jira_client.create_issue(
+        summary=request.summary,
+        description=request.description,
+        issue_type=request.issue_type or IssueType.TASK,
+        priority=request.priority or Priority.MEDIUM,
+        status_category=target_cat,
+        status_name=target_name,
+        status_id=request.status_id,
+        assignee_name=request.assignee_name,
+        assignee_account_id=request.assignee_account_id,
+        story_points=request.story_points,
+        due_date=request.due_date,
+        start_date=request.start_date,
+        recreate_after=request.recreate_after,
+        board_id=request.board_id or settings.jira_board_id,
+        project_key=request.project_key,
+        rank=request.rank,
+        rank_before_key=request.rank_before_key,
+    )
+
+    if trigger_webhook:
+        port = int(os.environ.get("PLAYWRIGHT_PORT") or os.environ.get("PORT") or "8001")
+        local_wh_url = f"http://127.0.0.1:{port}/api/webhooks/jira"
+        await jira_client.dispatch_webhook(
+            event="jira:issue_created",
+            issue=issue,
+            webhook_url=local_wh_url,
+        )
+
+    return issue
+
+
+@app.get("/api/test/jira/issues", response_model=list[JiraIssue])
+def get_fake_jira_issues() -> list[JiraIssue]:
+    """Retrieve all current issues from the FakeJiraClient test double."""
+    if not isinstance(jira_client, FakeJiraClient):
+        raise HTTPException(status_code=400, detail="Client is not FakeJiraClient")
+    return list(jira_client._issues.values())
+
+
+@app.get("/api/test/jira/issues/{key}", response_model=JiraIssue)
+def get_fake_jira_issue(key: str) -> JiraIssue:
+    """Retrieve a specific issue from the FakeJiraClient test double."""
+    if not isinstance(jira_client, FakeJiraClient):
+        raise HTTPException(status_code=400, detail="Client is not FakeJiraClient")
+    issue = jira_client._issues.get(key)
+    if not issue:
+        raise HTTPException(status_code=404, detail=f"Issue {key} not found in FakeJiraClient")
+    return issue
+
+
+@app.post("/api/test/jira/webhooks/dispatch")
+async def dispatch_test_webhook(request: WebhookDispatchRequest) -> dict[str, Any]:
+    """Trigger a simulated Jira webhook event from FakeJiraClient to the running server."""
+    if not isinstance(jira_client, FakeJiraClient):
+        raise HTTPException(status_code=400, detail="Client is not FakeJiraClient")
+
+    issue = jira_client._issues.get(request.issue_key)
+    if not issue:
+        raise HTTPException(status_code=404, detail=f"Issue {request.issue_key} not found")
+
+    if request.fields:
+        update_dict: dict[str, Any] = {}
+        if "summary" in request.fields:
+            update_dict["summary"] = request.fields["summary"]
+        if "status_name" in request.fields or "status_category" in request.fields:
+            cat = (
+                StatusCategory(request.fields["status_category"])
+                if "status_category" in request.fields
+                else issue.status.category
+            )
+            name = request.fields.get("status_name") or issue.status.name
+            update_dict["status"] = JiraStatus(id=name, name=name, category=cat)
+        issue = issue.model_copy(update=update_dict)
+        jira_client._issues[request.issue_key] = issue
+
+    port = int(os.environ.get("PLAYWRIGHT_PORT") or os.environ.get("PORT") or "8001")
+    local_wh_url = f"http://127.0.0.1:{port}/api/webhooks/jira"
+    results = await jira_client.dispatch_webhook(
+        event=request.event,
+        issue=issue,
+        webhook_url=local_wh_url,
+    )
+    return {"status": "dispatched", "results": results}
+
+
+@app.get("/api/test/outbox")
+def get_test_outbox() -> list[dict[str, Any]]:
+    """Get all pending outbox queue items from SQLite storage."""
+    return storage.get_pending_outbox()
+
+
+@app.post("/api/test/sync-drain")
+async def drain_test_outbox() -> dict[str, Any]:
+    """Trigger immediate processing of pending sync outbox items."""
+    processed = await sync_worker.drain_once()
+    return {"status": "drained", "items_processed": processed}
 
 
 # ---------------------------------------------------------------------------

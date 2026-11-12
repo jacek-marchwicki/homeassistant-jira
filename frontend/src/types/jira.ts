@@ -147,6 +147,7 @@ export interface IssueCreatePayload {
   due_date?: string | null;
   start_date?: string | null;
   recreate_after?: string | null;
+  board_id?: string;
   project_key?: string;
   rank?: string;
   target_rank?: string;

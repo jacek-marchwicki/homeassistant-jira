@@ -119,6 +119,22 @@ class TestPresentationApi(unittest.TestCase):
         self.assertEqual(data["story_points"], 3.0)
         self.assertEqual(data["recreate_after"], "1 month")
 
+    def test_create_issue_with_board_id_sets_correct_project_prefix(self) -> None:
+        """Verify POST /api/issues with board_id uses proper board prefix (HOME-15503)."""
+        response = self.client.post(
+            "/api/issues",
+            json={
+                "summary": "Task with HOME board_id",
+                "issue_type": "task",
+                "priority": "medium",
+                "board_id": "HOME",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertTrue(data["key"].startswith("HOME-"))
+        self.assertEqual(data["summary"], "Task with HOME board_id")
+
     def test_create_issue_when_board_has_jira_cloud_timezone_offset_timestamp(self) -> None:
         """Verify POST /api/issues does not crash when board contains Jira Cloud timestamps
         with numeric timezone offsets (e.g. 2026-10-08T16:25:43.045+0200)."""

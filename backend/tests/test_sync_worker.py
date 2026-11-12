@@ -417,3 +417,53 @@ def test_sync_worker_rank_issue_permanent_scope_error() -> None:
         assert "write:issue:jira-software" in item["error_message"]
 
     asyncio.run(_test())
+
+
+def test_sync_worker_create_issue_broadcasts_board_id_and_temp_key() -> None:
+    """Verify sync_worker sends board_id & temp_key in issue_created broadcast (HOME-15503)."""
+
+    async def _test() -> None:
+        storage = SQLiteStorage(":memory:")
+        storage.init_db()
+        fake_jira = FakeJiraClient()
+        fake_jira.reset()
+
+        broadcast_events: list[dict[str, Any]] = []
+
+        async def mock_broadcast(msg: dict[str, Any]) -> None:
+            broadcast_events.append(msg)
+
+        worker = JiraSyncWorker(storage, fake_jira, ws_broadcast_func=mock_broadcast)
+
+        outbox_id = storage.enqueue_outbox(
+            client_mutation_id="mut-create-board-id",
+            action_type="create_issue",
+            issue_key="HOME-TEMP-9999",
+            payload={
+                "summary": "Task with specific board_id",
+                "issue_type": "task",
+                "priority": "high",
+                "status_category": "todo",
+                "board_id": "HOME",
+                "project_key": "HOME",
+            },
+            base_updated_at=None,
+        )
+
+        processed = await worker.process_next_pending()
+        assert processed is True
+
+        item = storage.get_outbox_item(outbox_id)
+        assert item is not None
+        assert item["status"] == "completed"
+
+        assert len(broadcast_events) == 1
+        ev = broadcast_events[0]
+        assert ev["event"] == "issue_created"
+        assert ev["temp_key"] == "HOME-TEMP-9999"
+        assert ev["board_id"] == "HOME"
+        assert not ev["issue_key"].startswith("HOME-TEMP-")
+        assert ev["issue"]["key"] == ev["issue_key"]
+        assert ev["issue"]["summary"] == "Task with specific board_id"
+
+    asyncio.run(_test())

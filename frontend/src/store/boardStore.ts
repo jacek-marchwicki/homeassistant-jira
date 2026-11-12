@@ -1519,8 +1519,16 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
       _optimisticState: 'pending',
     };
 
+    const currentBoardId = payload.board_id || get().boardId || undefined;
+    const inferredProjectKey =
+      payload.project_key ||
+      (currentBoardId && !/^\d+$/.test(currentBoardId) ? currentBoardId.split('-')[0].toUpperCase() : undefined) ||
+      (realIssues[0]?.key && !realIssues[0].key.includes('-TEMP-') ? realIssues[0].key.split('-')[0].toUpperCase() : undefined);
+
     const finalPayload: IssueCreatePayload = {
       ...payload,
+      board_id: currentBoardId,
+      project_key: inferredProjectKey,
       assignee_account_id: resolvedAccountId || payload.assignee_account_id || undefined,
       status_id: targetStatusId,
       rank: topRank,
@@ -2107,6 +2115,14 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         if (state.routeTaskKey && state.routeTaskKey === incomingIssue.key) {
           newEditingIssue = incomingIssue;
           nextRouteStatus = null;
+        } else if (
+          state.editingIssue &&
+          (state.editingIssue.key === incomingIssue.key ||
+            (tempKey && state.editingIssue.key === tempKey) ||
+            ((state.editingIssue.key.startsWith('TEMP-') || state.editingIssue.key.includes('-TEMP-')) &&
+              state.editingIssue.summary === incomingIssue.summary))
+        ) {
+          newEditingIssue = { ...incomingIssue, _optimisticState: 'synced' };
         }
 
         if (tempIndex !== -1) {

@@ -188,3 +188,62 @@ def test_websocket_receives_sequenced_deletions_comments_and_account_types() -> 
         assert acc_ws["event"] == "outbox_delta"
         assert acc_ws["type"] == "account_types_updated"
         assert acc_ws["seq"] > comment_ws["seq"]
+
+
+def test_websocket_receives_issue_created_and_sync_worker_resolution_with_board_id() -> None:
+    """Verify that WebSocket clients on custom board_id receive prompt issue_created events
+
+    both upon optimistic creation and upon sync_worker resolution of temp_key (HOME-15503).
+    """
+    import asyncio
+
+    from jira_dashboard.presentation.main import sync_worker
+
+    client = TestClient(app)
+    client.post("/api/test/reset")
+    board_id = "HOME"
+
+    with client.websocket_connect(f"/ws?board_id={board_id}&last_seq=0") as ws:
+        init_msg = ws.receive_json()
+        assert init_msg["event"] == "connected"
+
+        # Drain catch-up events
+        msg = ws.receive_json()
+        while msg.get("event") != "catchup_complete":
+            msg = ws.receive_json()
+        assert msg["event"] == "catchup_complete"
+
+        # 1. Post new issue to /api/issues specifying board_id="HOME"
+        create_resp = client.post(
+            "/api/issues",
+            json={
+                "summary": "Real-time task on HOME board",
+                "issue_type": "task",
+                "priority": "high",
+                "board_id": board_id,
+            },
+        )
+        assert create_resp.status_code == 201
+        created_data = create_resp.json()
+        temp_key = created_data["key"]
+        assert temp_key.startswith("HOME-TEMP-")
+
+        # 2. Verify optimistic issue_created broadcast arrived on WebSocket for board="HOME"
+        live_create_msg = ws.receive_json()
+        assert live_create_msg["event"] == "outbox_delta"
+        assert live_create_msg["board_id"] == "HOME"
+        assert live_create_msg["type"] == "issue_created"
+        assert live_create_msg["payload"]["issue_key"] == temp_key
+        assert live_create_msg["payload"]["board_id"] == "HOME"
+
+        # 3. Allow sync_worker to process outbox item and broadcast real issue
+        asyncio.run(sync_worker.drain_once())
+
+        # 4. Verify resolved issue_created arrives on WebSocket with temp_key and real key
+        resolved_msg = ws.receive_json()
+        assert resolved_msg["event"] == "outbox_delta"
+        assert resolved_msg["board_id"] == "HOME"
+        assert resolved_msg["type"] == "issue_created"
+        assert resolved_msg["payload"]["temp_key"] == temp_key
+        assert not resolved_msg["payload"]["issue_key"].startswith("HOME-TEMP-")
+        assert resolved_msg["payload"]["issue"]["key"] == resolved_msg["payload"]["issue_key"]

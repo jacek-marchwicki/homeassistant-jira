@@ -1,5 +1,5 @@
 // Jira Dashboard Service Worker (PWA)
-const CACHE_NAME = 'jira-dashboard-v2';
+const CACHE_NAME = 'jira-dashboard-v3';
 
 // Core assets to pre-cache on install
 const PRECACHE_ASSETS = [
@@ -49,8 +49,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Navigation & HTML document requests: Network-first with cache fallback
-  // Ensures fresh index.html when online without breaking offline availability
+  // 2. Navigation & HTML document requests: Stale-While-Revalidate
+  // Serves cached HTML shell instantly (< 10ms) without waiting for network calls,
+  // and revalidates in the background so updates are captured for subsequent visits.
   const isHtmlNavigation =
     request.mode === 'navigate' ||
     url.pathname.endsWith('/') ||
@@ -58,21 +59,35 @@ self.addEventListener('fetch', (event) => {
 
   if (isHtmlNavigation) {
     event.respondWith(
-      fetch(request, { cache: 'no-cache' })
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseClone);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => {
-          return caches.match(request).then((cachedResponse) => {
-            return cachedResponse || caches.match('./') || caches.match('/index.html');
+      caches.match(request).then((cachedResponse) => {
+        // Fallback to pre-cached root or index.html if route has no direct entry
+        const matchPromise = cachedResponse
+          ? Promise.resolve(cachedResponse)
+          : caches.match('./').then((fallback) => fallback || caches.match('/index.html'));
+
+        const networkFetch = fetch(request)
+          .then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              const responseClone = networkResponse.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(request, responseClone);
+              });
+            }
+            return networkResponse;
+          })
+          .catch(() => {
+            // Offline or network error: background fetch fails silently
           });
-        })
+
+        return matchPromise.then((cached) => {
+          if (cached) {
+            // Instant startup from cache; background fetch updates cache
+            return cached;
+          }
+          // Cold start with empty cache: wait for network response
+          return networkFetch;
+        });
+      })
     );
     return;
   }

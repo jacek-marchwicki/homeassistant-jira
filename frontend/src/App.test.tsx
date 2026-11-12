@@ -136,6 +136,58 @@ describe('App component loading indicator & board rendering', () => {
     expect(container.textContent).toContain('Setup CI/CD pipeline');
   });
 
+  it('renders board immediately without loading screen when boardName is cached even if issues are empty', async () => {
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+    act(() => {
+      useBoardStore.setState({
+        isLoading: false,
+        isSyncing: true,
+        boardName: 'Engineering Sprint Board',
+        sprintName: 'Active Sprint 42',
+        issues: [],
+      });
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    expect(container.querySelector('[data-testid="loading-indicator"]')).toBeNull();
+    expect(container.textContent).toContain('Engineering Sprint Board');
+  });
+
+  it('keeps cached board rendered without error banner when background sync encounters network failure', async () => {
+    // Network fetch fails (offline)
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    act(() => {
+      useBoardStore.setState({
+        isLoading: false,
+        isSyncing: false,
+        boardName: 'Engineering Sprint Board',
+        sprintName: 'Active Sprint 42',
+        issues: [testIssue],
+        syncStatus: 'synced',
+        errorMessage: null,
+      });
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    // Verify loading indicator is NOT shown and cached data is visible
+    expect(container.querySelector('[data-testid="loading-indicator"]')).toBeNull();
+    expect(container.textContent).toContain('Engineering Sprint Board');
+    expect(container.textContent).toContain('Setup CI/CD pipeline');
+
+    // Verify syncStatus became offline and no disruptive error banner is shown
+    expect(useBoardStore.getState().syncStatus).toBe('offline');
+    expect(useBoardStore.getState().errorMessage).toBeNull();
+    expect(container.textContent).not.toContain('Unable to connect to Jira backend server.');
+  });
+
   it('renders UndoSnackbar when pendingQuickDone is present', async () => {
     act(() => {
       useBoardStore.setState({

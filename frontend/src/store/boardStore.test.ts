@@ -708,6 +708,61 @@ describe('Zustand BoardStore', () => {
     expect(useBoardStore.getState().issues[0].summary).toBe('Synced from Jira Cloud');
   });
 
+  it('loadBoard uses SWR background sync when boardName is present even if issues are empty', async () => {
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {})); // pending
+
+    useBoardStore.setState({
+      issues: [],
+      boardName: 'HOME Board',
+      isLoading: false,
+      isSyncing: false,
+    });
+
+    void useBoardStore.getState().loadBoard();
+
+    expect(useBoardStore.getState().isLoading).toBe(false);
+    expect(useBoardStore.getState().isSyncing).toBe(true);
+  });
+
+  it('loadBoard sets syncStatus offline and keeps errorMessage null when network fails and cached data exists', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    useBoardStore.setState({
+      issues: [mockIssue],
+      boardName: 'Engineering Sprint Board',
+      isLoading: false,
+      isSyncing: true,
+      errorMessage: null,
+      syncStatus: 'synced',
+    });
+
+    await useBoardStore.getState().loadBoard();
+
+    expect(useBoardStore.getState().isLoading).toBe(false);
+    expect(useBoardStore.getState().isSyncing).toBe(false);
+    expect(useBoardStore.getState().syncStatus).toBe('offline');
+    expect(useBoardStore.getState().errorMessage).toBeNull();
+  });
+
+  it('loadBoard sets errorMessage when network fails and no cached data exists', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    useBoardStore.setState({
+      issues: [],
+      boardName: '',
+      isLoading: true,
+      isSyncing: false,
+      errorMessage: null,
+    });
+
+    await useBoardStore.getState().loadBoard();
+
+    expect(useBoardStore.getState().isLoading).toBe(false);
+    expect(useBoardStore.getState().isSyncing).toBe(false);
+    expect(useBoardStore.getState().syncStatus).toBe('offline');
+    expect(useBoardStore.getState().errorMessage).toBe('Unable to connect to Jira backend server.');
+  });
+
   it('DEFAULT_COLUMNS does not contain phantom In Review status', () => {
     expect(DEFAULT_COLUMNS.map((c) => c.name)).toEqual(['To Do', 'In Progress', 'Done']);
     expect(
@@ -919,6 +974,22 @@ describe('Zustand BoardStore', () => {
       expect(cached).not.toBeNull();
       expect(cached?.boardName).toBe('HOME Board');
       expect(cached?.issues[0].key).toBe('HOME-1');
+    });
+
+    it('loads cached board when issues list is empty but boardName is present', () => {
+      const emptyBoardData = {
+        boardName: 'HOME Board',
+        sprintName: 'Active Issues',
+        jiraUrl: 'https://company.atlassian.net',
+        columns: DEFAULT_COLUMNS,
+        issues: [],
+      };
+      window.localStorage.setItem(LOCAL_STORAGE_BOARD_CACHE_KEY, JSON.stringify(emptyBoardData));
+
+      const cached = loadCachedBoard();
+      expect(cached).not.toBeNull();
+      expect(cached?.boardName).toBe('HOME Board');
+      expect(cached?.issues).toEqual([]);
     });
   });
 

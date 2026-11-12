@@ -206,7 +206,7 @@ export function loadCachedBoard(): CachedBoardData | null {
     const raw = window.localStorage.getItem(LOCAL_STORAGE_BOARD_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.issues) && parsed.issues.length > 0) {
+    if (parsed && Array.isArray(parsed.issues) && (parsed.issues.length > 0 || Boolean(parsed.boardName))) {
       // Discard legacy example/seeded tasks if present from earlier test/development runs
       const hasExampleIssues =
         parsed.issues.some((issue: any) => issue.url?.includes('example.com')) ||
@@ -1008,7 +1008,7 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
   },
 
   loadBoard: async () => {
-    const hasExistingData = get().issues.length > 0;
+    const hasExistingData = get().issues.length > 0 || Boolean(get().boardName);
     if (!hasExistingData) {
       set({ isLoading: true });
     } else {
@@ -1068,11 +1068,13 @@ export const useBoardStore = create<BoardStoreState>((set, get) => ({
         void get().resolveRouteTask();
       }
     } catch {
+      const hasData = get().issues.length > 0 || Boolean(get().boardName);
       set({
-        errorMessage: 'Unable to connect to Jira backend server.',
+        errorMessage: hasData ? null : 'Unable to connect to Jira backend server.',
         isLoading: false,
         isSyncing: false,
         initialSyncCompleted: true,
+        syncStatus: 'offline',
       });
       void get().resolveRouteTask();
     }
